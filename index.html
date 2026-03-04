@@ -298,6 +298,8 @@
               <div class="divider"></div>
               <div class="mini muted">Character</div>
               <div id="charSummary" class="mini"></div>
+              <div class="divider"></div>
+              <button id="resetCharBtn" type="button" class="mini" title="Reset character to re-do True Welcome (alpha testing)">Reset my character</button>
             </div>
           </div>
           <div class="pane">
@@ -748,6 +750,22 @@
         gameLog.textContent = "";
       }
       logoutBtn.addEventListener("click", logout);
+
+      async function resetMyCharacter(){
+        const btn = $("resetCharBtn");
+        if (btn) btn.disabled = true;
+        try {
+          await apiFetch("/api/character/reset", { method: "POST", body: {} });
+          currentCharacter = null;
+          hideGame();
+          await refreshCharacterAndMaybeOnboard();
+        } catch (e) {
+          if (typeof alert !== "undefined") alert(e.message || "Reset failed.");
+        }
+        if (btn) btn.disabled = false;
+      }
+      const resetCharBtn = $("resetCharBtn");
+      if (resetCharBtn) resetCharBtn.addEventListener("click", resetMyCharacter);
 
       // ─────────────────────────────────────────────────────────
       // Minimal game UI for smoke-testing
@@ -1746,7 +1764,7 @@
 const API = 'https://verasanth-backend.offkeybard.workers.dev';  // update after fly deploy
 
 // ── State ────────────────────────────────────────────────────────
-let token = localStorage.getItem('v_token') || '';
+let vToken = localStorage.getItem('v_token') || '';
 let currentNPC = '';
 let npcTopics  = {};
 let combatState = null;
@@ -1781,7 +1799,7 @@ async function api(method, path, body) {
     method,
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(vToken ? { Authorization: `Bearer ${vToken}` } : {}),
     },
   };
   if (body) opts.body = JSON.stringify(body);
@@ -1838,12 +1856,12 @@ async function init() {
     }
   } catch(e) {}
 
-  if (token) {
+  if (vToken) {
     try {
       await loadGame();
       document.getElementById('auth-screen').classList.add('hidden');
     } catch(e) {
-      token = '';
+      vToken = '';
       localStorage.removeItem('v_token');
     }
   }
@@ -1862,8 +1880,8 @@ async function doLogin() {
 
   try {
     const data = await POST('/api/login', { username, password });
-    token = data.token;
-    localStorage.setItem('v_token', token);
+    vToken = data.token;
+    localStorage.setItem('v_token', vToken);
     await loadGame();
     document.getElementById('auth-screen').classList.add('hidden');
   } catch(e) {
@@ -1889,8 +1907,8 @@ async function doRegister() {
 
   try {
     const data = await POST('/api/register', { username, password, name, race });
-    token = data.token;
-    localStorage.setItem('v_token', token);
+    vToken = data.token;
+    localStorage.setItem('v_token', vToken);
     await loadGame();
     document.getElementById('auth-screen').classList.add('hidden');
   } catch(e) {

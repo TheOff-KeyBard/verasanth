@@ -589,6 +589,31 @@ if (path === "/api/login" && method === "POST") {
   return json({ token, user_id: row.user_id });
 }
 
+// ── POST: Character reset (self or other via secret) ──
+if (path === "/api/character/reset" && method === "POST") {
+  let targetUid;
+  const usernameParam = body.username != null && String(body.username).trim() !== "";
+  if (usernameParam) {
+    const secret = request.headers.get("X-Reset-Secret") || "";
+    if (!env.RESET_SECRET || secret !== env.RESET_SECRET) return err("Forbidden.", 403);
+    const normalized = String(body.username).trim().toLowerCase();
+    const acc = await dbGet(db, "SELECT user_id FROM accounts WHERE username=?", [normalized]);
+    if (!acc) return err("User not found.", 404);
+    targetUid = acc.user_id;
+  } else {
+    const uidFromAuth = await getUid(db, request);
+    if (!uidFromAuth) return err("Unauthorized.", 401);
+    targetUid = uidFromAuth;
+  }
+  await dbRun(db, "UPDATE players SET location=? WHERE user_id=?", ["tavern", targetUid]);
+  await dbRun(db, `UPDATE characters SET instinct=NULL, strength=5, dexterity=5, constitution=5, intelligence=5, wisdom=5, charisma=5, stats_set=0,
+    alignment_morality=0, alignment_order=0, ash_marks=0, ember_shards=0, soul_coins=0, xp=0, class_stage=0, current_hp=0 WHERE user_id=?`, [targetUid]);
+  await dbRun(db, "DELETE FROM player_flags WHERE user_id=?", [targetUid]);
+  await dbRun(db, "DELETE FROM inventory WHERE user_id=?", [targetUid]);
+  await dbRun(db, "DELETE FROM combat_state WHERE user_id=?", [targetUid]);
+  return json({ ok: true, message: "Character reset. Reload to see True Welcome." });
+}
+
     // ── All routes below require auth ──
     const uid = await getUid(db, request);
     if (!uid && path !== "/api/data/races" && path !== "/api/data/instincts") {
