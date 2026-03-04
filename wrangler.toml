@@ -1,0 +1,8 @@
+name = "verasanth-backend"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "verasanth"
+database_id = "0d211a3f-958c-4738-ae0c-89bc626b1a08"
