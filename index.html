@@ -344,13 +344,13 @@
             </div>
 
             <div id="twStepStats" style="display:none;">
-              <h3>Set your stats (point-buy)</h3>
-              <p>All stats start at 8. Spend points to raise them. This is enforced client-side; server validation can be added later.</p>
+              <h3>Set your stats (point pool)</h3>
+              <p>Each stat starts at 5. Distribute 28 points among them (similar to 3d6 totals). Weapons, armor, and items can boost stats later.</p>
               <div style="height:12px;"></div>
               <div class="row">
-                <div class="pill">Budget: <span id="pbBudget">27</span></div>
+                <div class="pill">Pool: <span id="pbBudget">28</span></div>
                 <div class="pill">Spent: <span id="pbSpent">0</span></div>
-                <div class="pill">Remaining: <span id="pbRemaining">27</span></div>
+                <div class="pill">Remaining: <span id="pbRemaining">28</span></div>
               </div>
               <div style="height:12px;"></div>
               <div id="statsGrid" class="stats"></div>
@@ -463,14 +463,13 @@
       }
 
       // ─────────────────────────────────────────────────────────
-      // True Welcome: Instinct + Point-buy Stats
+      // True Welcome: Instinct + Point-pool Stats
       // ─────────────────────────────────────────────────────────
 
       const POINT_BUY = {
-        budget: 27,
-        min: 8,
-        max: 15,
-        cost: { 8:0, 9:1, 10:2, 11:3, 12:4, 13:5, 14:7, 15:9 },
+        base: 5,
+        pool: 28,
+        max: 18,
       };
 
       const STAT_KEYS = [
@@ -482,54 +481,50 @@
         ["charisma", "Charisma"],
       ];
 
-      function pointCostFor(v){
-        return POINT_BUY.cost[v] ?? Infinity;
-      }
-
       function computeSpent(stats){
-        return Object.values(stats).reduce((sum, v) => sum + pointCostFor(v), 0);
+        return Object.values(stats).reduce((sum, v) => sum + (Number(v) - POINT_BUY.base), 0);
       }
 
       function isStatsValid(stats){
         for (const k of Object.keys(stats)){
           const v = Number(stats[k]);
           if (!Number.isInteger(v)) return false;
-          if (v < POINT_BUY.min || v > POINT_BUY.max) return false;
-          if (pointCostFor(v) === Infinity) return false;
+          if (v < POINT_BUY.base || v > POINT_BUY.max) return false;
         }
-        return computeSpent(stats) <= POINT_BUY.budget;
+        return computeSpent(stats) === POINT_BUY.pool;
       }
 
       let twStep = "instinct"; // "instinct" | "stats"
       let selectedInstinct = "";
       let instinctsData = null;
       let statsState = {
-        strength: 8, dexterity: 8, constitution: 8,
-        intelligence: 8, wisdom: 8, charisma: 8,
+        strength: 5, dexterity: 5, constitution: 5,
+        intelligence: 5, wisdom: 5, charisma: 5,
       };
 
       function renderPointBuy(){
         const spent = computeSpent(statsState);
-        const remaining = POINT_BUY.budget - spent;
-        pbBudgetEl.textContent = String(POINT_BUY.budget);
+        const remaining = POINT_BUY.pool - spent;
+        pbBudgetEl.textContent = String(POINT_BUY.pool);
         pbSpentEl.textContent = String(spent);
         pbRemainingEl.textContent = String(remaining);
         pbRemainingEl.style.color = remaining >= 0 ? "var(--ok)" : "var(--danger)";
 
-        pbRules.textContent = `Range ${POINT_BUY.min}–${POINT_BUY.max}. Costs: 8→0, 9→1, 10→2, 11→3, 12→4, 13→5, 14→7, 15→9.`;
+        pbRules.textContent = `Each stat starts at ${POINT_BUY.base}, max ${POINT_BUY.max}. Distribute all ${POINT_BUY.pool} points.`;
 
         statsGrid.innerHTML = "";
         for (const [key, label] of STAT_KEYS){
           const v = statsState[key];
-          const canDec = v > POINT_BUY.min;
-          const canInc = v < POINT_BUY.max && (computeSpent({ ...statsState, [key]: v + 1 }) <= POINT_BUY.budget);
+          const fromPool = v - POINT_BUY.base;
+          const canDec = v > POINT_BUY.base;
+          const canInc = v < POINT_BUY.max && remaining > 0;
 
           const row = document.createElement("div");
           row.className = "stat";
           row.innerHTML = `
             <div>
               <div class="name">${label}</div>
-              <div class="mini">Cost: ${pointCostFor(v)}</div>
+              <div class="mini">+${fromPool} from pool</div>
             </div>
             <div class="stepper">
               <button data-dec="${key}" ${canDec ? "" : "disabled"}>-</button>
@@ -543,7 +538,7 @@
         statsGrid.querySelectorAll("button[data-dec]").forEach(btn => {
           btn.addEventListener("click", () => {
             const k = btn.getAttribute("data-dec");
-            statsState[k] = Math.max(POINT_BUY.min, statsState[k] - 1);
+            statsState[k] = Math.max(POINT_BUY.base, statsState[k] - 1);
             renderPointBuy();
             validateTW();
           });
@@ -551,13 +546,10 @@
         statsGrid.querySelectorAll("button[data-inc]").forEach(btn => {
           btn.addEventListener("click", () => {
             const k = btn.getAttribute("data-inc");
-            const next = Math.min(POINT_BUY.max, statsState[k] + 1);
-            const candidate = { ...statsState, [k]: next };
-            if (computeSpent(candidate) <= POINT_BUY.budget){
-              statsState = candidate;
-              renderPointBuy();
-              validateTW();
-            }
+            if (statsState[k] >= POINT_BUY.max || computeSpent(statsState) >= POINT_BUY.pool) return;
+            statsState[k] += 1;
+            renderPointBuy();
+            validateTW();
           });
         });
       }
@@ -597,7 +589,7 @@
         } else {
           twStep = "stats";
           twStepTitle.textContent = "Set your stats";
-          twHint.textContent = "point-buy";
+          twHint.textContent = "point pool";
           twBackBtn.disabled = false;
           twNextBtn.textContent = "Finish";
           twStepInstinct.style.display = "none";
@@ -666,7 +658,7 @@
           }
 
           // Stats step
-          if (!isStatsValid(statsState)) throw new Error("Invalid point-buy allocation.");
+          if (!isStatsValid(statsState)) throw new Error("Invalid point pool: use all 28 points.");
           await apiFetch("/api/character/stats", { method:"POST", body: statsState });
           currentCharacter = await apiFetch("/api/character");
 
@@ -2205,6 +2197,7 @@ async function combatAction(action) {
     document.getElementById('combat-log').innerHTML = render(data.message || '');
 
     if (data.result === 'victory' || data.result === 'fled') {
+      combatState = null;
       document.getElementById('combat-overlay').classList.remove('open');
       log(render(data.message));
       if (data.can_advance) log('<em>⚡ You feel something shift. A new stage awaits.</em>');
@@ -2212,16 +2205,16 @@ async function combatAction(action) {
       const lookData = await GET('/api/look');
       renderRoom(lookData);
     } else if (data.result === 'death') {
+      combatState = null;
       document.getElementById('combat-overlay').classList.remove('open');
       log(render(data.message));
       const lookData = await GET('/api/look');
       renderRoom(lookData);
       refreshSidebar();
     } else if (data.result === 'ongoing') {
-      updateCombatBars(
-        data.player_hp, playerMaxHp,
-        data.enemy_hp,  combatState?.enemy_hp || data.enemy_hp
-      );
+      const enemyMax = data.enemy_hp_max ?? combatState?.enemy_hp_max ?? data.enemy_hp;
+      if (combatState) combatState = { ...combatState, ...data, enemy_hp_max: enemyMax };
+      updateCombatBars(data.player_hp, playerMaxHp, data.enemy_hp, enemyMax);
     }
   } catch(e) {
     log(`<em>${e.message}</em>`);
@@ -2287,6 +2280,55 @@ document.addEventListener('keydown', e => {
     document.getElementById('combat-overlay').classList.remove('open');
   }
 });
+
+// ── Admin console (dev only) ──────────────────────────────────────
+// Set window.ADMIN_KEY = 'your-ADMIN_SECRET' and optionally window.ADMIN_API = API (or worker URL).
+// Then: admin('giveItem 12345 rope 2'); admin('tp 12345 market_square'); admin('listCommands');
+window.runAdmin = async function adminCmd(line) {
+  const ADMIN_KEY = window.ADMIN_KEY;
+  const base = (typeof window.ADMIN_API !== 'undefined' ? window.ADMIN_API : (typeof API !== 'undefined' ? API : '')) || '';
+  if (!ADMIN_KEY) { console.error('Set window.ADMIN_KEY to your ADMIN_SECRET'); return; }
+  const tokens = (line || '').match(/"([^"]*)"|'([^']*)'|\S+/g) || [];
+  const args = tokens.map(t => (t.startsWith('"') || t.startsWith("'")) ? t.slice(1, -1) : t);
+  const command = args[0];
+  if (!command) { console.error('Usage: admin("commandName param1 param2 ...")'); return; }
+  const paramNames = {
+    wipeCharacter: ['playerID'],
+    wipePlayer: ['playerID'],
+    wipeAllPlayers: [],
+    resetStats: ['playerID'],
+    setStat: ['playerID', 'statName', 'value'],
+    giveItem: ['playerID', 'itemID', 'amount'],
+    removeItem: ['playerID', 'itemID', 'amount'],
+    setCurrency: ['playerID', 'amount'],
+    resetWorldRegion: ['regionID'],
+    setTime: ['timeValue'],
+    setWeather: ['weatherType'],
+    tp: ['playerID', 'location'],
+    spawnNPC: ['npcID', 'location'],
+    setFlag: ['playerID', 'flagID', 'value'],
+    getFlag: ['playerID', 'flagID'],
+    unlockAll: ['playerID'],
+    forceEvent: ['eventID'],
+    listCommands: [],
+  };
+  const names = paramNames[command] || [];
+  const params = {};
+  names.forEach((name, i) => { if (args[i + 1] !== undefined) params[name] = isNaN(Number(args[i + 1])) ? args[i + 1] : Number(args[i + 1]); });
+  try {
+    const r = await fetch(base + '/api/admin/command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': ADMIN_KEY },
+      body: JSON.stringify({ command, params }),
+    });
+    const data = await r.json();
+    console.log(r.ok ? data : { error: data.error || data.detail, status: r.status });
+    return data;
+  } catch (e) {
+    console.error(e);
+    return { success: false, error: e.message };
+  }
+};
 
 // ── Boot ─────────────────────────────────────────────────────────
 init();
