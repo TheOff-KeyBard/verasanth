@@ -5,6 +5,10 @@ compatibility_date = "2024-01-01"
 # Optional: RESET_SECRET for POST /api/character/reset with body {"username":"..."}.
 # Set in .dev.vars for local dev; set in Cloudflare dashboard (Worker env) for production.
 
+[assets]
+directory = "."
+binding = "ASSETS"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "verasanth"
