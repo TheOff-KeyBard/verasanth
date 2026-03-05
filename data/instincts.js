@@ -1,0 +1,1 @@
+export const INSTINCTS = {"streetcraft": {"label": "Echo: Streetcraft", "description": "", "stat_mods": {}}, "ironblood": {"label": "Echo: Ironblood", "description": "", "stat_mods": {}}, "ember_touched": {"label": "Echo: Ember-Touched", "description": "", "stat_mods": {}}, "hearthbound": {"label": "Echo: Hearthbound", "description": "", "stat_mods": {}}};
