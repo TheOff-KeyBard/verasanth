@@ -1,14 +1,17 @@
-import { BOARD_NPC_REACTIONS } from "../data/board.js";
+import { boardNPCReaction } from "../data/board.js";
+
+export { boardNPCReaction };
 
 export async function getNPCResponse(env, npcId, topic, playerContext) {
-  const visits = playerContext.kelvaris_visits ?? 0;
-  const firstTime = visits === 0;
-  const earlyVisits = visits >= 1 && visits <= 2;
-  const hasSeenMarket = playerContext.has_seen_market_square;
-  const hasInstinct = playerContext.has_instinct;
-  const statsSet = playerContext.stats_set;
+  try {
+    const visits = playerContext.kelvaris_visits ?? 0;
+    const firstTime = visits === 0;
+    const earlyVisits = visits >= 1 && visits <= 2;
+    const hasSeenMarket = playerContext.has_seen_market_square;
+    const hasInstinct = playerContext.has_instinct;
+    const statsSet = playerContext.stats_set;
 
-  const systemPrompts = {
+    const systemPrompts = {
     bartender: `You are Kelvaris, the bartender of the Shadow Hearth Inn in Verasanth. 
 You are short, direct, and rarely use more than two sentences. You've been in this city a long time. You notice everything but comment on little. Never mention the true nature of this place or where the dead go; the player does not know. Keep everything in-world: the city, the inn, the roads, the square.
 ${firstTime ? `This is the first time this person has spoken to you. They have just woken or just arrived. Give a terse welcome. Nudge them toward the city: the door leads to the road; the square has the board and the main streets; paying for a room here buys safety until morning. Do not explain too much — one or two practical pointers, then leave it.` : ''}
@@ -56,7 +59,7 @@ When asked about Dask: "Some threads refuse to be cut. The city tries, occasiona
 When asked about the sanctuary: "Whatever is inside it has been watching this corner of the plane for a very long time. I find that interesting, not alarming."
 Topic being asked about: "${topic}".
 Respond in character. 1-4 sentences. Be composed. Never warm. Always interested.`,
-  };
+    };
 
   // Board notices — don't need Claude, use static pool
   if (topic === "board") {
@@ -85,16 +88,19 @@ Respond in character. 1-4 sentences. Be composed. Never warm. Always interested.
         messages: [{ role: "user", content: userMessage }],
       }),
     });
-    const data = await response.json();
+    const rawText = await response.text();
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json")) {
+      return "They don't respond.";
+    }
+    const data = JSON.parse(rawText);
     if (data.content?.[0]?.text) return data.content[0].text;
-    // Return error type so we can debug
     if (data.error) return `[${data.error.type}: ${data.error.message}]`;
     return "They say nothing.";
   } catch (e) {
-    return `[error: ${e.message}]`;
+    return "They don't respond.";
+  }
+  } catch (e) {
+    return "They don't respond.";
   }
 }
-
-export function boardNPCReaction(npcId) {
-  return BOARD_NPC_REACTIONS[npcId] || "They glance at the board and say nothing.";
-}

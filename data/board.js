@@ -6,6 +6,10 @@ export const BOARD_NPC_REACTIONS = {
   curator:     "\"The board and I have an understanding. It posts. I read.\"",
 };
 
+export function boardNPCReaction(npcId) {
+  return BOARD_NPC_REACTIONS[npcId] || "They glance at the board and say nothing.";
+}
+
 export const SERIS_NOTICES = {
   early: [
     { title: "MATERIALS SOUGHT", body: "Seeking vermin carapaces. Condition irrelevant. Payment fair.\n\n— Unsigned" },

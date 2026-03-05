@@ -1447,6 +1447,33 @@ const TOPIC_LABELS = {
   yourself:'Yourself', me:'Yourself',
 };
 
+const TOPIC_GATES = {
+  bartender: {
+    hearth: null, dog: null, ledger: null, bar: null, walls: null, city: null,
+    board: 'has_seen_market_square', sanctuary: 'has_seen_market_square', sewer: 'has_seen_market_square',
+    cistern: 'seen_sewer_wall_markings', crawlers: 'seen_sewer_wall_markings', dask: 'seen_sewer_wall_markings',
+  },
+  weaponsmith: {
+    forge: null, tool_wall: null, unfinished_blade: null, locked_chest: null, wall_marks: null,
+    kelvaris: null, city: null, caves: null, mountain: null,
+    dask: 'seen_sewer_wall_markings', board: 'has_seen_market_square', sanctuary: 'has_seen_market_square',
+    sewer: 'has_seen_market_square', crawlers: 'seen_sewer_wall_markings',
+  },
+  armorsmith: {
+    forge: null, wall_marks: null, armor_stock: null, kelvaris: null, caelir: null, thalara: null, seris: null, city: null,
+    dask: 'seen_sewer_wall_markings', board: 'has_seen_market_square', sanctuary: 'has_seen_market_square',
+    sewer: 'has_seen_market_square', crawlers: 'seen_sewer_wall_markings',
+  },
+  alchemist: {
+    sanctuary: 'has_seen_market_square', board: 'has_seen_market_square', dask: 'seen_sewer_wall_markings',
+    sewer: 'has_seen_market_square', cistern: 'seen_sewer_wall_markings', crawlers: 'seen_sewer_wall_markings',
+  },
+  curator: {
+    sanctuary: 'has_seen_market_square', board: 'has_seen_market_square', dask: 'seen_sewer_wall_markings',
+    sewer: 'has_seen_market_square', cistern: 'seen_sewer_wall_markings', crawlers: 'seen_sewer_wall_markings',
+  },
+};
+
 // ── API helpers ──────────────────────────────────────────────────
 async function api(method, path, body) {
   const opts = {
@@ -2036,14 +2063,15 @@ async function openDialogue(npcId) {
   document.getElementById('dialogue-overlay').classList.add('open');
 
   try {
-    // Load greeting + topics in parallel
-    const [talkData, topicsData] = await Promise.all([
+    const [talkData, topicsData, flagsData] = await Promise.all([
       POST('/api/talk', { npc: npcId, topic: '' }),
       GET(`/api/data/npc/${npcId}/topics`),
+      GET('/api/character/flags').catch(() => ({})),
     ]);
     npcTopics[npcId] = topicsData.topics || [];
+    const flags = flagsData && typeof flagsData === 'object' ? flagsData : {};
     showDialogueResponse(talkData.response);
-    renderTopics(npcId);
+    renderTopics(npcId, flags);
   } catch(e) {
     document.getElementById('dialogue-response').innerHTML = render(e.message);
   }
@@ -2063,10 +2091,14 @@ function showDialogueResponse(text) {
   document.getElementById('dialogue-response').innerHTML = render(text || '');
 }
 
-function renderTopics(npcId) {
+function renderTopics(npcId, flags = {}) {
   const wrap = document.getElementById('dialogue-topics');
   wrap.innerHTML = '';
-  const topics = npcTopics[npcId] || [];
+  const gates = TOPIC_GATES[npcId];
+  const topics = (npcTopics[npcId] || []).filter(t => {
+    const gate = gates && gates[t];
+    return gate == null || (flags[gate] && Number(flags[gate]) > 0);
+  });
   topics.forEach(t => {
     const b = document.createElement('button');
     b.className = 'topic-btn';

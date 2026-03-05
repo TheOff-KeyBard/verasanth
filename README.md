@@ -2,6 +2,8 @@
 
 ## Local development
 
+For local dev with NPC dialogue (Anthropic API) working, use `npx wrangler dev --remote`. For database-only work (registration, character, inventory) use `npx wrangler dev`.
+
 The local D1 database is empty — Franklin's account (and other production accounts) exist only in production. To test locally, either:
 
 - **Option A:** Register a new account using the **New Character** tab on the local dev server.

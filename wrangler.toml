@@ -13,3 +13,7 @@ binding = "ASSETS"
 binding = "DB"
 database_name = "verasanth"
 database_id = "0d211a3f-958c-4738-ae0c-89bc626b1a08"
+
+[dev]
+local_protocol = "http"
+upstream_protocol = "https"
