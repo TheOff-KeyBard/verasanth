@@ -547,19 +547,28 @@ export default {
     const path = url.pathname;
     const method = request.method;
 
+    const requestForAssets = request.clone();
+    let body = {};
+    if (method === "POST") {
+      try { body = await request.json(); } catch { body = {}; }
+    }
+
+    // GET /admin → serve admin panel (admin.html)
+    if (path === "/admin" && method === "GET" && env.ASSETS) {
+      const adminRequest = new Request(new URL("/admin.html", request.url), { method: "GET", headers: request.headers });
+      const adminResponse = await env.ASSETS.fetch(adminRequest);
+      if (adminResponse.status !== 404) return adminResponse;
+    }
+
     // Static assets first (no auth, no DB)
     if (env.ASSETS) {
-      const asset = await env.ASSETS.fetch(request);
+      const asset = await env.ASSETS.fetch(requestForAssets);
       if (asset.status !== 404) return asset;
     }
 
     if (path.startsWith("/api")) {
       const db = env.DB;
       await initDb(db);
-      let body = {};
-      if (method === "POST") {
-        try { body = await request.json(); } catch {}
-      }
       // ── Auth: Register ──
 if (path === "/api/register" && method === "POST") {
   const { username, password, name, race } = body;
@@ -632,7 +641,7 @@ if (path === "/api/character/reset" && method === "POST") {
   const usernameParam = body.username != null && String(body.username).trim() !== "";
   if (usernameParam) {
     const secret = request.headers.get("X-Reset-Secret") || "";
-    if (!env.RESET_SECRET || secret !== env.RESET_SECRET) return err("Forbidden.", 403);
+    if (!env.ADMIN_SECRET || secret !== env.ADMIN_SECRET) return err("Forbidden.", 403);
     const normalized = String(body.username).trim().toLowerCase();
     const acc = await dbGet(db, "SELECT user_id FROM accounts WHERE username=?", [normalized]);
     if (!acc) return err("User not found.", 404);
@@ -654,6 +663,8 @@ if (path === "/api/character/reset" && method === "POST") {
 // ── POST: Admin command ──
 if (path === "/api/admin/command" && method === "POST") {
   const adminKey = request.headers.get("X-Admin-Key") || "";
+  console.log('ENV SECRET:', JSON.stringify(env.ADMIN_SECRET));
+  console.log('RECEIVED KEY:', JSON.stringify(adminKey));
   if (!env.ADMIN_SECRET || adminKey !== env.ADMIN_SECRET) {
     return json({ error: "Unauthorized." }, 401);
   }

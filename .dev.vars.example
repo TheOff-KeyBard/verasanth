@@ -1,8 +1,8 @@
 # Copy to .dev.vars and set your secrets for local dev (wrangler dev).
 # .dev.vars is gitignored; never commit real secrets.
 
-# Required for POST /api/admin/command (X-Admin-Key header).
+# Required for POST /api/admin/command (X-Admin-Key header). Use this value as the admin key when opening /admin.
 ADMIN_SECRET=your-admin-secret-here
 
 # Optional: for POST /api/character/reset with body {"username":"..."}.
-# RESET_SECRET=your-reset-secret-here
+# Uses the same ADMIN_SECRET value; send it as X-Reset-Secret.

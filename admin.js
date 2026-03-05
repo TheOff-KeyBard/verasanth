@@ -318,6 +318,58 @@ const registry = {
     handler: async () => ({ success: true, message: "Events not implemented." }),
   },
 
+  getPlayerState: {
+    name: "getPlayerState",
+    description: "Get full player state (character, location, inventory, flags) by player ID or username",
+    paramSpec: [{ name: "playerIDOrUsername", type: "string" }],
+    handler: async (db, env, params) => {
+      const raw = String(params.playerIDOrUsername || "").trim();
+      if (!raw) return { success: false, error: "playerIDOrUsername is required." };
+      let uid = null;
+      const num = parseInt(raw, 10);
+      if (String(num) === raw && num >= 1) {
+        uid = num;
+      } else {
+        const acc = await dbGet(db, "SELECT user_id FROM accounts WHERE username=?", [raw.toLowerCase()]);
+        if (!acc) return { success: false, error: `No account found for username: ${raw}` };
+        uid = acc.user_id;
+      }
+      const player = await dbGet(db, "SELECT user_id, location FROM players WHERE user_id=?", [uid]);
+      if (!player) return { success: false, error: `No player found for ID: ${uid}` };
+      const character = await dbGet(db, "SELECT name, race, instinct, strength, dexterity, constitution, intelligence, wisdom, charisma, stats_set, ash_marks, ember_shards, soul_coins, current_hp, xp, class_stage FROM characters WHERE user_id=?", [uid]);
+      const inventory = await dbAll(db, "SELECT item, qty FROM inventory WHERE user_id=?", [uid]);
+      const flags = await dbAll(db, "SELECT flag, value FROM player_flags WHERE user_id=?", [uid]);
+      const maxHp = character ? 8 + Math.floor((Number(character.constitution) - 10) / 2) * 2 : 0;
+      return {
+        success: true,
+        data: {
+          playerId: uid,
+          location: player.location,
+          character: character ? { ...character, max_hp: maxHp } : null,
+          inventory: inventory.map((r) => ({ item: r.item, qty: r.qty })),
+          flags: flags.map((r) => ({ flag: r.flag, value: r.value })),
+        },
+        message: `Player ${uid} state loaded.`,
+      };
+    },
+  },
+
+  listPlayers: {
+    name: "listPlayers",
+    description: "List all players with their user_id, username, location, and character name",
+    paramSpec: [],
+    handler: async (db) => {
+      const players = await dbAll(db, `
+        SELECT a.user_id, a.username, p.location, c.name
+        FROM accounts a
+        LEFT JOIN players p ON p.user_id = a.user_id
+        LEFT JOIN characters c ON c.user_id = a.user_id
+        ORDER BY a.user_id ASC
+      `, []);
+      return { success: true, data: players, message: `${players.length} players.` };
+    },
+  },
+
   listCommands: {
     name: "listCommands",
     description: "List all admin commands and their paramSpec",

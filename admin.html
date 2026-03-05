@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verasanth Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:          #0d0b08;
+      --bg2:         #131009;
+      --bg3:         #1a1510;
+      --border:      #2a2218;
+      --border-warm: #3d2f1e;
+      --ember:       #c4622a;
+      --ember-dim:   #7a3d1a;
+      --ember-glow:  #e8845a;
+      --ash:         #8a7d6e;
+      --text:        #d4c4b0;
+      --text-dim:    #7a6d5e;
+      --text-bright: #ede0cc;
+      --gold:        #c9a84c;
+      --gold-dim:    #7a6328;
+      --danger:      #8b2020;
+      --ok:          #2d5a2d;
+      --font-title:  'Cinzel', serif;
+      --font-body:   'Crimson Text', serif;
+    }
+    html, body {
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    #login-screen {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    #login-screen h1 {
+      font-family: var(--font-title);
+      font-size: 1.4rem;
+      color: var(--ember-glow);
+      margin-bottom: 24px;
+      letter-spacing: 0.1em;
+    }
+    #login-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+      max-width: 320px;
+    }
+    #login-form input {
+      background: var(--bg2);
+      border: 1px solid var(--border-warm);
+      color: var(--text);
+      padding: 10px 14px;
+      font-family: inherit;
+      font-size: 1rem;
+    }
+    #login-form input:focus {
+      outline: none;
+      border-color: var(--ember);
+    }
+    #login-form button {
+      background: var(--ember);
+      border: 1px solid var(--ember-dim);
+      color: var(--text-bright);
+      padding: 12px;
+      font-family: var(--font-title);
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    #login-form button:hover { background: var(--ember-glow); color: var(--bg); }
+    .login-err { color: var(--danger); font-size: 0.9rem; margin-top: 4px; }
+    #main-panel { display: none; max-width: 900px; margin: 0 auto; padding: 20px; }
+    #main-panel.visible { display: block; }
+    #panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border-warm);
+    }
+    #panel-header h1 { font-family: var(--font-title); font-size: 1.2rem; color: var(--ember-glow); }
+    #current-player {
+      font-size: 0.9rem;
+      color: var(--text-dim);
+    }
+    #current-player strong { color: var(--text); }
+    #current-player button {
+      margin-left: 8px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 4px 10px;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    #current-player button:hover { color: var(--ember-glow); border-color: var(--ember-dim); }
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 20px;
+    }
+    .tabs button {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 8px 14px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    .tabs button:hover { color: var(--ember-glow); border-color: var(--ember-dim); }
+    .tabs button.active { background: var(--bg3); color: var(--ember-glow); border-color: var(--ember); }
+    .tab-panel { display: none; padding: 16px; background: var(--bg2); border: 1px solid var(--border); }
+    .tab-panel.visible { display: block; }
+    .tab-panel h2 { font-size: 1rem; color: var(--ash); margin-bottom: 12px; }
+    .form-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .form-row label { min-width: 80px; color: var(--text-dim); font-size: 0.9rem; }
+    .form-row input, .form-row select {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 10px;
+      font-size: 0.9rem;
+    }
+    .form-row input:focus, .form-row select:focus { outline: none; border-color: var(--ember); }
+    button.action {
+      background: var(--ember);
+      border: 1px solid var(--ember-dim);
+      color: var(--text-bright);
+      padding: 8px 16px;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    button.action:hover { background: var(--ember-glow); color: var(--bg); }
+    button.danger {
+      background: var(--danger);
+      border: 1px solid #6b1818;
+      color: var(--text-bright);
+    }
+    button.danger:hover { background: #a82828; }
+    #result-area {
+      margin-top: 16px;
+      padding: 10px 14px;
+      min-height: 2.5em;
+      font-size: 0.9rem;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+    }
+    #result-area.success { color: var(--ok); border-color: var(--ok); }
+    #result-area.error { color: var(--danger); border-color: var(--danger); }
+    #command-log {
+      margin-top: 24px;
+      padding: 12px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    #command-log h3 { font-size: 0.85rem; color: var(--ash); margin-bottom: 8px; }
+    #command-log ul { list-style: none; }
+    #command-log li { padding: 2px 0; border-bottom: 1px solid var(--border); }
+    .copy-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 2px 8px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      margin-left: 8px;
+    }
+    .copy-btn:hover { color: var(--gold); }
+    .block { margin-top: 12px; padding: 10px; background: var(--bg3); border: 1px solid var(--border); font-size: 0.9rem; }
+    .block h4 { font-size: 0.85rem; color: var(--ash); margin-bottom: 6px; }
+    .danger-zone .warn { color: var(--danger); margin: 12px 0; }
+    #list-players-table tbody tr.player-row:hover { background: var(--bg3); }
+  </style>
+</head>
+<body>
+  <div id="login-screen">
+    <h1>Verasanth Admin</h1>
+    <form id="login-form">
+      <input type="password" id="admin-key" placeholder="Admin key" autocomplete="off" />
+      <button type="submit">Log in</button>
+      <div id="login-err" class="login-err"></div>
+    </form>
+  </div>
+
+  <div id="main-panel">
+    <header id="panel-header">
+      <h1>Admin Panel</h1>
+      <div id="current-player">
+        <span>Current player: <strong id="current-player-id">—</strong></span>
+        <button type="button" id="clear-player">Clear</button>
+        <button type="button" id="copy-player-id" class="copy-btn">Copy ID</button>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button type="button" data-tab="lookup">Player Lookup</button>
+      <button type="button" data-tab="character">Character</button>
+      <button type="button" data-tab="inventory">Inventory</button>
+      <button type="button" data-tab="world">World</button>
+      <button type="button" data-tab="flags">Flags</button>
+      <button type="button" data-tab="danger">Danger Zone</button>
+    </nav>
+
+    <div id="tab-lookup" class="tab-panel">
+      <h2>Player Lookup</h2>
+      <div class="form-row">
+        <label>Username or player ID</label>
+        <input type="text" id="lookup-input" placeholder="e.g. 12345 or username" />
+        <button type="button" class="action" id="lookup-btn">Look up</button>
+        <button type="button" class="action" id="list-players-btn">List All Players</button>
+      </div>
+      <div id="list-players-result" class="block" style="display:none; margin-top:12px;">
+        <h4>All players (click a row to set as current player)</h4>
+        <table id="list-players-table" style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border); text-align:left;">
+              <th style="padding:6px 8px;">ID</th>
+              <th style="padding:6px 8px;">Username</th>
+              <th style="padding:6px 8px;">Character Name</th>
+              <th style="padding:6px 8px;">Location</th>
+            </tr>
+          </thead>
+          <tbody id="list-players-tbody"></tbody>
+        </table>
+      </div>
+      <div id="lookup-result" class="block" style="display:none;">
+        <h4>Player</h4>
+        <p id="lookup-player-id"></p>
+        <h4>Location</h4>
+        <p id="lookup-location"></p>
+        <h4>HP</h4>
+        <p id="lookup-hp"></p>
+        <h4>Stats</h4>
+        <p id="lookup-stats"></p>
+        <h4>Currency</h4>
+        <p id="lookup-currency"></p>
+        <h4>Inventory</h4>
+        <p id="lookup-inventory"></p>
+        <h4>Flags</h4>
+        <p id="lookup-flags"></p>
+      </div>
+    </div>
+
+    <div id="tab-character" class="tab-panel">
+      <h2>Character Management</h2>
+      <div class="form-row">
+        <button type="button" class="action danger" id="wipe-char-btn">Wipe Character</button>
+        <span id="wipe-char-confirm" style="display:none;">
+          <input type="text" id="wipe-char-word" placeholder="Type 'yes' to confirm" />
+          <button type="button" class="action" id="wipe-char-do">Confirm</button>
+        </span>
+      </div>
+      <div class="form-row">
+        <button type="button" class="action" id="reset-stats-btn">Reset Stats</button>
+      </div>
+      <div class="form-row">
+        <label>Set stat</label>
+        <select id="set-stat-name">
+          <option value="strength">strength</option>
+          <option value="dexterity">dexterity</option>
+          <option value="constitution">constitution</option>
+          <option value="intelligence">intelligence</option>
+          <option value="wisdom">wisdom</option>
+          <option value="charisma">charisma</option>
+        </select>
+        <input type="number" id="set-stat-value" value="10" min="1" max="30" style="width:60px" />
+        <button type="button" class="action" id="set-stat-btn">Set</button>
+      </div>
+      <div class="form-row">
+        <label>Ash Marks</label>
+        <input type="number" id="set-ash-value" value="0" min="0" style="width:80px" />
+        <button type="button" class="action" id="set-ash-btn">Set</button>
+      </div>
+    </div>
+
+    <div id="tab-inventory" class="tab-panel">
+      <h2>Give item</h2>
+      <div class="form-row">
+        <label>Item ID</label>
+        <input type="text" id="give-item-id" placeholder="item id" />
+        <label>Amount</label>
+        <input type="number" id="give-item-amount" value="1" min="1" style="width:60px" />
+        <button type="button" class="action" id="give-item-btn">Give</button>
+      </div>
+      <h2>Remove item</h2>
+      <div class="form-row">
+        <label>Item ID</label>
+        <input type="text" id="remove-item-id" placeholder="item id" />
+        <label>Amount</label>
+        <input type="number" id="remove-item-amount" value="1" min="1" style="width:60px" />
+        <button type="button" class="action" id="remove-item-btn">Remove</button>
+      </div>
+      <div class="block">
+        <h4>Current inventory</h4>
+        <p id="inv-list">Look up a player first.</p>
+      </div>
+    </div>
+
+    <div id="tab-world" class="tab-panel">
+      <h2>Teleport</h2>
+      <div class="form-row">
+        <label>Room</label>
+        <select id="tp-room">
+          <option value="tavern">tavern</option>
+          <option value="market_square">market_square</option>
+          <option value="ashen_sanctuary">ashen_sanctuary</option>
+          <option value="sewer_upper">sewer_upper</option>
+          <option value="sewer_den">sewer_den</option>
+          <option value="sewer_channel">sewer_channel</option>
+          <option value="sewer_deep">sewer_deep</option>
+          <option value="sewer_gate">sewer_gate</option>
+          <option value="sewer_mid_flooded">sewer_mid_flooded</option>
+          <option value="sewer_mid_barracks">sewer_mid_barracks</option>
+          <option value="sewer_mid_cistern">sewer_mid_cistern</option>
+          <option value="sewer_mid_drain">sewer_mid_drain</option>
+          <option value="sewer_deep_threshold">sewer_deep_threshold</option>
+          <option value="sewer_deep_vault">sewer_deep_vault</option>
+          <option value="sewer_deep_foundation">sewer_deep_foundation</option>
+        </select>
+        <label>or custom ID</label>
+        <input type="text" id="tp-custom" placeholder="room id" style="width:180px" />
+        <button type="button" class="action" id="tp-btn">Teleport</button>
+      </div>
+    </div>
+
+    <div id="tab-flags" class="tab-panel">
+      <h2>Set flag</h2>
+      <div class="form-row">
+        <label>Flag ID</label>
+        <input type="text" id="set-flag-id" placeholder="flag id" />
+        <label>Value</label>
+        <input type="number" id="set-flag-value" value="1" min="0" style="width:60px" />
+        <button type="button" class="action" id="set-flag-btn">Set</button>
+      </div>
+      <h2>Get flag</h2>
+      <div class="form-row">
+        <label>Flag ID</label>
+        <input type="text" id="get-flag-id" placeholder="flag id" />
+        <button type="button" class="action" id="get-flag-btn">Get</button>
+        <span id="get-flag-result"></span>
+      </div>
+      <div class="form-row">
+        <button type="button" class="action" id="unlock-all-btn">Unlock All</button>
+        <span id="unlock-all-confirm" style="display:none;">
+          <input type="text" id="unlock-all-word" placeholder="Type 'yes'" />
+          <button type="button" class="action" id="unlock-all-do">Confirm</button>
+        </span>
+      </div>
+      <div class="block">
+        <h4>Current flags</h4>
+        <p id="flags-list">Look up a player first.</p>
+      </div>
+    </div>
+
+    <div id="tab-danger" class="tab-panel danger-zone">
+      <h2>Wipe player (delete all data)</h2>
+      <p class="warn">Type CONFIRM below to enable the button, then click to wipe the current player.</p>
+      <div class="form-row">
+        <input type="text" id="wipe-player-word" placeholder="Type CONFIRM" />
+        <button type="button" class="action danger" id="wipe-player-btn" disabled>Wipe player</button>
+      </div>
+      <h2>Wipe ALL players</h2>
+      <p class="warn">Type WIPE ALL below to enable, then click to delete every player and all data.</p>
+      <div class="form-row">
+        <input type="text" id="wipe-all-word" placeholder="Type WIPE ALL" />
+        <button type="button" class="action danger" id="wipe-all-btn" disabled>Wipe all players</button>
+      </div>
+    </div>
+
+    <div id="result-area"></div>
+    <div id="command-log">
+      <h3>Command log</h3>
+      <ul id="command-log-list"></ul>
+    </div>
+  </div>
+
+  <script>
+(function () {
+  const base = window.location.origin;
+  let adminKey = "";
+  let currentPlayerId = null;
+  let lastLookup = null; // { playerId, location, character, inventory, flags }
+  const commandLog = [];
+  const MAX_LOG = 10;
+
+  function logCommand(cmd, paramsDesc) {
+    const entry = cmd + (paramsDesc ? " " + paramsDesc : "") + " @ " + new Date().toLocaleTimeString();
+    commandLog.push(entry);
+    if (commandLog.length > MAX_LOG) commandLog.shift();
+    const ul = document.getElementById("command-log-list");
+    if (ul) {
+      ul.innerHTML = commandLog.map((e) => "<li>" + escapeHtml(e) + "</li>").reverse().join("");
+    }
+  }
+  function escapeHtml(s) {
+    const div = document.createElement("div");
+    div.textContent = s;
+    return div.innerHTML;
+  }
+  function setResult(msg, isError) {
+    const el = document.getElementById("result-area");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.className = "";
+    el.classList.remove("success", "error");
+    if (msg) el.classList.add(isError ? "error" : "success");
+  }
+  async function runAdmin(command, params) {
+    const payload = { command: String(command), params: params && typeof params === "object" ? params : {} };
+    const bodyStr = JSON.stringify(payload);
+    console.log("runAdmin request body:", bodyStr);
+    const res = await fetch(base + "/api/admin/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Admin-Key": adminKey },
+      body: bodyStr,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setResult(data.error || "Request failed", true);
+      return data;
+    }
+    if (data.success) {
+      setResult(data.message || "OK", false);
+      logCommand(command, params && (params.playerID ? String(params.playerID) : Object.values(params || {}).filter(Boolean).join(" ")));
+    } else {
+      setResult(data.error || "Error", true);
+    }
+    return data;
+  }
+  function requirePlayer() {
+    if (!currentPlayerId) {
+      setResult("Look up a player first.", true);
+      return false;
+    }
+    return true;
+  }
+
+  // ── Login ──
+  document.getElementById("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const key = document.getElementById("admin-key").value.trim();
+    document.getElementById("login-err").textContent = "";
+    if (!key) {
+      document.getElementById("login-err").textContent = "Enter the admin key.";
+      return;
+    }
+    adminKey = key;
+    const data = await runAdmin("listCommands", {});
+    console.log("Admin login response data:", data);
+    const loginOk = data && (data.success === true || (Array.isArray(data.data) && data.data.length > 0));
+    if (loginOk) {
+      document.getElementById("login-screen").style.display = "none";
+      document.getElementById("main-panel").classList.add("visible");
+      setResult("Logged in.");
+      logCommand("listCommands", "");
+    } else {
+      adminKey = "";
+      document.getElementById("login-err").textContent = "Invalid key.";
+    }
+  });
+
+  // ── Tabs ──
+  document.querySelectorAll(".tabs button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.tab;
+      document.querySelectorAll(".tabs button").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("visible"));
+      const panel = document.getElementById("tab-" + tab);
+      if (panel) panel.classList.add("visible");
+    });
+  });
+  document.querySelector(".tabs button[data-tab=lookup]").classList.add("active");
+  document.getElementById("tab-lookup").classList.add("visible");
+
+  // ── Current player ──
+  document.getElementById("clear-player").addEventListener("click", () => {
+    currentPlayerId = null;
+    lastLookup = null;
+    document.getElementById("current-player-id").textContent = "—";
+    document.getElementById("inv-list").textContent = "Look up a player first.";
+    document.getElementById("flags-list").textContent = "Look up a player first.";
+    setResult("Cleared current player.", false);
+  });
+  document.getElementById("copy-player-id").addEventListener("click", () => {
+    if (!currentPlayerId) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(String(currentPlayerId));
+      setResult("Player ID copied.", false);
+    }
+  });
+
+  // ── List All Players ──
+  document.getElementById("list-players-btn").addEventListener("click", async () => {
+    const data = await runAdmin("listPlayers", {});
+    if (!data.success) return;
+    const players = data.data || [];
+    const block = document.getElementById("list-players-result");
+    const tbody = document.getElementById("list-players-tbody");
+    tbody.innerHTML = "";
+    players.forEach((row) => {
+      const tr = document.createElement("tr");
+      tr.className = "player-row";
+      tr.style.cursor = "pointer";
+      tr.style.borderBottom = "1px solid var(--border)";
+      tr.dataset.userId = String(row.user_id);
+      tr.innerHTML = "<td style=\"padding:6px 8px;\">" + escapeHtml(String(row.user_id ?? "")) + "</td><td style=\"padding:6px 8px;\">" + escapeHtml(String(row.username ?? "—")) + "</td><td style=\"padding:6px 8px;\">" + escapeHtml(String(row.name ?? "—")) + "</td><td style=\"padding:6px 8px;\">" + escapeHtml(String(row.location ?? "—")) + "</td>";
+      tr.addEventListener("click", async () => {
+        const uid = tr.dataset.userId;
+        if (!uid) return;
+        currentPlayerId = parseInt(uid, 10);
+        document.getElementById("current-player-id").textContent = uid;
+        document.getElementById("lookup-input").value = uid;
+        const stateData = await runAdmin("getPlayerState", { playerIDOrUsername: uid });
+        if (stateData.success && stateData.data) {
+          lastLookup = stateData.data;
+          document.getElementById("inv-list").textContent = (stateData.data.inventory && stateData.data.inventory.length) ? stateData.data.inventory.map((i) => i.item + " × " + i.qty).join(", ") : "None";
+          document.getElementById("flags-list").textContent = (stateData.data.flags && stateData.data.flags.length) ? stateData.data.flags.map((f) => f.flag + "=" + f.value).join(", ") : "None";
+          document.getElementById("lookup-result").style.display = "block";
+          document.getElementById("lookup-player-id").innerHTML = "ID: " + uid + ' <button type="button" class="copy-btn" data-copy="' + uid + '">Copy</button>';
+          document.getElementById("lookup-location").textContent = stateData.data.location || "—";
+          const ch = stateData.data.character;
+          document.getElementById("lookup-hp").textContent = ch ? (ch.current_hp ?? "—") + " / " + (ch.max_hp ?? "—") : "—";
+          document.getElementById("lookup-stats").textContent = ch ? ["strength","dexterity","constitution","intelligence","wisdom","charisma"].map((s) => s + "=" + (ch[s] ?? "—")).join(", ") : "—";
+          document.getElementById("lookup-currency").textContent = ch ? "ash_marks=" + (ch.ash_marks ?? 0) + ", ember_shards=" + (ch.ember_shards ?? 0) + ", soul_coins=" + (ch.soul_coins ?? 0) : "—";
+          document.getElementById("lookup-inventory").textContent = (stateData.data.inventory && stateData.data.inventory.length) ? stateData.data.inventory.map((i) => i.item + " × " + i.qty).join(", ") : "None";
+          document.getElementById("lookup-flags").textContent = (stateData.data.flags && stateData.data.flags.length) ? stateData.data.flags.map((f) => f.flag + "=" + f.value).join(", ") : "None";
+        }
+        setResult("Current player set to " + uid + ".", false);
+      });
+      tbody.appendChild(tr);
+    });
+    block.style.display = "block";
+  });
+
+  // ── Lookup ──
+  document.getElementById("lookup-btn").addEventListener("click", async () => {
+    const input = document.getElementById("lookup-input").value.trim();
+    if (!input) {
+      setResult("Enter a username or player ID.", true);
+      return;
+    }
+    const data = await runAdmin("getPlayerState", { playerIDOrUsername: input });
+    if (!data.success) return;
+    const d = data.data;
+    lastLookup = d;
+    currentPlayerId = d.playerId;
+    document.getElementById("current-player-id").textContent = d.playerId;
+
+    const block = document.getElementById("lookup-result");
+    block.style.display = "block";
+    document.getElementById("lookup-player-id").innerHTML = "ID: " + d.playerId + ' <button type="button" class="copy-btn" data-copy="' + d.playerId + '">Copy</button>';
+    document.getElementById("lookup-location").textContent = d.location || "—";
+    const ch = d.character;
+    const hp = ch ? (ch.current_hp ?? "—") + " / " + (ch.max_hp ?? "—") : "—";
+    document.getElementById("lookup-hp").textContent = hp;
+    const stats = ch ? ["strength","dexterity","constitution","intelligence","wisdom","charisma"].map((s) => s + "=" + (ch[s] ?? "—")).join(", ") : "—";
+    document.getElementById("lookup-stats").textContent = stats;
+    const cur = ch ? "ash_marks=" + (ch.ash_marks ?? 0) + ", ember_shards=" + (ch.ember_shards ?? 0) + ", soul_coins=" + (ch.soul_coins ?? 0) : "—";
+    document.getElementById("lookup-currency").textContent = cur;
+    document.getElementById("lookup-inventory").textContent = (d.inventory && d.inventory.length) ? d.inventory.map((i) => i.item + " × " + i.qty).join(", ") : "None";
+    document.getElementById("lookup-flags").textContent = (d.flags && d.flags.length) ? d.flags.map((f) => f.flag + "=" + f.value).join(", ") : "None";
+
+    document.getElementById("inv-list").textContent = (d.inventory && d.inventory.length) ? d.inventory.map((i) => i.item + " × " + i.qty).join(", ") : "None";
+    document.getElementById("flags-list").textContent = (d.flags && d.flags.length) ? d.flags.map((f) => f.flag + "=" + f.value).join(", ") : "None";
+
+    block.querySelectorAll("[data-copy]").forEach((el) => {
+      el.replaceWith(el.cloneNode(true));
+    });
+    block.querySelectorAll(".copy-btn[data-copy]").forEach((btn) => {
+      btn.onclick = () => {
+        const v = btn.getAttribute("data-copy");
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v);
+      };
+    });
+  });
+
+  // ── Character ──
+  document.getElementById("wipe-char-btn").addEventListener("click", () => {
+    document.getElementById("wipe-char-confirm").style.display = "inline";
+  });
+  document.getElementById("wipe-char-do").addEventListener("click", async () => {
+    if (document.getElementById("wipe-char-word").value.trim().toLowerCase() !== "yes") {
+      setResult("Type 'yes' to confirm.", true);
+      return;
+    }
+    if (!requirePlayer()) return;
+    await runAdmin("wipeCharacter", { playerID: currentPlayerId });
+    document.getElementById("wipe-char-confirm").style.display = "none";
+    document.getElementById("wipe-char-word").value = "";
+  });
+  document.getElementById("reset-stats-btn").addEventListener("click", async () => {
+    if (!requirePlayer()) return;
+    await runAdmin("resetStats", { playerID: currentPlayerId });
+  });
+  document.getElementById("set-stat-btn").addEventListener("click", async () => {
+    if (!requirePlayer()) return;
+    const name = document.getElementById("set-stat-name").value;
+    const value = parseInt(document.getElementById("set-stat-value").value, 10);
+    await runAdmin("setStat", { playerID: currentPlayerId, statName: name, value });
+  });
+  document.getElementById("set-ash-btn").addEventListener("click", async () => {
+    if (!requirePlayer()) return;
+    const amount = parseInt(document.getElementById("set-ash-value").value, 10) || 0;
+    await runAdmin("setCurrency", { playerID: currentPlayerId, amount });
+  });
+
+  // ── Inventory ──
+  document.getElementById("give-item-btn").addEventListener("click", async () => {
+    if (!requirePlayer()) return;
+    const item = document.getElementById("give-item-id").value.trim();
+    const amount = parseInt(document.getElementById("give-item-amount").value, 10) || 1;
+    if (!item) { setResult("Enter item ID.", true); return; }
+    await runAdmin("giveItem", { playerID: currentPlayerId, itemID: item, amount });
+  });
+  document.getElementById("remove-item-btn").addEventListener("click", async () => {
+    if (!requirePlayer()) return;
+    const item = document.getElementById("remove-item-id").value.trim();
+    const amount = parseInt(document.getElementById("remove-item-amount").value, 10) || 1;
+    if (!item) { setResult("Enter item ID.", true); return; }
+    await runAdmin("removeItem", { playerID: currentPlayerId, itemID: item, amount });
+  });
+
+  // ── World ──
+  document.getElementById("tp-btn").addEventListener("click", async () => {
+    if (!requirePlayer()) return;
+    const custom = document.getElementById("tp-custom").value.trim();
+    const location = custom || document.getElementById("tp-room").value;
+    await runAdmin("tp", { playerID: currentPlayerId, location });
+  });
+
+  // ── Flags ──
+  document.getElementById("set-flag-btn").addEventListener("click", async () => {
+    if (!requirePlayer()) return;
+    const flagID = document.getElementById("set-flag-id").value.trim();
+    const value = parseInt(document.getElementById("set-flag-value").value, 10) || 1;
+    if (!flagID) { setResult("Enter flag ID.", true); return; }
+    await runAdmin("setFlag", { playerID: currentPlayerId, flagID, value });
+  });
+  document.getElementById("get-flag-btn").addEventListener("click", async () => {
+    if (!requirePlayer()) return;
+    const flagID = document.getElementById("get-flag-id").value.trim();
+    if (!flagID) { setResult("Enter flag ID.", true); return; }
+    const data = await runAdmin("getFlag", { playerID: currentPlayerId, flagID });
+    document.getElementById("get-flag-result").textContent = data.data !== undefined ? " = " + data.data : "";
+  });
+  document.getElementById("unlock-all-btn").addEventListener("click", () => {
+    document.getElementById("unlock-all-confirm").style.display = "inline";
+  });
+  document.getElementById("unlock-all-do").addEventListener("click", async () => {
+    if (document.getElementById("unlock-all-word").value.trim().toLowerCase() !== "yes") {
+      setResult("Type 'yes' to confirm.", true);
+      return;
+    }
+    if (!requirePlayer()) return;
+    await runAdmin("unlockAll", { playerID: currentPlayerId });
+    document.getElementById("unlock-all-confirm").style.display = "none";
+    document.getElementById("unlock-all-word").value = "";
+  });
+
+  // ── Danger zone ──
+  document.getElementById("wipe-player-word").addEventListener("input", () => {
+    document.getElementById("wipe-player-btn").disabled = document.getElementById("wipe-player-word").value.trim() !== "CONFIRM";
+  });
+  document.getElementById("wipe-player-btn").addEventListener("click", async () => {
+    if (!requirePlayer()) return;
+    await runAdmin("wipePlayer", { playerID: currentPlayerId });
+    currentPlayerId = null;
+    lastLookup = null;
+    document.getElementById("current-player-id").textContent = "—";
+  });
+  document.getElementById("wipe-all-word").addEventListener("input", () => {
+    document.getElementById("wipe-all-btn").disabled = document.getElementById("wipe-all-word").value.trim() !== "WIPE ALL";
+  });
+  document.getElementById("wipe-all-btn").addEventListener("click", async () => {
+    await runAdmin("wipeAllPlayers", {});
+    currentPlayerId = null;
+    lastLookup = null;
+    document.getElementById("current-player-id").textContent = "—";
+  });
+})();
+  </script>
+</body>
+</html>
