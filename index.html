@@ -2284,9 +2284,9 @@ document.addEventListener('keydown', e => {
 // ── Admin console (dev only) ──────────────────────────────────────
 // Set window.ADMIN_KEY = 'your-ADMIN_SECRET' and optionally window.ADMIN_API = API (or worker URL).
 // Then: admin('giveItem 12345 rope 2'); admin('tp 12345 market_square'); admin('listCommands');
-window.runAdmin = async function adminCmd(line) {
+window.admin = window.runAdmin = async function adminCmd(line) {
   const ADMIN_KEY = window.ADMIN_KEY;
-  const base = (typeof window.ADMIN_API !== 'undefined' ? window.ADMIN_API : (typeof API !== 'undefined' ? API : '')) || '';
+  const base = (window.location.origin && window.location.protocol !== 'file:') ? window.location.origin : (window.ADMIN_API ?? API ?? '');
   if (!ADMIN_KEY) { console.error('Set window.ADMIN_KEY to your ADMIN_SECRET'); return; }
   const tokens = (line || '').match(/"([^"]*)"|'([^']*)'|\S+/g) || [];
   const args = tokens.map(t => (t.startsWith('"') || t.startsWith("'")) ? t.slice(1, -1) : t);
@@ -2326,6 +2326,7 @@ window.runAdmin = async function adminCmd(line) {
     return data;
   } catch (e) {
     console.error(e);
+    console.error('Backend unreachable. If deploying: run `wrangler deploy` and use that URL. For local dev: run `wrangler dev` and open the game from the URL it prints.');
     return { success: false, error: e.message };
   }
 };

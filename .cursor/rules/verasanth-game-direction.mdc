@@ -1,0 +1,41 @@
+---
+description: Verasanth tone, world pillars, NPCs, and constraints from GAME_DIRECTION.md
+alwaysApply: true
+---
+
+# Verasanth Game Direction
+
+When adding or changing content (dialogue, locations, items, systems), align with the canonical blueprint: **GAME_DIRECTION.md**.
+
+## Tone
+
+- Dark, atmospheric, grounded. Short dialogue; no lore dumps, no high fantasy, no comedy, no modern slang.
+- Sensory detail: cold, stone, fog, echoes. Environmental storytelling over exposition.
+
+## World pillars
+
+- **Oppression** — mountain, fog, cold.
+- **Decay** — old stone, old magic, old grudges.
+- **Subtlety** — NPCs hint; the world suggests rather than explains.
+- **Resilience** — people endure and adapt.
+- **Environmental storytelling** — walls, objects, spaces tell stories.
+
+City = hub (Verasanth). Runs = zones (mountain, forest, sewer). Districts modular and expandable.
+
+## Key NPCs
+
+- **Kelvaris** — bartender; polite, observant; rumors, quest hooks.
+- **Caelir** — weaponsmith; elegant, precise; weapon upgrades, crafted gear.
+- **Veyra** — minimal speech, heavy environmental storytelling; rare items, lore fragments.
+- **Seris Vantrel** — general trader; calm, enigmatic; goods, consumables, run supplies.
+- **Alchemist/Herbalist** — practical, uncanny; potions, buffs, run modifiers.
+
+They speak briefly and meaningfully; never fully explain themselves.
+
+## Technical
+
+- Modular, data-driven zones (e.g. JSON). Stateful NPCs. Simple, atmospheric UI. Avoid overcomplication.
+
+## Constraint
+
+All new content must align with **GAME_DIRECTION.md**. When in doubt, prefer subtle and old/weathered over flashy or explanatory.

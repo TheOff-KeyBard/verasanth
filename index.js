@@ -560,8 +560,7 @@ export default {
       if (method === "POST") {
         try { body = await request.json(); } catch {}
       }
-
-    // ── Auth: Register ──
+      // ── Auth: Register ──
 if (path === "/api/register" && method === "POST") {
   const { username, password, name, race } = body;
   if (!name || name.trim().length < 2) return err("Name too short.");
