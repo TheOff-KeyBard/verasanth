@@ -16,6 +16,12 @@ const COMBAT_DATA = {"enemies": {"cinder_rat": {"id": "cinder_rat", "name": "Cin
 const RACES = {"human": {"name": "human", "description": "", "stat_mods": {"strength": 0, "dexterity": 0, "constitution": 0, "intelligence": 0, "wisdom": 0, "charisma": 0}}, "dwarf": {"name": "dwarf", "description": "", "stat_mods": {"strength": 1, "dexterity": -1, "constitution": 2, "intelligence": 0, "wisdom": 0, "charisma": 0}}, "elf": {"name": "elf", "description": "", "stat_mods": {"strength": -1, "dexterity": 2, "constitution": 0, "intelligence": 1, "wisdom": 0, "charisma": 0}}, "tiefling": {"name": "tiefling", "description": "", "stat_mods": {"strength": 0, "dexterity": 0, "constitution": 0, "intelligence": 1, "wisdom": 0, "charisma": 2}}};
 const INSTINCTS = {"streetcraft": {"label": "Echo: Streetcraft", "description": "", "stat_mods": {}}, "ironblood": {"label": "Echo: Ironblood", "description": "", "stat_mods": {}}, "ember_touched": {"label": "Echo: Ember-Touched", "description": "", "stat_mods": {}}, "hearthbound": {"label": "Echo: Hearthbound", "description": "", "stat_mods": {}}};
 
+const PROGRESSION_FLAGS = [
+  "seen_sewer_wall_markings", "seen_sewer_graffiti", "seen_dask_roster", "seen_tier2_graffiti",
+  "seen_rusted_pipe", "seen_foundation_dask", "warned_mid_sewer", "has_seen_market_square",
+  "found_foundation_stone", "has_room",
+];
+
 const NPC_LOCATIONS = {
   bartender:   "tavern",
   weaponsmith: "atelier",
@@ -560,6 +566,18 @@ export default {
       if (adminResponse.status !== 404) return adminResponse;
     }
 
+    // GET /api/character/flags (before ASSETS so it is not 404'd by static lookup)
+    if (path === "/api/character/flags" && method === "GET") {
+      const db = env.DB;
+      await initDb(db);
+      const userId = await getUid(db, request);
+      if (!userId) return err("Unauthorized.", 401);
+      const rows = await dbAll(db, "SELECT flag, value FROM player_flags WHERE user_id=?", [userId]);
+      const out = {};
+      rows.forEach((r) => (out[r.flag] = r.value));
+      return json(out);
+    }
+
     // Static assets first (no auth, no DB)
     if (env.ASSETS) {
       const asset = await env.ASSETS.fetch(requestForAssets);
@@ -1081,6 +1099,15 @@ if (path === "/api/combat/state" && method === "GET") {
     if (path === "/api/wallet" && method === "GET") {
       const row = await dbGet(db, "SELECT ash_marks,ember_shards,soul_coins FROM characters WHERE user_id=?", [uid]);
       return json(row || { ash_marks:0, ember_shards:0, soul_coins:0 });
+    }
+
+    // ── GET: Progression flags (for character sheet) ──
+    if (path === "/api/character/flags" && method === "GET") {
+      const flags = {};
+      for (const id of PROGRESSION_FLAGS) {
+        flags[id] = await getFlag(db, uid, id, 0);
+      }
+      return json(flags);
     }
 
     // ── GET: Races / Instincts (public) ──

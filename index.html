@@ -1,853 +1,10 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Verasanth</title>
-    <style>
-      :root{
-        --bg:#0b0d12;
-        --panel:#111525;
-        --panel2:#0f1320;
-        --text:#e7e9ee;
-        --muted:#a7adbd;
-        --accent:#b48cff;
-        --danger:#ff5c7a;
-        --ok:#57d48f;
-        --border:rgba(231,233,238,.12);
-        --shadow:0 12px 40px rgba(0,0,0,.55);
-        --mono:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        --sans:ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
-      }
-      *{ box-sizing:border-box; }
-      html,body{ height:100%; }
-      body{
-        margin:0;
-        background: radial-gradient(1200px 800px at 20% 0%, rgba(180,140,255,.16), transparent 55%),
-                    radial-gradient(900px 600px at 90% 20%, rgba(87,212,143,.12), transparent 55%),
-                    var(--bg);
-        color:var(--text);
-        font-family:var(--sans);
-      }
-      a{ color:var(--accent); }
-      .app{
-        min-height:100%;
-        display:grid;
-        place-items:center;
-        padding:24px;
-      }
-      .shell{
-        width:min(1000px, 100%);
-        border:1px solid var(--border);
-        background:linear-gradient(180deg, rgba(17,21,37,.85), rgba(17,21,37,.62));
-        box-shadow:var(--shadow);
-        border-radius:16px;
-        overflow:hidden;
-      }
-      header{
-        display:flex;
-        align-items:center;
-        justify-content:space-between;
-        padding:14px 16px;
-        border-bottom:1px solid var(--border);
-        background:rgba(15,19,32,.6);
-      }
-      header .brand{
-        display:flex;
-        gap:10px;
-        align-items:baseline;
-      }
-      header .brand .title{
-        font-weight:700;
-        letter-spacing:.4px;
-      }
-      header .brand .sub{
-        color:var(--muted);
-        font-size:12px;
-      }
-      header .right{
-        display:flex;
-        gap:10px;
-        align-items:center;
-      }
-      .pill{
-        font-family:var(--mono);
-        font-size:12px;
-        padding:6px 10px;
-        border:1px solid var(--border);
-        border-radius:999px;
-        color:var(--muted);
-        background:rgba(255,255,255,.02);
-      }
-      button, input, select{
-        font-family:inherit;
-        font-size:14px;
-      }
-      button{
-        cursor:pointer;
-        border:1px solid var(--border);
-        background:rgba(255,255,255,.04);
-        color:var(--text);
-        border-radius:10px;
-        padding:10px 12px;
-      }
-      button.primary{
-        background:linear-gradient(180deg, rgba(180,140,255,.26), rgba(180,140,255,.12));
-        border-color:rgba(180,140,255,.35);
-      }
-      button.danger{
-        background:linear-gradient(180deg, rgba(255,92,122,.18), rgba(255,92,122,.08));
-        border-color:rgba(255,92,122,.4);
-      }
-      button:disabled{
-        opacity:.5;
-        cursor:not-allowed;
-      }
-      input{
-        width:100%;
-        padding:10px 12px;
-        border-radius:10px;
-        border:1px solid var(--border);
-        background:rgba(0,0,0,.25);
-        color:var(--text);
-        outline:none;
-      }
-      input::placeholder{ color:rgba(167,173,189,.75); }
-      .content{
-        display:grid;
-        grid-template-columns: 340px 1fr;
-        gap:0;
-      }
-      .pane{
-        padding:16px;
-      }
-      .pane.left{
-        border-right:1px solid var(--border);
-        background:rgba(15,19,32,.35);
-      }
-      .pane h2{
-        font-size:14px;
-        margin:0 0 8px;
-        color:var(--muted);
-        letter-spacing:.5px;
-        text-transform:uppercase;
-      }
-      .stack{ display:grid; gap:10px; }
-      .row{ display:flex; gap:10px; }
-      .row > *{ flex:1; }
-      .muted{ color:var(--muted); }
-      .err{ color:var(--danger); }
-      .ok{ color:var(--ok); }
-      .divider{ height:1px; background:var(--border); margin:12px 0; }
-      .game{
-        display:none;
-      }
-      .log{
-        height:460px;
-        overflow:auto;
-        padding:14px 16px;
-        border:1px solid var(--border);
-        border-radius:12px;
-        background:rgba(0,0,0,.22);
-        font-family:var(--mono);
-        font-size:13px;
-        line-height:1.45;
-        white-space:pre-wrap;
-      }
-      .cmdbar{
-        display:flex;
-        gap:10px;
-        margin-top:12px;
-      }
-      .cmdbar input{ flex:1; font-family:var(--mono); }
-      .overlay{
-        position:fixed;
-        inset:0;
-        display:none;
-        align-items:center;
-        justify-content:center;
-        padding:24px;
-        background:rgba(5,6,10,.72);
-        backdrop-filter: blur(8px);
-        z-index:50;
-      }
-      .modal{
-        width:min(920px, 100%);
-        border:1px solid var(--border);
-        border-radius:16px;
-        background:linear-gradient(180deg, rgba(17,21,37,.92), rgba(15,19,32,.86));
-        box-shadow:var(--shadow);
-        overflow:hidden;
-      }
-      .modal header{
-        background:rgba(15,19,32,.55);
-      }
-      .modal .body{
-        padding:16px;
-        display:grid;
-        grid-template-columns: 1fr 320px;
-        gap:14px;
-      }
-      .card{
-        border:1px solid var(--border);
-        border-radius:14px;
-        background:rgba(0,0,0,.18);
-        padding:14px;
-      }
-      .card h3{
-        margin:0 0 8px;
-        font-size:16px;
-      }
-      .card p{ margin:0; color:var(--muted); }
-      .instinct-grid{
-        display:grid;
-        gap:10px;
-      }
-      .instinct{
-        text-align:left;
-        padding:12px;
-        border-radius:14px;
-        border:1px solid var(--border);
-        background:rgba(255,255,255,.03);
-      }
-      .instinct.selected{
-        border-color:rgba(180,140,255,.55);
-        background:rgba(180,140,255,.12);
-      }
-      .instinct .label{
-        font-weight:700;
-      }
-      .instinct .desc{
-        margin-top:4px;
-        color:var(--muted);
-        font-size:13px;
-      }
-      .stats{
-        display:grid;
-        gap:10px;
-      }
-      .stat{
-        display:grid;
-        grid-template-columns: 1fr 140px;
-        gap:10px;
-        align-items:center;
-        padding:10px 12px;
-        border:1px solid var(--border);
-        border-radius:14px;
-        background:rgba(255,255,255,.02);
-      }
-      .stat .name{
-        font-weight:650;
-      }
-      .stepper{
-        display:flex;
-        gap:8px;
-        align-items:center;
-        justify-content:flex-end;
-      }
-      .stepper .val{
-        width:34px;
-        text-align:center;
-        font-family:var(--mono);
-      }
-      .mini{
-        font-size:12px;
-        color:var(--muted);
-        font-family:var(--mono);
-      }
-      @media (max-width: 900px){
-        .content{ grid-template-columns: 1fr; }
-        .pane.left{ border-right:none; border-bottom:1px solid var(--border); }
-        .modal .body{ grid-template-columns: 1fr; }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="app">
-      <div class="shell">
-        <header>
-          <div class="brand">
-            <div class="title">Verasanth</div>
-            <div class="sub">Shadow Hearth build</div>
-          </div>
-          <div class="right">
-            <div id="statusPill" class="pill">offline</div>
-            <button id="logoutBtn" class="danger" style="display:none;">Logout</button>
-          </div>
-        </header>
-        <div class="content">
-          <div class="pane left">
-            <h2>Account</h2>
-            <div class="stack" id="authPane">
-              <div class="muted">Sign in to continue.</div>
-              <input id="username" placeholder="username" autocomplete="username" />
-              <input id="password" placeholder="password" type="password" autocomplete="current-password" />
-              <div class="row">
-                <button id="loginBtn" class="primary">Login</button>
-                <button id="registerBtn">Register</button>
-              </div>
-              <div id="authMsg" class="mini"></div>
-              <div class="divider"></div>
-              <div class="mini muted">
-                This page expects the Worker to serve API routes at the same origin (or configure <code>API_BASE</code> in the script).
-              </div>
-            </div>
-            <div class="stack" id="whoPane" style="display:none;">
-              <div class="mini muted">Signed in as</div>
-              <div id="who" style="font-weight:650;"></div>
-              <div class="divider"></div>
-              <div class="mini muted">Character</div>
-              <div id="charSummary" class="mini"></div>
-              <div class="divider"></div>
-              <button id="resetCharBtn" type="button" class="mini" title="Reset character to re-do True Welcome (alpha testing)">Reset my character</button>
-            </div>
-          </div>
-          <div class="pane">
-            <div class="game" id="gamePane">
-              <h2>Game</h2>
-              <div id="gameLog" class="log"></div>
-              <div class="cmdbar">
-                <input id="commandInput" placeholder="try: look" />
-                <button id="sendBtn" class="primary">Send</button>
-              </div>
-              <div class="mini muted" style="margin-top:10px;">
-                Note: this is a minimal test UI; your full GitHub frontend can drop in and keep the same onboarding overlay logic.
-              </div>
-            </div>
-            <div id="preGame" class="muted">
-              Login/register to begin. If your character is incomplete, you’ll be taken through “True Welcome” before the game loads.
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- True Welcome overlay -->
-    <div id="trueWelcome" class="overlay" aria-hidden="true">
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="twTitle">
-        <header>
-          <div class="brand">
-            <div class="title" id="twTitle">True Welcome</div>
-            <div class="sub" id="twStepTitle">Choose your Echo</div>
-          </div>
-          <div class="right">
-            <div id="twHint" class="pill">required</div>
-          </div>
-        </header>
-        <div class="body">
-          <div class="card">
-            <div id="twStepInstinct">
-              <h3>Choose an Echo</h3>
-              <p>Your instinct is permanent. It unlocks a once-per-turn combat ability.</p>
-              <div style="height:12px;"></div>
-              <div id="instinctGrid" class="instinct-grid"></div>
-            </div>
-
-            <div id="twStepStats" style="display:none;">
-              <h3>Set your stats (point pool)</h3>
-              <p>Each stat starts at 5. Distribute 28 points among them (similar to 3d6 totals). Weapons, armor, and items can boost stats later.</p>
-              <div style="height:12px;"></div>
-              <div class="row">
-                <div class="pill">Pool: <span id="pbBudget">28</span></div>
-                <div class="pill">Spent: <span id="pbSpent">0</span></div>
-                <div class="pill">Remaining: <span id="pbRemaining">28</span></div>
-              </div>
-              <div style="height:12px;"></div>
-              <div id="statsGrid" class="stats"></div>
-              <div style="height:12px;"></div>
-              <div class="mini muted" id="pbRules"></div>
-            </div>
-          </div>
-
-          <div class="card">
-            <h3>Continue</h3>
-            <p class="muted">You can’t enter the main UI until your character is complete.</p>
-            <div style="height:12px;"></div>
-            <div class="stack">
-              <button id="twBackBtn">Back</button>
-              <button id="twNextBtn" class="primary" disabled>Next</button>
-              <div id="twMsg" class="mini"></div>
-            </div>
-            <div class="divider"></div>
-            <div class="mini muted">
-              Tip: if you refresh mid-onboarding, the overlay will resume based on your saved character.
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <script>
-      // Configure if frontend isn't served by the Worker origin.
-      const API_BASE = ""; // e.g. "https://your-worker.your-domain.com"
-
-      const $ = (id) => document.getElementById(id);
-      const statusPill = $("statusPill");
-      const logoutBtn = $("logoutBtn");
-      const authPane = $("authPane");
-      const whoPane = $("whoPane");
-      const who = $("who");
-      const charSummary = $("charSummary");
-      const preGame = $("preGame");
-      const gamePane = $("gamePane");
-      const gameLog = $("gameLog");
-      const commandInput = $("commandInput");
-
-      const trueWelcome = $("trueWelcome");
-      const twStepTitle = $("twStepTitle");
-      const twHint = $("twHint");
-      const twMsg = $("twMsg");
-      const twBackBtn = $("twBackBtn");
-      const twNextBtn = $("twNextBtn");
-      const twStepInstinct = $("twStepInstinct");
-      const twStepStats = $("twStepStats");
-      const instinctGrid = $("instinctGrid");
-      const statsGrid = $("statsGrid");
-      const pbBudgetEl = $("pbBudget");
-      const pbSpentEl = $("pbSpent");
-      const pbRemainingEl = $("pbRemaining");
-      const pbRules = $("pbRules");
-
-      const TOKEN_KEY = "verasanth_token";
-      let token = localStorage.getItem(TOKEN_KEY) || "";
-      let currentCharacter = null;
-
-      function setStatus(text, ok=true){
-        statusPill.textContent = text;
-        statusPill.style.color = ok ? "var(--muted)" : "var(--danger)";
-      }
-
-      async function apiFetch(path, { method="GET", body=null, auth=true } = {}){
-        const headers = { "Content-Type": "application/json" };
-        if (auth && token) headers.Authorization = `Bearer ${token}`;
-        const res = await fetch(`${API_BASE}${path}`, {
-          method,
-          headers,
-          body: body ? JSON.stringify(body) : null,
-        });
-        let data = null;
-        const ct = res.headers.get("content-type") || "";
-        if (ct.includes("application/json")) data = await res.json();
-        else data = await res.text();
-        if (!res.ok){
-          const msg = (data && data.error) ? data.error : (typeof data === "string" ? data : "Request failed.");
-          const err = new Error(msg);
-          err.status = res.status;
-          err.data = data;
-          throw err;
-        }
-        return data;
-      }
-
-      function log(line){
-        gameLog.textContent += (gameLog.textContent ? "\n" : "") + line;
-        gameLog.scrollTop = gameLog.scrollHeight;
-      }
-
-      function showGame(){
-        preGame.style.display = "none";
-        gamePane.style.display = "block";
-      }
-      function hideGame(){
-        preGame.style.display = "block";
-        gamePane.style.display = "none";
-      }
-
-      function showOverlay(){
-        trueWelcome.style.display = "flex";
-        trueWelcome.setAttribute("aria-hidden","false");
-      }
-      function hideOverlay(){
-        trueWelcome.style.display = "none";
-        trueWelcome.setAttribute("aria-hidden","true");
-      }
-
-      // ─────────────────────────────────────────────────────────
-      // True Welcome: Instinct + Point-pool Stats
-      // ─────────────────────────────────────────────────────────
-
-      const POINT_BUY = {
-        base: 5,
-        pool: 28,
-        max: 18,
-      };
-
-      const STAT_KEYS = [
-        ["strength", "Strength"],
-        ["dexterity", "Dexterity"],
-        ["constitution", "Constitution"],
-        ["intelligence", "Intelligence"],
-        ["wisdom", "Wisdom"],
-        ["charisma", "Charisma"],
-      ];
-
-      function computeSpent(stats){
-        return Object.values(stats).reduce((sum, v) => sum + (Number(v) - POINT_BUY.base), 0);
-      }
-
-      function isStatsValid(stats){
-        for (const k of Object.keys(stats)){
-          const v = Number(stats[k]);
-          if (!Number.isInteger(v)) return false;
-          if (v < POINT_BUY.base || v > POINT_BUY.max) return false;
-        }
-        return computeSpent(stats) === POINT_BUY.pool;
-      }
-
-      let twStep = "instinct"; // "instinct" | "stats"
-      let selectedInstinct = "";
-      let instinctsData = null;
-      let statsState = {
-        strength: 5, dexterity: 5, constitution: 5,
-        intelligence: 5, wisdom: 5, charisma: 5,
-      };
-
-      function renderPointBuy(){
-        const spent = computeSpent(statsState);
-        const remaining = POINT_BUY.pool - spent;
-        pbBudgetEl.textContent = String(POINT_BUY.pool);
-        pbSpentEl.textContent = String(spent);
-        pbRemainingEl.textContent = String(remaining);
-        pbRemainingEl.style.color = remaining >= 0 ? "var(--ok)" : "var(--danger)";
-
-        pbRules.textContent = `Each stat starts at ${POINT_BUY.base}, max ${POINT_BUY.max}. Distribute all ${POINT_BUY.pool} points.`;
-
-        statsGrid.innerHTML = "";
-        for (const [key, label] of STAT_KEYS){
-          const v = statsState[key];
-          const fromPool = v - POINT_BUY.base;
-          const canDec = v > POINT_BUY.base;
-          const canInc = v < POINT_BUY.max && remaining > 0;
-
-          const row = document.createElement("div");
-          row.className = "stat";
-          row.innerHTML = `
-            <div>
-              <div class="name">${label}</div>
-              <div class="mini">+${fromPool} from pool</div>
-            </div>
-            <div class="stepper">
-              <button data-dec="${key}" ${canDec ? "" : "disabled"}>-</button>
-              <div class="val">${v}</div>
-              <button data-inc="${key}" ${canInc ? "" : "disabled"}>+</button>
-            </div>
-          `;
-          statsGrid.appendChild(row);
-        }
-
-        statsGrid.querySelectorAll("button[data-dec]").forEach(btn => {
-          btn.addEventListener("click", () => {
-            const k = btn.getAttribute("data-dec");
-            statsState[k] = Math.max(POINT_BUY.base, statsState[k] - 1);
-            renderPointBuy();
-            validateTW();
-          });
-        });
-        statsGrid.querySelectorAll("button[data-inc]").forEach(btn => {
-          btn.addEventListener("click", () => {
-            const k = btn.getAttribute("data-inc");
-            if (statsState[k] >= POINT_BUY.max || computeSpent(statsState) >= POINT_BUY.pool) return;
-            statsState[k] += 1;
-            renderPointBuy();
-            validateTW();
-          });
-        });
-      }
-
-      function renderInstincts(){
-        instinctGrid.innerHTML = "";
-        const instincts = instinctsData?.instincts || {};
-        for (const [id, def] of Object.entries(instincts)){
-          const btn = document.createElement("button");
-          btn.className = "instinct" + (selectedInstinct === id ? " selected" : "");
-          btn.type = "button";
-          const label = def?.label || id;
-          const desc = def?.description || "";
-          btn.innerHTML = `
-            <div class="label">${label}</div>
-            <div class="desc">${desc || " "}</div>
-          `;
-          btn.addEventListener("click", () => {
-            selectedInstinct = id;
-            renderInstincts();
-            validateTW();
-          });
-          instinctGrid.appendChild(btn);
-        }
-      }
-
-      function setTWStep(next){
-        twMsg.textContent = "";
-        if (next === "instinct"){
-          twStep = "instinct";
-          twStepTitle.textContent = "Choose your Echo";
-          twHint.textContent = "required";
-          twBackBtn.disabled = true;
-          twNextBtn.textContent = "Next";
-          twStepInstinct.style.display = "block";
-          twStepStats.style.display = "none";
-        } else {
-          twStep = "stats";
-          twStepTitle.textContent = "Set your stats";
-          twHint.textContent = "point pool";
-          twBackBtn.disabled = false;
-          twNextBtn.textContent = "Finish";
-          twStepInstinct.style.display = "none";
-          twStepStats.style.display = "block";
-          renderPointBuy();
-        }
-        validateTW();
-      }
-
-      function validateTW(){
-        if (twStep === "instinct"){
-          twNextBtn.disabled = !selectedInstinct;
-          return;
-        }
-        twNextBtn.disabled = !isStatsValid(statsState);
-      }
-
-      async function startTrueWelcomeFromCharacter(character){
-        currentCharacter = character;
-
-        // If already complete, never show overlay.
-        const needsInstinct = !character?.instinct;
-        const needsStats = !Number(character?.stats_set);
-        if (!needsInstinct && !needsStats) return false;
-
-        showOverlay();
-
-        // Preload instincts list for step 1
-        if (!instinctsData){
-          try {
-            instinctsData = await apiFetch("/api/data/instincts", { auth: false });
-          } catch (e) {
-            twMsg.textContent = `Failed to load instincts: ${e.message}`;
-            twMsg.className = "mini err";
-            throw e;
-          }
-        }
-
-        selectedInstinct = character?.instinct || "";
-        renderInstincts();
-
-        if (needsInstinct){
-          setTWStep("instinct");
-        } else {
-          setTWStep("stats");
-        }
-        return true;
-      }
-
-      twBackBtn.addEventListener("click", () => {
-        if (twStep === "stats") setTWStep("instinct");
-      });
-
-      twNextBtn.addEventListener("click", async () => {
-        twMsg.textContent = "";
-        twMsg.className = "mini";
-        twNextBtn.disabled = true;
-
-        try {
-          if (twStep === "instinct"){
-            await apiFetch("/api/character/instinct", { method:"POST", body:{ instinct: selectedInstinct } });
-            // Refresh character state so we respect server truth.
-            currentCharacter = await apiFetch("/api/character");
-            setTWStep("stats");
-            return;
-          }
-
-          // Stats step
-          if (!isStatsValid(statsState)) throw new Error("Invalid point pool: use all 28 points.");
-          await apiFetch("/api/character/stats", { method:"POST", body: statsState });
-          currentCharacter = await apiFetch("/api/character");
-
-          hideOverlay();
-          await loadGame();
-        } catch (e) {
-          twMsg.textContent = e.message || "Failed.";
-          twMsg.className = "mini err";
-          validateTW();
-        }
-      });
-
-      // ─────────────────────────────────────────────────────────
-      // Auth + bootstrap
-      // ─────────────────────────────────────────────────────────
-
-      async function refreshCharacterAndMaybeOnboard(){
-        const character = await apiFetch("/api/character");
-        currentCharacter = character;
-
-        who.textContent = character?.name ? `${character.name} (${character.user_id})` : character?.user_id || "unknown";
-        charSummary.textContent = [
-          character?.race ? `race=${character.race}` : "race=?",
-          character?.instinct ? `instinct=${character.instinct}` : "instinct=?",
-          Number(character?.stats_set) ? "stats=ok" : "stats=?",
-        ].join(" • ");
-
-        const didShow = await startTrueWelcomeFromCharacter(character);
-        if (!didShow) await loadGame();
-      }
-
-      async function loginOrRegister(kind){
-        const username = $("username").value.trim();
-        const password = $("password").value;
-        const authMsg = $("authMsg");
-        authMsg.textContent = "";
-        authMsg.className = "mini";
-        if (!username || !password){
-          authMsg.textContent = "Username and password required.";
-          authMsg.className = "mini err";
-          return;
-        }
-        try {
-          const data = await apiFetch(kind === "login" ? "/api/login" : "/api/register", {
-            method: "POST",
-            body: { username, password },
-            auth: false
-          });
-          token = data.token;
-          localStorage.setItem(TOKEN_KEY, token);
-          await onAuthed();
-        } catch (e) {
-          authMsg.textContent = e.message || "Auth failed.";
-          authMsg.className = "mini err";
-        }
-      }
-
-      $("loginBtn").addEventListener("click", () => loginOrRegister("login"));
-      $("registerBtn").addEventListener("click", () => loginOrRegister("register"));
-
-      async function onAuthed(){
-        setStatus("online");
-        logoutBtn.style.display = "inline-block";
-        authPane.style.display = "none";
-        whoPane.style.display = "grid";
-        await refreshCharacterAndMaybeOnboard();
-      }
-
-      async function logout(){
-        try { await apiFetch("/api/logout", { method:"POST" }); } catch {}
-        token = "";
-        localStorage.removeItem(TOKEN_KEY);
-        currentCharacter = null;
-        setStatus("offline");
-        logoutBtn.style.display = "none";
-        authPane.style.display = "grid";
-        whoPane.style.display = "none";
-        hideOverlay();
-        hideGame();
-        preGame.style.display = "block";
-        gameLog.textContent = "";
-      }
-      logoutBtn.addEventListener("click", logout);
-
-      async function resetMyCharacter(){
-        const btn = $("resetCharBtn");
-        if (btn) btn.disabled = true;
-        try {
-          await apiFetch("/api/character/reset", { method: "POST", body: {} });
-          currentCharacter = null;
-          hideGame();
-          await refreshCharacterAndMaybeOnboard();
-        } catch (e) {
-          if (typeof alert !== "undefined") alert(e.message || "Reset failed.");
-        }
-        if (btn) btn.disabled = false;
-      }
-      const resetCharBtn = $("resetCharBtn");
-      if (resetCharBtn) resetCharBtn.addEventListener("click", resetMyCharacter);
-
-      // ─────────────────────────────────────────────────────────
-      // Minimal game UI for smoke-testing
-      // ─────────────────────────────────────────────────────────
-
-      async function loadGame(){
-        // Gate: never load if character incomplete.
-        const c = currentCharacter || await apiFetch("/api/character");
-        const needsInstinct = !c?.instinct;
-        const needsStats = !Number(c?.stats_set);
-        if (needsInstinct || needsStats){
-          await startTrueWelcomeFromCharacter(c);
-          return;
-        }
-
-        showGame();
-        gameLog.textContent = "";
-        const look = await apiFetch("/api/look");
-        log(`[${look.name}]`);
-        log(look.description);
-        log("");
-        log(`Exits: ${look.exits.join(", ") || "none"}`);
-        if (look.npcs?.length) log(`NPCs: ${look.npcs.join(", ")}`);
-        if (look.fightable) log(`(This place feels fightable.)`);
-      }
-
-      async function handleCommand(cmd){
-        const raw = cmd.trim();
-        if (!raw) return;
-        log(`> ${raw}`);
-        const [head, ...rest] = raw.split(/\s+/);
-        try {
-          if (head === "look"){
-            const look = await apiFetch("/api/look");
-            log(`[${look.name}]`);
-            log(look.description);
-            log(`Exits: ${look.exits.join(", ") || "none"}`);
-            return;
-          }
-          if (head === "go" || head === "move"){
-            const direction = rest[0];
-            const data = await apiFetch("/api/move", { method:"POST", body:{ direction } });
-            if (data.ambient) log(data.ambient);
-            log(`[${data.name}]`);
-            log(data.description);
-            log(`Exits: ${data.exits.join(", ") || "none"}`);
-            return;
-          }
-          log("Unknown command (try: look, go north).");
-        } catch (e) {
-          log(`! ${e.message || "Error"}`);
-        }
-      }
-
-      $("sendBtn").addEventListener("click", async () => {
-        const v = commandInput.value;
-        commandInput.value = "";
-        await handleCommand(v);
-      });
-      commandInput.addEventListener("keydown", async (e) => {
-        if (e.key === "Enter"){
-          e.preventDefault();
-          const v = commandInput.value;
-          commandInput.value = "";
-          await handleCommand(v);
-        }
-      });
-
-      // Auto-login if token present
-      (async () => {
-        if (!token){
-          setStatus("offline");
-          return;
-        }
-        try {
-          setStatus("checking…");
-          await onAuthed();
-        } catch (e) {
-          await logout();
-        }
-      })();
-    </script>
-  </body>
-</html>
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Verasanth</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
 <style>
@@ -1457,17 +614,22 @@
   }
 
   .form-input {
-    background: var(--bg2);
+    background: rgba(0,0,0,0.4);
     border: 1px solid var(--border-warm);
-    color: var(--text-bright);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 12px;
     font-family: var(--font-body);
     font-size: 1rem;
-    padding: 10px 14px;
     outline: none;
     transition: border-color 0.2s;
   }
 
-  .form-input:focus { border-color: var(--ember); }
+  .form-input:focus {
+    border-color: var(--ember);
+    outline: none;
+    box-shadow: 0 0 8px rgba(196,98,42,0.3);
+  }
 
   .form-select {
     background: var(--bg2);
@@ -1570,10 +732,367 @@
 
   #board-close:hover { color: var(--text); border-color: var(--ash); }
 
+  /* ── True Welcome overlay (second app) ──────────────────────────── */
+  .screen-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tw-modal {
+    background: var(--bg2);
+    border: 1px solid var(--ember-dim);
+    box-shadow: 0 0 24px rgba(196,98,42,0.3);
+    padding: 28px 32px;
+    width: min(420px, 92vw);
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .tw-modal h2 { font-family: var(--font-title); font-size: 1.1rem; color: var(--ember-glow); margin-bottom: 12px; }
+  .tw-hint { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 16px; }
+  .tw-instinct-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+  .tw-instinct-grid button {
+    background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+    padding: 10px 14px; font-family: var(--font-body); cursor: pointer;
+  }
+  .tw-instinct-grid button.selected { border-color: var(--ember); color: var(--ember-glow); }
+  .tw-stats-grid { display: grid; gap: 8px; margin-bottom: 12px; }
+  .tw-stats-grid label { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .tw-stats-grid input { width: 56px; }
+  .tw-pool { font-size: 0.9rem; color: var(--text-dim); margin-bottom: 12px; }
+  .tw-msg { min-height: 1.2em; font-size: 0.9rem; margin-bottom: 12px; }
+  .tw-msg.err { color: var(--danger); }
+  .tw-actions { margin-top: 16px; }
+  .btn-ember {
+    background: var(--ember); border: 1px solid var(--ember-dim); color: var(--text-bright);
+    padding: 10px 24px; font-family: var(--font-title); cursor: pointer;
+  }
+  .btn-ember:hover { background: var(--ember-glow); color: var(--bg); }
+
+  /* ── Character sheet (Screen 2) ─────────────────────────────────── */
+  .screen-full {
+    position: fixed;
+    inset: 0;
+    background: #0d0b08;
+    z-index: 150;
+    overflow-y: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .sheet-container {
+    position: relative;
+    width: min(560px, 96vw);
+    max-height: 92vh;
+    overflow-y: auto;
+    background: var(--bg2);
+    border: 1px solid var(--border-warm);
+    box-shadow: 0 0 32px rgba(196,98,42,0.2);
+    padding: 24px 28px;
+  }
+  .sheet-ember-pulse {
+    animation: sheetPulse 3s ease-in-out infinite;
+  }
+  @keyframes sheetPulse {
+    0%, 100% { box-shadow: 0 0 32px rgba(196,98,42,0.2); border-color: var(--ember-dim); }
+    50% { box-shadow: 0 0 40px rgba(232,132,90,0.35); border-color: var(--ember); }
+  }
+  .sheet-cracks {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(180deg, transparent 0%, transparent 48%, rgba(196,98,42,0.08) 50%, transparent 52%, transparent 100%);
+  }
+  .sheet-embers {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .sheet-embers .ember-dot {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: var(--ember-glow);
+    border-radius: 50%;
+    opacity: 0.5;
+    animation: floatEmber 4s ease-in-out infinite;
+  }
+  .sheet-embers .ember-dot:nth-child(1) { top: 8%; left: 12%; animation-delay: 0s; }
+  .sheet-embers .ember-dot:nth-child(2) { top: 25%; right: 18%; animation-delay: 0.8s; }
+  .sheet-embers .ember-dot:nth-child(3) { top: 55%; left: 8%; animation-delay: 1.6s; }
+  .sheet-embers .ember-dot:nth-child(4) { top: 75%; right: 12%; animation-delay: 2.4s; }
+  .sheet-embers .ember-dot:nth-child(5) { top: 40%; left: 50%; animation-delay: 3s; }
+  @keyframes floatEmber {
+    0%, 100% { transform: translate(0,0); opacity: 0.4; }
+    50% { transform: translate(6px, -10px); opacity: 0.7; }
+  }
+  .sheet-inner { position: relative; z-index: 1; }
+  .sheet-name { font-family: var(--font-title); font-size: 1.6rem; color: var(--ember-glow); text-shadow: 0 0 12px rgba(196,98,42,0.5); margin-bottom: 16px; }
+  .sheet-sigil { color: var(--ember); margin-right: 6px; }
+  .sheet-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .sheet-tab {
+    background: var(--bg3); border: 1px solid var(--border); color: var(--text-dim);
+    padding: 6px 12px; font-size: 0.88rem; cursor: pointer;
+  }
+  .sheet-tab:hover { color: var(--ember-glow); }
+  .sheet-tab.active { border-color: var(--ember); color: var(--ember-glow); }
+  .sheet-divider {
+    height: 1px;
+    background: transparent;
+    box-shadow: 0 0 8px #c4622a, 0 0 2px #e8845a;
+    margin: 14px 0;
+  }
+  .sheet-tab-panel { font-size: 0.95rem; min-height: 80px; }
+  .cs-badges { margin-bottom: 8px; }
+  .badge { display: inline-block; background: var(--bg3); border: 1px solid var(--ember-dim); color: var(--ember-glow); padding: 4px 10px; margin-right: 8px; font-size: 0.85rem; }
+  .cs-muted { color: var(--text-dim); font-size: 0.9rem; margin: 8px 0; }
+  .cs-last-seen { color: var(--text-dim); font-size: 0.9rem; }
+  .cs-hp-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .cs-hp-bar { height: 10px; background: var(--bg3); border: 1px solid var(--border); overflow: hidden; margin-bottom: 14px; }
+  .cs-hp-fill { height: 100%; background: var(--ember); transition: width 0.3s; }
+  .cs-currency { margin-bottom: 12px; color: var(--gold); font-size: 0.9rem; }
+  .cs-inv-list { color: var(--text-dim); font-size: 0.9rem; }
+  .cs-flags-list { list-style: none; }
+  .cs-flags-list li { padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+  .cs-flags-list li.unlocked { color: var(--ember-glow); }
+  .cs-flags-list li.locked { color: var(--text-dim); }
+  .btn-enter-verasanth {
+    display: block;
+    width: 100%;
+    margin-top: 20px;
+    padding: 14px 24px;
+    background: var(--ember);
+    border: 1px solid var(--ember-dim);
+    color: var(--text-bright);
+    font-family: var(--font-title);
+    font-size: 1rem;
+    cursor: pointer;
+    box-shadow: 0 0 16px rgba(196,98,42,0.4);
+  }
+  .btn-enter-verasanth:hover { background: var(--ember-glow); color: var(--bg); }
+
+  /* ── Collapsible sheet panel (Screen 3) ─────────────────────────── */
+  .sheet-panel-tab {
+    position: fixed;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    padding: 12px 8px;
+    background: var(--bg2);
+    border: 1px solid var(--border-warm);
+    border-left: none;
+    border-radius: 0 8px 8px 0;
+    color: var(--ember-glow);
+    font-family: var(--font-title);
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    z-index: 50;
+  }
+  .sheet-panel-tab:hover { background: var(--bg3); }
+  .sheet-panel-overlay {
+    position: fixed;
+    inset: 0;
+    background: transparent;
+    z-index: 98;
+  }
+  .sheet-panel {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: min(340px, 85vw);
+    background: var(--bg2);
+    border-right: 1px solid var(--border-warm);
+    box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+    z-index: 99;
+    overflow-y: auto;
+    padding: 20px 16px;
+  }
+  .sheet-panel-title { font-family: var(--font-title); font-size: 1.1rem; color: var(--ember-glow); margin-bottom: 12px; }
+  .sheet-panel-tab-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    border-left: 2px solid transparent;
+    color: var(--text-dim);
+    padding: 6px 10px;
+    margin-bottom: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  .sheet-panel-tab-btn:hover { color: var(--text); }
+  .sheet-panel-tab-btn.active { border-left-color: var(--ember); color: var(--ember-glow); }
+  .sheet-panel-content { font-size: 0.88rem; line-height: 1.5; }
+
   /* ── Scrollbars ────────────────────────────────────────────────── */
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border-warm); border-radius: 2px; }
+
+  /* ── Entry transition screen ───────────────────────────────────── */
+  #entry-screen {
+    position: fixed;
+    inset: 0;
+    background: #0d0b08;
+    z-index: 200;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    box-sizing: border-box;
+  }
+  #entry-screen .entry-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    max-width: 100%;
+  }
+  #entry-screen .entry-title {
+    font-family: var(--font-title);
+    font-size: clamp(2rem, 5vw, 3rem);
+    letter-spacing: 0.2em;
+    margin-bottom: 48px;
+    position: relative;
+    z-index: 1;
+  }
+  #entry-screen .entry-title .entry-letter {
+    display: inline-block;
+    opacity: 0;
+    animation: entryLetterBurn 0.6s ease-out forwards;
+  }
+  #entry-screen .entry-title .entry-letter:nth-child(1) { animation-delay: 0ms; }
+  #entry-screen .entry-title .entry-letter:nth-child(2) { animation-delay: 80ms; }
+  #entry-screen .entry-title .entry-letter:nth-child(3) { animation-delay: 160ms; }
+  #entry-screen .entry-title .entry-letter:nth-child(4) { animation-delay: 240ms; }
+  #entry-screen .entry-title .entry-letter:nth-child(5) { animation-delay: 320ms; }
+  #entry-screen .entry-title .entry-letter:nth-child(6) { animation-delay: 400ms; }
+  #entry-screen .entry-title .entry-letter:nth-child(7) { animation-delay: 480ms; }
+  #entry-screen .entry-title .entry-letter:nth-child(8) { animation-delay: 560ms; }
+  #entry-screen .entry-title .entry-letter:nth-child(9) { animation-delay: 640ms; }
+  @keyframes entryLetterBurn {
+    0% { opacity: 0; color: var(--ember-glow); text-shadow: 0 0 20px var(--ember-glow); }
+    50% { opacity: 1; color: var(--ember-glow); text-shadow: 0 0 28px var(--ember-glow); }
+    100% { opacity: 1; color: var(--gold); text-shadow: 0 0 12px rgba(201,168,76,0.6); }
+  }
+  #entry-screen .entry-copy {
+    font-family: var(--font-body);
+    font-style: italic;
+    font-size: 1.05rem;
+    color: var(--ash-light);
+    max-width: 520px;
+    margin: 0 auto 24px;
+    line-height: 1.9;
+    opacity: 0;
+    animation: entryFadeIn 0.8s ease-out forwards;
+    animation-delay: 1.2s;
+  }
+  #entry-screen .entry-prompt {
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ash);
+    margin-bottom: 28px;
+    opacity: 0;
+    animation: entryFadeIn 0.8s ease-out forwards;
+    animation-delay: 2.2s;
+  }
+  #entry-screen #entry-enter-city {
+    font-family: var(--font-title);
+    font-size: 0.95rem;
+    letter-spacing: 0.15em;
+    padding: 14px 28px;
+    background: transparent;
+    border: 1px solid var(--ember);
+    color: var(--ember-glow);
+    cursor: pointer;
+    box-shadow: 0 0 16px rgba(196,98,42,0.3);
+    opacity: 0;
+    animation: entryFadeIn 0.6s ease-out forwards;
+    animation-delay: 2.5s;
+  }
+  #entry-screen #entry-enter-city:hover {
+    background: var(--ember);
+    color: var(--text-bright);
+  }
+  @keyframes entryFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* Entry Phase 2: intensity, letter fade out, black */
+  #entry-screen.entry-phase2 {
+    transition: background 0.5s ease-out;
+  }
+  #entry-screen.entry-phase2 .entry-title .entry-letter {
+    color: #fff3e0;
+    text-shadow: 0 0 30px #fff3e0;
+    animation: entryLetterFadeOut 1.5s ease-out forwards;
+  }
+  #entry-screen.entry-phase2 .entry-title .entry-letter:nth-child(1) { animation-delay: 0.8s; }
+  #entry-screen.entry-phase2 .entry-title .entry-letter:nth-child(2) { animation-delay: 0.7s; }
+  #entry-screen.entry-phase2 .entry-title .entry-letter:nth-child(3) { animation-delay: 0.6s; }
+  #entry-screen.entry-phase2 .entry-title .entry-letter:nth-child(4) { animation-delay: 0.5s; }
+  #entry-screen.entry-phase2 .entry-title .entry-letter:nth-child(5) { animation-delay: 0.4s; }
+  #entry-screen.entry-phase2 .entry-title .entry-letter:nth-child(6) { animation-delay: 0.3s; }
+  #entry-screen.entry-phase2 .entry-title .entry-letter:nth-child(7) { animation-delay: 0.2s; }
+  #entry-screen.entry-phase2 .entry-title .entry-letter:nth-child(8) { animation-delay: 0.1s; }
+  #entry-screen.entry-phase2 .entry-title .entry-letter:nth-child(9) { animation-delay: 0s; }
+  @keyframes entryLetterFadeOut {
+    from { opacity: 1; text-shadow: 0 0 30px #fff3e0; }
+    to { opacity: 0; text-shadow: none; }
+  }
+  #entry-screen.entry-phase2 .entry-copy,
+  #entry-screen.entry-phase2 .entry-prompt,
+  #entry-screen.entry-phase2 #entry-enter-city {
+    opacity: 0;
+    animation: none;
+  }
+  #entry-screen.entry-phase2 .entry-blackout {
+    position: absolute;
+    inset: 0;
+    background: #000;
+    opacity: 0;
+    animation: entryBlackout 1s ease-out 1.5s forwards;
+    pointer-events: none;
+  }
+  @keyframes entryBlackout {
+    to { opacity: 1; }
+  }
+  #entry-screen .entry-ash-container {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10;
+    overflow: hidden;
+  }
+  .entry-ash {
+    position: fixed;
+    width: 3px;
+    height: 3px;
+    background: #e8845a;
+    border-radius: 50%;
+    opacity: 0.9;
+    pointer-events: none;
+    box-shadow: 0 0 4px #c4622a;
+    animation: entryAshFall linear forwards;
+    z-index: 210;
+  }
+  @keyframes entryAshFall {
+    from { transform: translate(0, 0); opacity: 0.9; }
+    to { transform: translate(var(--fall-x, 0), var(--fall-y, 90px)); opacity: 0; }
+  }
 </style>
 </head>
 <body>
@@ -1628,8 +1147,101 @@
   </div>
 </div>
 
-<!-- ── Main App ─────────────────────────────────────────────────── -->
-<div id="app">
+<!-- ── True Welcome (second app) ─────────────────────────────────── -->
+<div id="true-welcome-screen" class="screen-overlay" style="display:none;" aria-hidden="true">
+  <div class="tw-modal">
+    <h2 id="tw-title">Choose your Echo</h2>
+    <div id="tw-step-instinct">
+      <p class="tw-hint">Your instinct is permanent. It unlocks a once-per-turn combat ability.</p>
+      <div id="tw-instinct-grid" class="tw-instinct-grid"></div>
+    </div>
+    <div id="tw-step-stats" style="display:none;">
+      <p class="tw-hint">Distribute 28 points among your stats (each starts at 5).</p>
+      <div id="tw-stats-grid" class="tw-stats-grid"></div>
+      <div class="tw-pool"><span>Pool: <strong id="tw-pool-remain">28</strong></span></div>
+    </div>
+    <div id="tw-msg" class="tw-msg"></div>
+    <div class="tw-actions">
+      <button type="button" id="tw-next-btn" class="btn-ember">Next</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Character Sheet (Screen 2) ────────────────────────────────── -->
+<div id="character-sheet-screen" class="screen-full" style="display:none;">
+  <div class="sheet-container sheet-ember-pulse">
+    <div class="sheet-cracks"></div>
+    <div class="sheet-embers" aria-hidden="true">
+      <span class="ember-dot"></span><span class="ember-dot"></span><span class="ember-dot"></span><span class="ember-dot"></span><span class="ember-dot"></span>
+    </div>
+    <div class="sheet-inner">
+      <h1 class="sheet-name"><span class="sheet-sigil">ᚢ</span> <span id="cs-name">—</span></h1>
+      <div class="sheet-tabs">
+        <button type="button" class="sheet-tab active" data-cs-tab="identity">Identity</button>
+        <button type="button" class="sheet-tab" data-cs-tab="stats">Stats</button>
+        <button type="button" class="sheet-tab" data-cs-tab="inventory">Inventory</button>
+        <button type="button" class="sheet-tab" data-cs-tab="progression">Progression</button>
+      </div>
+      <div class="sheet-divider"></div>
+      <div id="cs-tab-identity" class="sheet-tab-panel">
+        <div class="cs-badges"><span id="cs-race" class="badge">—</span> <span id="cs-instinct" class="badge">—</span></div>
+        <p id="cs-instinct-desc" class="cs-muted"></p>
+        <p class="cs-last-seen">Last seen: <span id="cs-location">—</span></p>
+      </div>
+      <div id="cs-tab-stats" class="sheet-tab-panel" style="display:none;">
+        <div class="cs-hp-row"><span>HP</span> <span id="cs-hp-text">— / —</span></div>
+        <div class="cs-hp-bar"><div id="cs-hp-fill" class="cs-hp-fill"></div></div>
+        <div id="cs-stats-rows"></div>
+        <p class="cs-muted">XP: <span id="cs-xp">—</span> · Stage: <span id="cs-stage">—</span></p>
+      </div>
+      <div id="cs-tab-inventory" class="sheet-tab-panel" style="display:none;">
+        <div class="cs-currency"><span>◈</span> <span id="cs-ash">0</span> Ash Marks · <span>◆</span> <span id="cs-ember">0</span> Ember Shards · <span>○</span> <span id="cs-soul">0</span> Soul Coins</div>
+        <div id="cs-inv-list" class="cs-inv-list">Nothing carried.</div>
+      </div>
+      <div id="cs-tab-progression" class="sheet-tab-panel" style="display:none;">
+        <ul id="cs-flags-list"></ul>
+      </div>
+      <div class="sheet-divider"></div>
+      <button type="button" id="cs-enter-btn" class="btn-enter-verasanth">Enter Verasanth — The Shadow Hearth Awaits</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Entry transition (full-screen, hidden by default) ───────────── -->
+<div id="entry-screen" style="display:none;" aria-hidden="true">
+  <div class="entry-blackout" aria-hidden="true"></div>
+  <div class="entry-ash-container" id="entry-ash-container"></div>
+  <div class="entry-inner">
+    <div class="entry-title" id="entry-title">
+      <span class="entry-letter">V</span><span class="entry-letter">E</span><span class="entry-letter">R</span><span class="entry-letter">A</span><span class="entry-letter">S</span><span class="entry-letter">A</span><span class="entry-letter">N</span><span class="entry-letter">T</span><span class="entry-letter">H</span>
+    </div>
+    <p class="entry-copy">They came from somewhere. They always do.</p>
+    <p class="entry-copy">The ash took the memory of it. The ash takes everything, eventually.</p>
+    <p class="entry-copy">Welcome to Verasanth. You have always been here.</p>
+    <p class="entry-prompt">— step forward when you are ready —</p>
+    <button type="button" id="entry-enter-city">ENTER THE CITY</button>
+  </div>
+</div>
+
+<!-- ── Main App (Screen 3) ────────────────────────────────────────── -->
+<div id="app" style="display:none;">
+  <button type="button" id="sheet-panel-tab" class="sheet-panel-tab" aria-label="Open character sheet"><span class="sheet-sigil">ᚢ</span> Character</button>
+  <div id="sheet-panel-overlay" class="sheet-panel-overlay" style="display:none;"></div>
+  <div id="sheet-panel" class="sheet-panel" style="display:none;">
+    <div class="sheet-panel-inner">
+      <h2 class="sheet-panel-title"><span class="sheet-sigil">ᚢ</span> <span id="panel-cs-name">—</span></h2>
+      <div class="sheet-panel-tabs">
+        <button type="button" class="sheet-panel-tab-btn active" data-panel-tab="identity">Identity</button>
+        <button type="button" class="sheet-panel-tab-btn" data-panel-tab="stats">Stats</button>
+        <button type="button" class="sheet-panel-tab-btn" data-panel-tab="inventory">Inventory</button>
+        <button type="button" class="sheet-panel-tab-btn" data-panel-tab="progression">Progression</button>
+      </div>
+      <div id="panel-tab-identity" class="sheet-panel-content"></div>
+      <div id="panel-tab-stats" class="sheet-panel-content" style="display:none;"></div>
+      <div id="panel-tab-inventory" class="sheet-panel-content" style="display:none;"></div>
+      <div id="panel-tab-progression" class="sheet-panel-content" style="display:none;"></div>
+    </div>
+  </div>
   <div id="header">
     <h1>VERASANTH</h1>
     <span id="header-sub"></span>
@@ -1753,7 +1365,50 @@
 
 <script>
 // ── Config ───────────────────────────────────────────────────────
-const API = 'https://verasanth-backend.offkeybard.workers.dev';  // update after fly deploy
+const API = '';  // use relative paths (same origin)
+
+// ── Location display names (for character sheet "Last seen") ───────
+const LOCATION_NAMES = {
+  tavern: "The Shadow Hearth Inn",
+  market_square: "The Market Square",
+  north_road: "North Road — The Threshold District",
+  south_road: "South Road — The Low Quarter",
+  east_road: "East Road — The Ember Quarter",
+  west_road: "West Road — The Pale Rise",
+  atelier: "Dawnforge Atelier",
+  mended_hide: "The Mended Hide",
+  still_scale: "The Still Scale",
+  hollow_jar: "The Hollow Jar",
+  ashen_sanctuary: "The Ashen Sanctuary",
+  alley: "Narrow Alley",
+  sewer_upper: "Upper Sewer — The Ashway",
+  sewer_den: "The Cinder Den",
+  sewer_channel: "The Black Channel",
+  sewer_deep: "The Hollow Below",
+  sewer_gate: "The Iron Threshold",
+  sewer_mid_flooded: "The Flooded Hall",
+  sewer_mid_barracks: "The Old Barracks",
+  sewer_mid_cistern: "The Great Cistern",
+  sewer_mid_drain: "The Drain",
+  sewer_deep_threshold: "The Deep Threshold",
+  sewer_deep_vault: "The Sealed Vault",
+  sewer_deep_foundation: "The Foundation",
+};
+function getLocationName(id) { return LOCATION_NAMES[id] || id || "—"; }
+
+// ── Progression flag labels (for character sheet) ──────────────────
+const PROGRESSION_LABELS = {
+  seen_sewer_wall_markings: "Seen sewer wall markings",
+  seen_sewer_graffiti: "Seen sewer graffiti",
+  seen_dask_roster: "Seen Dask roster",
+  seen_tier2_graffiti: "Seen tier-two graffiti",
+  seen_rusted_pipe: "Seen rusted pipe",
+  seen_foundation_dask: "Seen foundation Dask",
+  warned_mid_sewer: "Warned mid-sewer",
+  has_seen_market_square: "Has seen market square",
+  found_foundation_stone: "Found foundation stone",
+  has_room: "Has room at the inn",
+};
 
 // ── State ────────────────────────────────────────────────────────
 let vToken = localStorage.getItem('v_token') || '';
@@ -1761,6 +1416,13 @@ let currentNPC = '';
 let npcTopics  = {};
 let combatState = null;
 let playerMaxHp = 1;
+let mainCharacter = null;
+let mainInstinctsData = null;
+let mainTwStep = "instinct";
+let twSelectedInstinct = "";
+let twStats = { strength: 5, dexterity: 5, constitution: 5, intelligence: 5, wisdom: 5, charisma: 5 };
+const TW_POOL = 28;
+const TW_BASE = 5;
 
 const NPC_NAMES = {
   bartender:   'Kelvaris',
@@ -1835,8 +1497,156 @@ function switchTab(tab) {
   document.getElementById('auth-error-reg').textContent = '';
 }
 
+function showScreen(screenId) {
+  const auth = document.getElementById('auth-screen');
+  const sheet = document.getElementById('character-sheet-screen');
+  const app = document.getElementById('app');
+  const tw = document.getElementById('true-welcome-screen');
+  auth.style.display = screenId === 'auth' ? 'flex' : 'none';
+  sheet.style.display = screenId === 'sheet' ? 'block' : 'none';
+  app.style.display = screenId === 'game' ? 'grid' : 'none';
+  tw.style.display = screenId === 'tw' ? 'flex' : 'none';
+}
+
+function needsOnboard(c) {
+  return c == null || c.instinct == null || c.instinct === '' || c.stats_set == null || Number(c.stats_set) === 0;
+}
+
+async function showTrueWelcome() {
+  if (!mainInstinctsData) {
+    try { mainInstinctsData = await GET('/api/data/instincts'); } catch(e) { mainInstinctsData = { instincts: {} }; }
+  }
+  const grid = document.getElementById('tw-instinct-grid');
+  grid.innerHTML = '';
+  const inst = mainInstinctsData.instincts || {};
+  for (const [id, def] of Object.entries(inst)) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = def.label || id;
+    btn.className = twSelectedInstinct === id ? 'selected' : '';
+    btn.onclick = () => {
+      twSelectedInstinct = id;
+      grid.querySelectorAll('button').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+    };
+    grid.appendChild(btn);
+  }
+  document.getElementById('tw-step-instinct').style.display = 'block';
+  document.getElementById('tw-step-stats').style.display = 'none';
+  document.getElementById('tw-title').textContent = 'Choose your Echo';
+  document.getElementById('tw-msg').textContent = '';
+  document.getElementById('tw-msg').className = 'tw-msg';
+  mainTwStep = 'instinct';
+  showScreen('tw');
+}
+
+function renderTwStats() {
+  const container = document.getElementById('tw-stats-grid');
+  container.innerHTML = '';
+  const keys = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
+  keys.forEach(k => {
+    const lab = document.createElement('label');
+    lab.innerHTML = k.charAt(0).toUpperCase() + k.slice(1) + ' <input type="number" min="5" max="18" value="' + (twStats[k] || 5) + '" data-stat="' + k + '">';
+    lab.querySelector('input').onchange = (e) => { twStats[k] = parseInt(e.target.value, 10) || 5; updateTwPool(); };
+    container.appendChild(lab);
+  });
+  updateTwPool();
+}
+
+function updateTwPool() {
+  const sum = Object.values(twStats).reduce((a, b) => a + b, 0);
+  const spent = sum - (TW_BASE * 6);
+  const remain = TW_POOL - spent;
+  document.getElementById('tw-pool-remain').textContent = remain;
+}
+
+async function finishTrueWelcome() {
+  document.getElementById('tw-msg').textContent = '';
+  document.getElementById('tw-msg').className = 'tw-msg';
+  const sum = Object.values(twStats).reduce((a, b) => a + b, 0);
+  const spent = sum - (TW_BASE * 6);
+  if (mainTwStep === 'instinct') {
+    if (!twSelectedInstinct) { document.getElementById('tw-msg').textContent = 'Choose an Echo.'; document.getElementById('tw-msg').className = 'tw-msg err'; return; }
+    await POST('/api/character/instinct', { instinct: twSelectedInstinct });
+    mainCharacter = await GET('/api/character');
+    mainTwStep = 'stats';
+    document.getElementById('tw-step-instinct').style.display = 'none';
+    document.getElementById('tw-step-stats').style.display = 'block';
+    document.getElementById('tw-title').textContent = 'Set your stats';
+    renderTwStats();
+    return;
+  }
+  if (spent !== TW_POOL) { document.getElementById('tw-msg').textContent = 'Use all 28 points.'; document.getElementById('tw-msg').className = 'tw-msg err'; return; }
+  await POST('/api/character/stats', twStats);
+  mainCharacter = await GET('/api/character');
+  showScreen('sheet');
+  await populateCharacterSheet();
+}
+
+async function populateCharacterSheet() {
+  const char = mainCharacter || await GET('/api/character');
+  mainCharacter = char;
+  let wallet = { ash_marks: 0, ember_shards: 0, soul_coins: 0 };
+  let inv = { items: [] };
+  let flags = {};
+  try { wallet = await GET('/api/wallet'); } catch(e) {}
+  try { inv = await GET('/api/inventory'); } catch(e) {}
+  try { flags = await GET('/api/character/flags'); } catch(e) {}
+  const locName = getLocationName(char.location);
+  document.getElementById('cs-name').textContent = char.name || '—';
+  document.getElementById('cs-race').textContent = (char.race && char.race.charAt(0).toUpperCase() + char.race.slice(1)) || '—';
+  const instId = char.instinct || '';
+  const instDef = mainInstinctsData?.instincts?.[instId];
+  document.getElementById('cs-instinct').textContent = instDef ? instDef.label : (instId || '—');
+  document.getElementById('cs-instinct-desc').textContent = instDef && instDef.description ? instDef.description : '';
+  document.getElementById('cs-location').textContent = locName;
+  const hp = char.current_hp ?? 0;
+  const maxHp = char.max_hp || 10;
+  document.getElementById('cs-hp-text').textContent = hp + ' / ' + maxHp;
+  document.getElementById('cs-hp-fill').style.width = Math.max(0, Math.min(100, (hp / maxHp) * 100)) + '%';
+  const statKeys = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
+  const statRows = document.getElementById('cs-stats-rows');
+  statRows.innerHTML = '';
+  statKeys.forEach(s => {
+    const v = char[s] ?? 5;
+    const mod = Math.floor((v - 10) / 2);
+    const modStr = mod >= 0 ? '+' + mod : String(mod);
+    const row = document.createElement('div');
+    row.className = 'cs-hp-row';
+    row.innerHTML = '<span>' + s.toUpperCase().slice(0,3) + '</span><span>' + v + ' (' + modStr + ')</span>';
+    statRows.appendChild(row);
+  });
+  document.getElementById('cs-xp').textContent = char.xp ?? '—';
+  document.getElementById('cs-stage').textContent = char.class_stage ?? '—';
+  document.getElementById('cs-ash').textContent = wallet.ash_marks ?? 0;
+  document.getElementById('cs-ember').textContent = wallet.ember_shards ?? 0;
+  document.getElementById('cs-soul').textContent = wallet.soul_coins ?? 0;
+  const items = inv.items || [];
+  document.getElementById('cs-inv-list').textContent = items.length ? items.join(', ') : 'Nothing carried.';
+  const ul = document.getElementById('cs-flags-list');
+  ul.innerHTML = '';
+  for (const [id, label] of Object.entries(PROGRESSION_LABELS)) {
+    const li = document.createElement('li');
+    li.className = (flags[id] && Number(flags[id]) > 0) ? 'unlocked' : 'locked';
+    li.textContent = (flags[id] && Number(flags[id]) > 0) ? label : '???';
+    ul.appendChild(li);
+  }
+}
+
+function setupCharacterSheetTabs() {
+  document.querySelectorAll('.sheet-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.csTab;
+      document.querySelectorAll('.sheet-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.sheet-tab-panel').forEach(p => { p.style.display = 'none'; });
+      const panel = document.getElementById('cs-tab-' + tab);
+      if (panel) panel.style.display = 'block';
+    });
+  });
+}
+
 async function init() {
-  // Load races for registration form
   try {
     const data = await GET('/api/data/races');
     const sel = document.getElementById('input-race');
@@ -1850,13 +1660,111 @@ async function init() {
 
   if (vToken) {
     try {
-      await loadGame();
-      document.getElementById('auth-screen').classList.add('hidden');
+      const char = await GET('/api/character');
+      mainCharacter = char;
+      if (needsOnboard(char)) {
+        showTrueWelcome();
+      } else {
+        showScreen('sheet');
+        await populateCharacterSheet();
+      }
     } catch(e) {
       vToken = '';
       localStorage.removeItem('v_token');
+      mainCharacter = null;
     }
   }
+  setupCharacterSheetTabs();
+  document.getElementById('tw-next-btn').onclick = finishTrueWelcome;
+  document.getElementById('cs-enter-btn').onclick = () => {
+    // MUSIC HOOK: entry transition start
+    document.getElementById('character-sheet-screen').style.display = 'none';
+    const entryScreen = document.getElementById('entry-screen');
+    entryScreen.style.display = 'flex';
+    entryScreen.setAttribute('aria-hidden', 'false');
+  };
+  document.getElementById('entry-enter-city').onclick = async () => {
+    const entryScreen = document.getElementById('entry-screen');
+    if (!entryScreen || entryScreen.classList.contains('entry-phase2')) return;
+    entryScreen.classList.add('entry-phase2');
+
+    const title = document.getElementById('entry-title');
+    if (title) {
+      const rect = title.getBoundingClientRect();
+      for (let i = 0; i < 40; i++) {
+        const dot = document.createElement('span');
+        dot.className = 'entry-ash';
+        dot.style.left = (rect.left + Math.random() * rect.width) + 'px';
+        dot.style.top = (rect.bottom - 10 + Math.random() * 20) + 'px';
+        dot.style.setProperty('--fall-y', (80 + Math.random() * 120) + 'px');
+        dot.style.setProperty('--fall-x', (Math.random() * 30 - 15) + 'px');
+        dot.style.animationDuration = (0.8 + Math.random() * 0.8) + 's';
+        dot.style.animationDelay = (Math.random() * 0.4) + 's';
+        document.body.appendChild(dot);
+      }
+    }
+
+    setTimeout(async () => {
+      // MUSIC HOOK: game reveal
+      document.querySelectorAll('.entry-ash').forEach(el => el.remove());
+      showScreen('game');
+      await loadGame();
+      const el = document.getElementById('entry-screen');
+      if (el) el.remove();
+    }, 3000);
+  };
+  const panelTab = document.getElementById('sheet-panel-tab');
+  const panel = document.getElementById('sheet-panel');
+  const panelOverlay = document.getElementById('sheet-panel-overlay');
+  function openPanel() {
+    panel.style.display = 'block';
+    panelOverlay.style.display = 'block';
+    refreshSheetPanel();
+  }
+  function closePanel() {
+    panel.style.display = 'none';
+    panelOverlay.style.display = 'none';
+  }
+  panelTab.onclick = () => { if (panel.style.display === 'none') openPanel(); else closePanel(); };
+  panelOverlay.onclick = closePanel;
+  document.querySelectorAll('.sheet-panel-tab-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.sheet-panel-tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const t = btn.dataset.panelTab;
+      document.querySelectorAll('.sheet-panel-content').forEach(c => { c.style.display = 'none'; });
+      const el = document.getElementById('panel-tab-' + t);
+      if (el) el.style.display = 'block';
+    };
+  });
+}
+
+async function refreshSheetPanel() {
+  const char = await GET('/api/character');
+  mainCharacter = char;
+  let wallet = { ash_marks: 0, ember_shards: 0, soul_coins: 0 };
+  let inv = { items: [] };
+  let flags = {};
+  try { wallet = await GET('/api/wallet'); } catch(e) {}
+  try { inv = await GET('/api/inventory'); } catch(e) {}
+  try { flags = await GET('/api/character/flags'); } catch(e) {}
+  document.getElementById('panel-cs-name').textContent = char.name || '—';
+  const locName = getLocationName(char.location);
+  document.getElementById('panel-tab-identity').innerHTML = '<p><strong>Race</strong> ' + (char.race || '—') + '</p><p><strong>Instinct</strong> ' + (char.instinct || '—') + '</p><p class="cs-muted">Last seen: ' + locName + '</p>';
+  const hp = char.current_hp ?? 0;
+  const maxHp = char.max_hp || 10;
+  const statKeys = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
+  let statsHtml = '<p><strong>HP</strong> ' + hp + ' / ' + maxHp + '</p>';
+  statKeys.forEach(s => { statsHtml += '<p>' + s + ': ' + (char[s] ?? '—') + '</p>'; });
+  document.getElementById('panel-tab-stats').innerHTML = statsHtml;
+  const items = inv.items || [];
+  document.getElementById('panel-tab-inventory').innerHTML = '<p>◈ ' + (wallet.ash_marks ?? 0) + ' Ash · ◆ ' + (wallet.ember_shards ?? 0) + ' Ember · ○ ' + (wallet.soul_coins ?? 0) + ' Soul</p><p>' + (items.length ? items.join(', ') : 'Nothing carried.') + '</p>';
+  let flagsHtml = '<ul>';
+  for (const [id, label] of Object.entries(PROGRESSION_LABELS)) {
+    flagsHtml += '<li class="' + ((flags[id] && Number(flags[id]) > 0) ? 'unlocked' : 'locked') + '">' + ((flags[id] && Number(flags[id]) > 0) ? label : '???') + '</li>';
+  }
+  flagsHtml += '</ul>';
+  document.getElementById('panel-tab-progression').innerHTML = flagsHtml;
 }
 
 async function doLogin() {
@@ -1874,8 +1782,16 @@ async function doLogin() {
     const data = await POST('/api/login', { username, password });
     vToken = data.token;
     localStorage.setItem('v_token', vToken);
-    await loadGame();
+    const char = await GET('/api/character');
+    mainCharacter = char;
+    document.getElementById('auth-btn').textContent = 'Enter Verasanth';
     document.getElementById('auth-screen').classList.add('hidden');
+    if (needsOnboard(char)) {
+      showTrueWelcome();
+    } else {
+      showScreen('sheet');
+      await populateCharacterSheet();
+    }
   } catch(e) {
     errEl.textContent = e.message;
     document.getElementById('auth-btn').textContent = 'Enter Verasanth';
@@ -1901,8 +1817,16 @@ async function doRegister() {
     const data = await POST('/api/register', { username, password, name, race });
     vToken = data.token;
     localStorage.setItem('v_token', vToken);
-    await loadGame();
+    const char = await GET('/api/character');
+    mainCharacter = char;
+    document.getElementById('auth-btn-reg').textContent = 'Begin Your Story';
     document.getElementById('auth-screen').classList.add('hidden');
+    if (needsOnboard(char)) {
+      showTrueWelcome();
+    } else {
+      showScreen('sheet');
+      await populateCharacterSheet();
+    }
   } catch(e) {
     errEl.textContent = e.message;
     document.getElementById('auth-btn-reg').textContent = 'Begin Your Story';
