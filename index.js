@@ -783,6 +783,14 @@ if (path === "/api/admin/command" && method === "POST") {
         caelirBladeRevealed = await getFlag(db, uid, "caelir_blade_revealed");
         seenSewerWallMarkings = await getFlag(db, uid, "seen_sewer_wall_markings");
       }
+      let veyraVisits = 0;
+      let veyraMarkAcknowledged = 0;
+      let veyraSeenSewer = 0;
+      if (npc === "armorsmith") {
+        veyraVisits = await getFlag(db, uid, "veyra_visits");
+        veyraMarkAcknowledged = await getFlag(db, uid, "veyra_mark_acknowledged");
+        veyraSeenSewer = await getFlag(db, uid, "seen_sewer_wall_markings");
+      }
       const hp = await getPlayerHp(db, uid, row);
 
       const playerContext = {
@@ -808,6 +816,13 @@ if (path === "/api/admin/command" && method === "POST") {
         playerContext.seen_sewer_wall_markings = seenSewerWallMarkings;
         playerContext.race = row.race || "";
       }
+      if (npc === "armorsmith") {
+        playerContext.veyra_visits = veyraVisits;
+        playerContext.veyra_mark_acknowledged = veyraMarkAcknowledged;
+        playerContext.seen_sewer_wall_markings = veyraSeenSewer;
+        playerContext.race = row.race || "";
+        playerContext.constitution = row.constitution;
+      }
 
       const response = await getNPCResponse(env, npc, topic, playerContext);
 
@@ -817,6 +832,12 @@ if (path === "/api/admin/command" && method === "POST") {
       }
       if (npc === "weaponsmith") {
         await setFlag(db, uid, "caelir_visits", caelirVisits + 1);
+      }
+      if (npc === "armorsmith") {
+        await setFlag(db, uid, "veyra_visits", veyraVisits + 1);
+        if (topic === "wall_marks" && veyraVisits >= 6 && (row.wisdom ?? 10) >= 12 && !veyraMarkAcknowledged) {
+          await setFlag(db, uid, "veyra_mark_acknowledged", 1);
+        }
       }
 
       return json({ response });
