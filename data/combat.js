@@ -387,23 +387,40 @@ export const COMBAT_DATA = {
 
 /** Map fightable location IDs to sewer floor 1–5. Based on DUNGEON_TIERS in data/items.js */
 export const LOCATION_TO_FLOOR = {
-  sewer_upper: 1,
-  sewer_den: 1,
-  sewer_channel: 1,
-  sewer_deep: 2,
-  sewer_gate: 2,
-  sewer_mid_flooded: 2,
-  sewer_mid_barracks: 2,
-  sewer_mid_cistern: 3,
-  sewer_mid_drain: 3,
-  sewer_deep_threshold: 4,
-  sewer_deep_vault: 5,
-  sewer_deep_foundation: 5,
+  drain_entrance: 1,
+  overflow_channel: 1,
+  broken_pipe_room: 1,
+  vermin_nest: 1,
+  workers_alcove: 1,
+  rusted_gate: 1,
+  fungal_bloom_chamber: 2,
+  collapsed_passage: 2,
+  old_maintenance_room: 2,
+  echoing_hall: 2,
+  spore_garden: 2,
+  cracked_aqueduct: 2,
+  flooded_hall: 3,
+  drowned_archive: 3,
+  submerged_tunnel: 3,
+  broken_pump_room: 3,
+  drowned_vault: 3,
+  sluice_gate: 3,
+  gear_hall: 4,
+  steam_vent_corridor: 4,
+  broken_regulator_chamber: 4,
+  iron_walkway: 4,
+  heart_pump: 4,
+  pressure_valve_shaft: 4,
+  ash_pillar_hall: 5,
+  whispering_chamber: 5,
+  rune_lit_corridor: 5,
+  cathedral_floor: 5,
+  ash_heart_chamber: 5,
+  sump_pit: 5,
 };
 
-export const FIGHTABLE_LOCATIONS = new Set([
-  "sewer_upper", "sewer_den", "sewer_channel", "sewer_deep",
-  "sewer_gate", "sewer_mid_flooded", "sewer_mid_barracks",
-  "sewer_mid_cistern", "sewer_mid_drain", "sewer_deep_threshold",
-  "sewer_deep_vault", "sewer_deep_foundation",
-]);
+const SEWER_SAFE_ZONES = new Set(["drain_entrance", "workers_alcove", "drowned_archive", "old_maintenance_room"]);
+
+export const FIGHTABLE_LOCATIONS = new Set(
+  Object.keys(LOCATION_TO_FLOOR).filter(id => !SEWER_SAFE_ZONES.has(id))
+);

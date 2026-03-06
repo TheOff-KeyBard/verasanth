@@ -1,0 +1,335 @@
+/**
+ * Sewer nodes — five-floor structure from sewer_complete.md
+ * Gate exits (deeper/down) are in base exits; index.js filters by requires_flag.
+ */
+export const SEWER_NODES = {
+  drain_entrance: {
+    name: "The Drain Entrance",
+    description: "The smell hits before the dark does. Ash, standing water, old iron. The ladder behind you is the last clean thing for a while. Ahead, two passages. Both are equally uninviting. The east one is louder.",
+    exits: { up: "sewer_entrance", east: "overflow_channel", north: "workers_alcove" },
+    objects: {
+      old_ladder: { desc: "Iron rungs set into the stone wall. Old, but solid. Someone has maintained these.", actions: ["inspect", "climb"] },
+      scratched_warnings: { desc: "Words scratched into the stone. The ink has faded to nothing. The warnings remain.", actions: ["inspect", "read"] },
+      ash_residue: { desc: "Grey ash in a fine layer. Disturbed recently. The pattern suggests something low and fast.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  overflow_channel: {
+    name: "The Overflow Channel",
+    description: "A channel running with slow black water down the center. The ceiling is low enough that you feel it without touching it. Something moves in the water but it is not the current — the current is not strong enough to move what is moving.",
+    exits: { west: "drain_entrance", east: "broken_pipe_room", south: "vermin_nest" },
+    objects: {
+      overflow_pipe: { desc: "Iron pipe, cracked. Water seeps through. The metal is warm.", actions: ["inspect"] },
+      filth_residue: { desc: "A film on the lower walls. It pulses faintly when disturbed.", actions: ["inspect"] },
+      scratched_tally_marks: { desc: "Tallies in groups of five. Hundreds of them. Below: IT HEARS YOU COUNT.", actions: ["inspect", "read"] },
+    },
+    items: [],
+  },
+  broken_pipe_room: {
+    name: "The Broken Pipe Room",
+    description: "The pipes here have given up the pretense of carrying anything useful. Steam pushes through the cracks in irregular bursts — too irregular to feel safe ignoring. The crawlers like the warmth. So do the cracks.",
+    exits: { west: "overflow_channel" },
+    objects: {
+      cracked_pipes: { desc: "Steam hisses from the cracks. The metal is hot. The pattern of bursts is not random.", actions: ["inspect"] },
+      steam_valve: { desc: "A valve that should control the flow. The handle is fused shut.", actions: ["inspect"] },
+      pipe_residue: { desc: "Ash and something else. The crawlers nest in the gaps.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  vermin_nest: {
+    name: "The Vermin Nest",
+    description: "The rats have been here long enough to make an architecture of it. Ash and bone and debris shaped into something that functions as a home. The largest ones don't run. They've decided they live here and you are the intruder.",
+    exits: { north: "overflow_channel", east: "workers_alcove", west: "rusted_gate" },
+    objects: {
+      nest_material: { desc: "Ash, bone, cloth. Shaped deliberately. A home.", actions: ["inspect"] },
+      gnawed_bones: { desc: "Small bones. Rats, mostly. A few that are not rats.", actions: ["inspect"] },
+      rat_cache: { desc: "Something glints in the debris. The rats have been collecting.", actions: ["inspect", "search"] },
+    },
+    items: [],
+  },
+  workers_alcove: {
+    name: "The Workers Alcove",
+    description: "Someone worked here. The workbench is old but the arrangement of what's left on it is deliberate — tools sorted by size, a cup that used to hold something, a mark on the wall counting something that was worth counting. They stopped counting at a number you don't find reassuring.",
+    exits: { west: "vermin_nest", south: "drain_entrance" },
+    objects: {
+      abandoned_workbench: { desc: "Tools sorted by size. Everything in its place. Someone left in the middle of work.", actions: ["inspect", "search"] },
+      tool_rack: { desc: "Empty hooks. A few tools remain. One slot is sized for something specific.", actions: ["inspect"] },
+      old_crate: { desc: "Wood, warped by moisture. The contents have settled into the bottom.", actions: ["inspect", "search"] },
+    },
+    items: [],
+  },
+  rusted_gate: {
+    name: "The Rusted Gate",
+    description: "The gate is iron, old enough that the rust is structural rather than damage. Beyond it, the air changes — less filth, more age. Something large has been using the space in front of the gate as a territory marker for a long time. The marks are fresh.",
+    exits: { west: "vermin_nest", deeper: "fungal_bloom_chamber" },
+    objects: {
+      rusted_gate: { desc: "Iron, rusted through. The hinges have grown into the stone. Beyond: darkness and older air.", actions: ["inspect"] },
+      heat_rising_from_below: { desc: "Warm air pushes up through the gaps. The source is not visible.", actions: ["inspect"] },
+      old_warnings: { desc: "Scratched into the frame. DEEPER = OLDER = WORSE. WORTH IT.", actions: ["inspect", "read"] },
+    },
+    items: [],
+  },
+  fungal_bloom_chamber: {
+    name: "The Fungal Bloom Chamber",
+    description: "The fungi here produce their own light — pale blue-green, steady, sourceless. It is the most beautiful thing in the sewer. The spores it releases are not beautiful. They taste like metal and they stay in the back of the throat. Move through. Don't breathe deep.",
+    exits: { up: "rusted_gate", east: "echoing_hall", north: "collapsed_passage" },
+    objects: {
+      bloom_cluster: { desc: "Fungi in a dozen varieties. Some you recognize from Thalara's jars. Some you have never seen labeled.", actions: ["inspect"] },
+      spore_drift: { desc: "The spore cloud is thick enough to be visible. A layer in the air.", actions: ["inspect"] },
+      old_stonework: { desc: "The stone here is older. Finer cut. Different.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  collapsed_passage: {
+    name: "The Collapsed Passage",
+    description: "The ceiling came down here at some point. What is left is navigable if you don't mind the weight of the stone above and the sounds it makes when you put weight on the floor. The channel stalkers like collapsed spaces. Something about the angles suits them.",
+    exits: { south: "fungal_bloom_chamber", east: "old_maintenance_room" },
+    objects: {
+      collapsed_stonework: { desc: "Rubble. A path through. The stone above groans when you move.", actions: ["inspect"] },
+      old_marks: { desc: "Scratches in the dust. Someone found a way through.", actions: ["inspect"] },
+      debris_pile: { desc: "Stone, wood, something that was cloth. A passage might be hidden.", actions: ["inspect", "search"] },
+    },
+    items: [],
+  },
+  old_maintenance_room: {
+    name: "The Old Maintenance Room",
+    description: "Someone maintained this tunnel. The equipment is old enough that the design language is unfamiliar — not broken, just from a different era of thinking about what these systems needed. The maintenance log uses a notation Caelir would recognize. You find this out later.",
+    exits: { west: "collapsed_passage" },
+    objects: {
+      tool_storage: { desc: "Tools from another era. The design is deliberate. Caelir would know these.", actions: ["inspect"] },
+      parts_bench: { desc: "Gear fragments. Scrap. Something was being repaired when they stopped.", actions: ["inspect"] },
+      maintenance_log: { desc: "A log in notation you don't recognize. Caelir would.", actions: ["inspect", "read"] },
+    },
+    items: [],
+  },
+  echoing_hall: {
+    name: "The Echoing Hall",
+    description: "The hall amplifies sound and returns it wrong — your footstep comes back from the far wall a half-second late and from a slightly different direction. After a few minutes you stop trusting your ears entirely. The channel stalkers have lived here long enough to use this.",
+    exits: { west: "fungal_bloom_chamber", east: "spore_garden", north: "old_maintenance_room" },
+    objects: {
+      echo_walls: { desc: "The stone returns sound wrong. Your voice comes back from the wrong place.", actions: ["inspect"] },
+      old_support_beams: { desc: "Iron, rusted. They hold. Something moves in the shadows above.", actions: ["inspect"] },
+      something_in_ceiling: { desc: "You look up. Something looks back. Then it drops.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  spore_garden: {
+    name: "The Spore Garden",
+    description: "The garden should not exist. There is no light source sufficient to explain what has grown here — fungi in a dozen varieties, some you recognize from Thalara's jars, some you have never seen labeled. The spore cloud is thick enough to be visible as a layer in the air. The old inscription on the far wall reads: GREW WITHOUT PERMISSION. You are not certain this is a complaint.",
+    exits: { west: "echoing_hall", south: "cracked_aqueduct" },
+    objects: {
+      spore_garden_main: { desc: "The most beautiful and most dangerous room on this floor. The fungi glow. The spores kill.", actions: ["inspect"] },
+      rare_bloom: { desc: "A variety you have never seen. Thalara would want a sample.", actions: ["inspect"] },
+      old_inscription: { desc: "GREW WITHOUT PERMISSION. Carved deep. Recent enough to read.", actions: ["inspect", "read"] },
+    },
+    items: [],
+  },
+  cracked_aqueduct: {
+    name: "The Cracked Aqueduct",
+    description: "The aqueduct is older than everything above it. The stonework is finer, the engineering more deliberate. Water still flows through the cracks — slow, dark, and warm. Below, the sound of much more water. The inscription above the descent reads: WHAT YOU FIND BELOW IS WHAT THE CITY DOES NOT DISCUSS. You have been warned.",
+    exits: { north: "spore_garden", down: "flooded_hall" },
+    objects: {
+      aqueduct_structure: { desc: "Ancient engineering. The cracks are recent. The design is not.", actions: ["inspect"] },
+      water_flow: { desc: "Slow, dark, warm. It goes somewhere you cannot see.", actions: ["inspect"] },
+      deep_inscription: { desc: "WHAT YOU FIND BELOW IS WHAT THE CITY DOES NOT DISCUSS.", actions: ["inspect", "read"] },
+    },
+    items: [],
+  },
+  flooded_hall: {
+    name: "The Flooded Hall",
+    description: "The water stands still from wall to wall — knee-deep, warm, and dark. It reflects the torchlight perfectly until something moves beneath it. The drowned thralls do not announce themselves. They simply rise from whatever the water has been hiding and orient toward you with the patience of things that are not in any hurry.",
+    exits: { up: "cracked_aqueduct", east: "drowned_archive", south: "submerged_tunnel" },
+    objects: {
+      standing_water: { desc: "Still. Reflective. Something moves beneath the surface.", actions: ["inspect", "wade"] },
+      waterlogged_armor: { desc: "Pieces of armor. Older style. Whoever wore this did not come back up.", actions: ["inspect", "search"] },
+      submerged_marks: { desc: "Scratches below the waterline. Words. Names. Dates.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  drowned_archive: {
+    name: "The Drowned Archive",
+    description: "Shelves of stone holding documents wrapped in something that kept them mostly intact despite the water. The flood records go back further than the current city. Among them, a page with a name Thalara would recognize — Descent 7, no return date. You don't know whose name it is yet. Thalara will.",
+    exits: { west: "flooded_hall" },
+    objects: {
+      submerged_shelves: { desc: "Stone shelves. Documents wrapped. The water did not destroy everything.", actions: ["inspect"] },
+      flood_records: { desc: "Dates. Names. A page Thalara would recognize.", actions: ["inspect", "read"] },
+      personal_effects: { desc: "A bundle. Someone's things. Left here when they did not return.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  submerged_tunnel: {
+    name: "The Submerged Tunnel",
+    description: "The tunnel dips below water level for a stretch. You can go through fast — and take what latches onto you — or slow, and feel them before they reach you. Neither option is comfortable. The leeches have been in this water long enough that they are the water, functionally.",
+    exits: { north: "flooded_hall", south: "broken_pump_room" },
+    objects: {
+      submerged_tunnel_walls: { desc: "The walls are under water here. Something brushes your leg.", actions: ["inspect"] },
+      leech_presence: { desc: "You feel them before you see them. They feel you too.", actions: ["inspect"] },
+      deep_current: { desc: "A pull. Not strong. Persistent. Something below is breathing.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  broken_pump_room: {
+    name: "The Broken Pump Room",
+    description: "The pump that was supposed to manage water levels down here has been broken long enough that the water has found its own opinion about where it wants to be. It is rising. Slowly, but with the patience of something that has been rising for years and is close to where it wants to go.",
+    exits: { north: "submerged_tunnel", east: "drowned_vault" },
+    objects: {
+      broken_pump: { desc: "The mechanism is still. The water is not. It has found another way.", actions: ["inspect"] },
+      water_level_gauge: { desc: "The needle is wrong. The level is wrong. Everything is wrong.", actions: ["inspect"] },
+      pump_controls: { desc: "Levers. Valves. None of them respond.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  drowned_vault: {
+    name: "The Drowned Vault",
+    description: "The vault sits on a raised platform above the water level — deliberately, precisely. Whatever was stored here was stored to survive flooding. The artifact on the platform has been here long enough that the stone around it has changed color slightly. When you pick it up, something in the room changes. You are not certain what. You are certain something noticed.",
+    exits: { west: "broken_pump_room", north: "sluice_gate" },
+    objects: {
+      vault_platform: { desc: "Raised. Deliberate. Whatever was here was meant to survive.", actions: ["inspect"] },
+      artifact_display: { desc: "Something on the platform. The stone around it has changed color.", actions: ["inspect"] },
+      ancient_inscription: { desc: "Script you do not recognize. Older than the city. Older than the city's memory.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  sluice_gate: {
+    name: "The Sluice Gate",
+    description: "The gate controls the flow between levels. The mechanism is ancient. The water has learned to go around it.",
+    exits: { south: "drowned_vault", down: "gear_hall" },
+    objects: {
+      sluice_gate: { desc: "Iron. Old. The water flows through the gaps.", actions: ["inspect"] },
+      descent: { desc: "Below. The sound of machinery. Heat. Something that has been running for a very long time.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  gear_hall: {
+    name: "The Gear Hall",
+    description: "The gears are still moving. They have been moving without maintenance for longer than the city above. The mechanism they are part of is not obvious from this position. Whatever they drive is somewhere below.",
+    exits: { up: "sluice_gate", east: "steam_vent_corridor", south: "iron_walkway" },
+    objects: {
+      gear_mechanism: { desc: "Gears. Moving. The timing is wrong. Catch a finger and you lose it.", actions: ["inspect"] },
+      runic_power_conduit: { desc: "Lines of power. The gears draw from something below.", actions: ["inspect"] },
+      ancient_instructions: { desc: "Carved into the wall. A language no one speaks anymore.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  steam_vent_corridor: {
+    name: "The Steam Vent Corridor",
+    description: "The vents activate in a pattern. You watch two cycles before committing to the corridor. The heat wraiths form when the vents are active and come apart when they're not. The window between cycles is exactly wide enough.",
+    exits: { west: "gear_hall", east: "broken_regulator_chamber" },
+    objects: {
+      steam_vents: { desc: "They cycle. The heat is lethal. The pattern is learnable.", actions: ["inspect"] },
+      heat_buildup: { desc: "The air is wrong. Too hot. Too dry.", actions: ["inspect"] },
+      vent_controls: { desc: "Someone tried to control this. They failed.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  broken_regulator_chamber: {
+    name: "The Broken Regulator Chamber",
+    description: "The control node for the underworks water system. It was not built to fight. It was built to regulate. The distinction stopped mattering when whatever corrupted it decided the regulation was finished.",
+    exits: { west: "steam_vent_corridor" },
+    objects: {
+      regulator_mechanism: { desc: "The mechanism that controlled the flow. It controls nothing now.", actions: ["inspect"] },
+      runic_tablet: { desc: "A tablet. Full symbol sequence. Major lore. Seris would want this.", actions: ["inspect"] },
+      symbol_sequence: { desc: "The sequence from Floor 2 and 4 appears here complete.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  iron_walkway: {
+    name: "The Iron Walkway",
+    description: "The walkway is single-file. Whatever is below is not visible — the drop goes further than your torch reaches. The old safety chains are still bolted in. Most of them. The rust golem patrols this section with the patience of something that has been doing it for a very long time and has never once thought about why.",
+    exits: { north: "gear_hall", south: "heart_pump" },
+    objects: {
+      iron_walkway_structure: { desc: "Narrow. Single-file. The chains are old.", actions: ["inspect"] },
+      depth_below: { desc: "The drop goes further than your torch. Something is down there.", actions: ["inspect"] },
+      old_safety_chains: { desc: "Most are intact. Some are not. Fall and you might catch one.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  heart_pump: {
+    name: "The Heart Pump",
+    description: "The thumping you felt two rooms back originates here. A mechanism the size of the room, moving in a cycle so regular it has become the rhythm of this floor. It has been running since before the city above was built in its current form. Whatever it pumps has not been traced. Othorion has theories. He has not confirmed them.",
+    exits: { north: "iron_walkway", east: "pressure_valve_shaft" },
+    objects: {
+      heart_pump_mechanism: { desc: "The size of the room. Moving. Regular. Ancient.", actions: ["inspect"] },
+      runic_core: { desc: "The power source. It has been running for a very long time.", actions: ["inspect"] },
+      ancient_engineering: { desc: "A design language no one uses anymore. It works.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  pressure_valve_shaft: {
+    name: "The Pressure Valve Shaft",
+    description: "The shaft descends into the cathedral. The air from below is different — older, colder. The next level does not announce itself. It simply waits.",
+    exits: { west: "heart_pump", down: "ash_pillar_hall" },
+    objects: {
+      pressure_valve: { desc: "The mechanism that controlled the flow. It still moves.", actions: ["inspect"] },
+      shaft: { desc: "The descent. The air changes. The cathedral waits below.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  ash_pillar_hall: {
+    name: "The Ash Pillar Hall",
+    description: "The scale of this room should not be possible at this depth. The pillars of ash-grey stone reach a ceiling you cannot see. The acolytes stand between them, chanting in a language that predates every language in the city above. They were here before you arrived. They will continue after you leave. This is not reassuring.",
+    exits: { up: "pressure_valve_shaft", east: "whispering_chamber", south: "rune_lit_corridor" },
+    objects: {
+      ash_pillars: { desc: "Pillars that reach a ceiling you cannot see. The scale is wrong.", actions: ["inspect"] },
+      acolyte_positions: { desc: "They stand between the pillars. Chanting. They have not stopped.", actions: ["inspect"] },
+      ancient_architecture: { desc: "Older than the city. Older than memory.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  whispering_chamber: {
+    name: "The Whispering Chamber",
+    description: "The walls whisper. Not metaphorically — a sound that carries specific syllables in a specific order, repeated, emanating from the stone itself. The cathedral wraiths move through the walls as if the whispers opened a door for them. The whispers make you uncertain about what you are doing and whether you decided to do it.",
+    exits: { west: "ash_pillar_hall" },
+    objects: {
+      whispering_walls: { desc: "The stone speaks. Syllables. Order. You cannot make out the words.", actions: ["inspect"] },
+      rune_patterns: { desc: "Patterns in the stone. They shift when you look away.", actions: ["inspect"] },
+      deep_inscription: { desc: "Words. Or something like words. The meaning is just out of reach.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  rune_lit_corridor: {
+    name: "The Rune-Lit Corridor",
+    description: "The full sequence is here, assembled from everything the sewer has been trying to tell you since Floor 2. Whether you have been paying attention determines what this room costs you.",
+    exits: { north: "ash_pillar_hall", south: "cathedral_floor" },
+    objects: {
+      rune_sequence_full: { desc: "The complete sequence. From the tablet. From the maintenance room. It is all here.", actions: ["inspect"] },
+      activation_panels: { desc: "Panels. The correct sequence opens something. The wrong sequence does not.", actions: ["inspect"] },
+      hidden_cache: { desc: "Something is hidden here. The runes guard it.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  cathedral_floor: {
+    name: "The Cathedral Floor",
+    description: "The cathedral floor is worn by the passage of things that have walked it for longer than the city above has existed. The sump guardians hold positions that have not changed. They guard the approach to the pit and the approach to the chamber with equal patience. They have always done this.",
+    exits: { north: "rune_lit_corridor", east: "ash_heart_chamber", south: "sump_pit" },
+    objects: {
+      cathedral_architecture: { desc: "Worn smooth. By feet. By time. By things that are not feet.", actions: ["inspect"] },
+      pit_entrance: { desc: "The pit. It breathes. The inscription: THE KEY DOES NOT OPEN UPWARD.", actions: ["inspect"] },
+      guardian_positions: { desc: "They have not moved. They will not move. Until you approach.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  ash_heart_chamber: {
+    name: "The Ash Heart Chamber",
+    description: "The chamber is the source. Every pattern you have seen on every floor of this sewer traces back to this room. The artifact on the central platform has been waiting. Whether it was waiting for you specifically is a question the city does not answer directly.",
+    exits: { west: "cathedral_floor" },
+    objects: {
+      ashbound_resonance_display: { desc: "The artifact. It has been waiting. The city does not say for whom.", actions: ["inspect"] },
+      ancient_inscription: { desc: "Script that predates every language you know.", actions: ["inspect"] },
+      sealed_alcoves: { desc: "Alcoves. Sealed. Something was stored here. Something was taken.", actions: ["inspect"] },
+      city_memory_stone: { desc: "A stone. The city's memory. Or something like it.", actions: ["inspect"] },
+    },
+    items: [],
+  },
+  sump_pit: {
+    name: "The Sump Pit",
+    description: "The pit breathes. Not metaphorically. A slow exhale rises through the grate every four seconds — warm, dry, and smelling of something that has been below for longer than the word 'below' has existed. The inscription on the near wall: THE KEY DOES NOT OPEN UPWARD. Below the inscription, smaller, recent: M. DASK — I UNDERSTAND NOW.",
+    exits: { north: "cathedral_floor" },
+    objects: {
+      pit_breathing: { desc: "The exhale. Regular. Four seconds. The source is not visible.", actions: ["inspect"] },
+      depth_below: { desc: "The darkness goes further than it should. Something is down there.", actions: ["inspect"] },
+      ancient_warning: { desc: "THE KEY DOES NOT OPEN UPWARD. M. DASK — I UNDERSTAND NOW.", actions: ["inspect", "read"] },
+    },
+    items: [],
+  },
+};

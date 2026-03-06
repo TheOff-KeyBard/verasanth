@@ -23,18 +23,46 @@ import { getRelationship, setRelationship, getPartyMembers, triggerBetrayalCasca
 // GAME DATA (remaining in index)
 // ─────────────────────────────────────────────────────────────
 
-// Sewer depth: three levels for consistency (Hollow Below = level 1 end, Iron Threshold = level 2 start)
-const SEWER_LEVEL_1 = ["sewer_entrance", "sewer_upper", "sewer_den", "sewer_channel", "sewer_deep"];
-const SEWER_LEVEL_2 = ["sewer_gate", "sewer_mid_flooded", "sewer_mid_barracks", "sewer_mid_cistern", "sewer_mid_drain"];
-const SEWER_LEVEL_3 = ["sewer_deep_threshold", "sewer_deep_vault", "sewer_deep_foundation"];
+// Sewer depth: five floors (drain_entrance through sump_pit)
+const SEWER_LEVEL_1 = ["drain_entrance", "overflow_channel", "broken_pipe_room", "vermin_nest", "workers_alcove", "rusted_gate"];
+const SEWER_LEVEL_2 = ["fungal_bloom_chamber", "collapsed_passage", "old_maintenance_room", "echoing_hall", "spore_garden", "cracked_aqueduct"];
+const SEWER_LEVEL_3 = ["flooded_hall", "drowned_archive", "submerged_tunnel", "broken_pump_room", "drowned_vault", "sluice_gate"];
+const SEWER_LEVEL_4 = ["gear_hall", "steam_vent_corridor", "broken_regulator_chamber", "iron_walkway", "heart_pump", "pressure_valve_shaft"];
+const SEWER_LEVEL_5 = ["ash_pillar_hall", "whispering_chamber", "rune_lit_corridor", "cathedral_floor", "ash_heart_chamber", "sump_pit"];
+
+const OLD_SEWER_LOCATIONS = new Set([
+  "sewer_upper", "sewer_den", "sewer_channel", "sewer_deep", "sewer_gate",
+  "sewer_mid_flooded", "sewer_mid_barracks", "sewer_mid_cistern", "sewer_mid_drain",
+  "sewer_deep_threshold", "sewer_deep_vault", "sewer_deep_foundation"
+]);
+
+// Boss nodes: when combat starts here and player lacks flag, force this boss. On victory, set flag.
+const BOSS_NODES = {
+  rusted_gate: { boss_id: "rat_king", flag: "boss_floor1" },
+  spore_garden: { boss_id: "sporebound_custodian", flag: "boss_floor2" },
+  drowned_vault: { boss_id: "cistern_leviathan", flag: "boss_floor3" },
+  broken_regulator_chamber: { boss_id: "broken_regulator", flag: "boss_floor4" },
+  ash_heart_chamber: { boss_id: "ash_heart_custodian", flag: "boss_floor5" },
+};
+
+// Gate nodes: requires_flag null = always open; otherwise player must have flag to see deeper/down exit
+const FLOOR_GATES = {
+  rusted_gate:          { requires_flag: null, exit_dir: "deeper", leads_to: "fungal_bloom_chamber" },
+  cracked_aqueduct:     { requires_flag: "boss_floor1", exit_dir: "down", leads_to: "flooded_hall" },
+  sluice_gate:          { requires_flag: "boss_floor2", exit_dir: "down", leads_to: "gear_hall" },
+  pressure_valve_shaft: { requires_flag: "boss_floor3", exit_dir: "down", leads_to: "ash_pillar_hall" },
+};
 
 // Story markings: (location, object_id) -> flag. When player inspects, set flag so NPC dialogue can unlock.
 const SEWER_STORY_MARKINGS = {
-  sewer_upper: { wall_markings: "seen_sewer_wall_markings", graffiti: "seen_sewer_graffiti" },
-  sewer_mid_barracks: { wall_orders: "seen_dask_roster" },
-  sewer_mid_flooded: { tier2_graffiti: "seen_tier2_graffiti" },
-  sewer_deep: { rusted_pipe: "seen_rusted_pipe" },
-  sewer_deep_foundation: { deep_air: "seen_foundation_dask" },
+  drain_entrance: { scratched_warnings: "seen_sewer_wall_markings" },
+  overflow_channel: { scratched_tally_marks: "seen_sewer_graffiti" },
+  rusted_gate: { old_warnings: "seen_sewer_graffiti" },
+  fungal_bloom_chamber: { bloom_cluster: "seen_sewer_wall_markings" },
+  drowned_archive: { flood_records: "seen_dask_roster" },
+  drowned_vault: { artifact_display: "seen_tier2_graffiti" },
+  pressure_valve_shaft: { pressure_valve: "seen_rusted_pipe" },
+  sump_pit: { ancient_warning: "seen_foundation_dask" },
 };
 
 const PROGRESSION_FLAGS = [
@@ -55,7 +83,7 @@ const NOTICEBOARD_NPC_NOTICES = {
   sewer_entrance: [
     { id: "npc-sewer-1", title: "WARNING", message: "DON'T GO DOWN. NOT WATER. NOT WATER.", player_name: "The City", pinned: 1 },
   ],
-  sewer_upper: [
+  drain_entrance: [
     { id: "npc-sewer-2", title: "IT HEARS YOU COUNT", message: "KEEP COUNTING.", player_name: "The City", pinned: 0 },
   ],
 };
@@ -932,9 +960,14 @@ if (path === "/api/admin/command" && method === "POST") {
 
     // ── GET: Look ──
     if (path === "/api/look" && method === "GET") {
-      const row = await getPlayerSheet(db, uid);
+      let row = await getPlayerSheet(db, uid);
       if (!row) return err("No character.", 404);
-      const loc  = row.location;
+      let loc = row.location;
+      if (OLD_SEWER_LOCATIONS.has(loc)) {
+        await dbRun(db, "UPDATE players SET location=? WHERE user_id=?", ["drain_entrance", uid]);
+        row = await getPlayerSheet(db, uid);
+        loc = row.location;
+      }
       const room = WORLD[loc];
       if (!room) return err("Unknown location.");
 
@@ -973,6 +1006,16 @@ if (path === "/api/admin/command" && method === "POST") {
         exits = exits.filter(e => e !== "deeper");
         delete exit_map.deeper;
       }
+      // Floor gates: hide deeper/down exit if player lacks required boss flag
+      const gate = FLOOR_GATES[loc];
+      if (gate && gate.requires_flag) {
+        const hasFlag = await getFlag(db, uid, gate.requires_flag, 0);
+        if (!hasFlag) {
+          exits = exits.filter(e => e !== gate.exit_dir);
+          delete exit_map[gate.exit_dir];
+          description += " The gate ahead is sealed. Beyond it, something older waits.";
+        }
+      }
 
       const deathDrops = await getUnclaimedDropsAtLocation(db, loc);
       if (deathDrops.length > 0) {
@@ -994,8 +1037,12 @@ if (path === "/api/admin/command" && method === "POST") {
     // ── POST: Move ──
     if (path === "/api/move" && method === "POST") {
       const { direction } = body;
-      const row  = await getPlayerSheet(db, uid);
+      let row = await getPlayerSheet(db, uid);
       if (!row) return err("No character.", 404);
+      if (OLD_SEWER_LOCATIONS.has(row.location)) {
+        await dbRun(db, "UPDATE players SET location=? WHERE user_id=?", ["drain_entrance", uid]);
+        row = await getPlayerSheet(db, uid);
+      }
       const inCombat = await dbGet(db, "SELECT 1 FROM combat_state WHERE user_id=?", [uid]);
       if (inCombat) return err("You're in combat. Flee first.");
 
@@ -1005,6 +1052,12 @@ if (path === "/api/admin/command" && method === "POST") {
       if (row.location === "cinder_cells_block" && direction === "deeper" && (row.crime_heat ?? 0) < 11) {
         dest = null;
       }
+      // Floor gates: block deeper/down if player lacks required boss flag
+      const gate = FLOOR_GATES[row.location];
+      if (gate && direction === gate.exit_dir && gate.requires_flag) {
+        const hasFlag = await getFlag(db, uid, gate.requires_flag, 0);
+        if (!hasFlag) dest = null;
+      }
       if (!dest) return err(`You can't go ${direction} from here.`);
       if (!WORLD[dest]) return err("That path leads nowhere.");
 
@@ -1012,9 +1065,9 @@ if (path === "/api/admin/command" && method === "POST") {
 
       // Ambient events
       let ambient = null;
-      if (dest === "sewer_mid_cistern") {
+      if (dest === "flooded_hall") {
         const r = Math.random();
-        if (r < 0.1) ambient = "*A single bubble rises from the center of the cistern. The water does not ripple.*";
+        if (r < 0.1) ambient = "*A single bubble rises from the still water. The surface does not ripple.*";
         else if (r < 0.225) ambient = "*Something skitters just beyond your torchlight. The sound stops the moment you turn.*";
       }
 
@@ -1034,8 +1087,8 @@ if (path === "/api/admin/command" && method === "POST") {
         }
       }
 
-      // Depth flag
-      if (dest.startsWith("sewer_mid") || dest.startsWith("sewer_deep") || dest === "sewer_gate") {
+      // Depth flag (sewer floors 2–5)
+      if (SEWER_LEVEL_2.includes(dest) || SEWER_LEVEL_3.includes(dest) || SEWER_LEVEL_4.includes(dest) || SEWER_LEVEL_5.includes(dest)) {
         await setFlag(db, uid, "warned_mid_sewer", 1);
       }
       if (dest === "market_square") {
@@ -1052,6 +1105,15 @@ if (path === "/api/admin/command" && method === "POST") {
       if (dest === "cinder_cells_block" && (row.crime_heat ?? 0) < 11) {
         destExits = destExits.filter(e => e !== "deeper");
         delete destExitMap.deeper;
+      }
+      const destGate = FLOOR_GATES[dest];
+      if (destGate && destGate.requires_flag) {
+        const hasFlag = await getFlag(db, uid, destGate.requires_flag, 0);
+        if (!hasFlag) {
+          destExits = destExits.filter(e => e !== destGate.exit_dir);
+          delete destExitMap[destGate.exit_dir];
+          destDescription += " The gate ahead is sealed. Beyond it, something older waits.";
+        }
       }
       let npcsHere = Object.entries(NPC_LOCATIONS)
         .filter(([,l]) => l === dest).map(([id]) => id);
@@ -1680,13 +1742,20 @@ if (path === "/api/combat/state" && method === "GET") {
       if (hp.current <= 0) return err("You can't fight in this condition.");
 
       let enemy;
-      // Optional: set player_flags.force_combat_test=1 for deterministic gutter_rat spawn (playtest).
-      const forceCombatTest = await getFlag(db, uid, "force_combat_test");
-      if (forceCombatTest) {
-        const gutterRat = COMBAT_DATA.enemies.gutter_rat;
-        enemy = { ...gutterRat, id: gutterRat.id };
+      const bossNode = BOSS_NODES[row.location];
+      const forceBoss = bossNode && !(await getFlag(db, uid, bossNode.flag, 0));
+      if (forceBoss) {
+        const bossData = COMBAT_DATA.enemies[bossNode.boss_id];
+        enemy = bossData ? { ...bossData, id: bossData.id } : randomEnemy(row.location);
       } else {
-        enemy = randomEnemy(row.location);
+        // Optional: set player_flags.force_combat_test=1 for deterministic gutter_rat spawn (playtest).
+        const forceCombatTest = await getFlag(db, uid, "force_combat_test");
+        if (forceCombatTest) {
+          const gutterRat = COMBAT_DATA.enemies.gutter_rat;
+          enemy = { ...gutterRat, id: gutterRat.id };
+        } else {
+          enemy = randomEnemy(row.location);
+        }
       }
       const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
       let weaponDie = 6, armorReduction = 0, shieldBonus = 0;
@@ -1823,6 +1892,11 @@ if (path === "/api/combat/state" && method === "GET") {
         await dbRun(db, "DELETE FROM combat_state WHERE user_id=?", [uid]);
         await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [playerHp, uid]);
 
+        // Set boss_floorN flag when defeating a floor boss
+        const bossFlags = { rat_king: "boss_floor1", sporebound_custodian: "boss_floor2", cistern_leviathan: "boss_floor3", broken_regulator: "boss_floor4", ash_heart_custodian: "boss_floor5" };
+        const bossFlag = bossFlags[state.enemy_id];
+        if (bossFlag) await setFlag(db, uid, bossFlag, 1);
+
         const xpGain = enemy.xp || 50;
         const xpRow  = await dbGet(db, "SELECT xp,class_stage FROM characters WHERE user_id=?", [uid]);
         const newXp  = (xpRow.xp || 0) + xpGain;
@@ -1835,7 +1909,7 @@ if (path === "/api/combat/state" && method === "GET") {
 
         // Procedural item drop
         const playerLevel = 1 + (xpRow.class_stage || 0);
-        const locationId = state.location || "sewer_upper";
+        const locationId = state.location || "drain_entrance";
         const enemyTier = enemy.tier ?? 1;
         const dropped = generateItem(playerLevel, locationId, enemyTier);
         await dbRun(db, `INSERT INTO inventory (user_id, item, qty, tier, corrupted, curse, curse_identified, special_property, display_name)
@@ -1855,7 +1929,7 @@ if (path === "/api/combat/state" && method === "GET") {
 
       // Death
       if (playerHp <= 0) {
-        const deathLoc = state.location || "sewer_upper";
+        const deathLoc = state.location || "drain_entrance";
         const { ashLost } = await processDeathDrop(db, uid, deathLoc);
         await dbRun(db, "DELETE FROM combat_state WHERE user_id=?", [uid]);
         await dbRun(db, "UPDATE characters SET current_hp=0 WHERE user_id=?", [uid]);
