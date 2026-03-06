@@ -786,6 +786,61 @@
 
   #board-close:hover { color: var(--text); border-color: var(--ash); }
 
+  /* ── Noticeboard overlay ──────────────────────────────────────── */
+  #noticeboard-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    z-index: 100;
+    justify-content: center;
+    align-items: center;
+  }
+  #noticeboard-overlay.open { display: flex; }
+  #noticeboard-box {
+    background: var(--bg2);
+    border: 1px solid var(--border-warm);
+    width: min(520px, 92vw);
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 24px 28px;
+    box-shadow: 0 0 60px rgba(0,0,0,0.8);
+    animation: slideUp 0.2s ease;
+    font-size: 0.9rem;
+    line-height: 1.7;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  .noticeboard-desc { margin-bottom: 1rem; white-space: pre-wrap; color: var(--text-dim); }
+  .noticeboard-list { margin: 1rem 0; }
+  .noticeboard-list .notice-item {
+    border-left: 2px solid var(--ember);
+    padding: 0.4rem 0 0.4rem 0.6rem;
+    margin-bottom: 0.6rem;
+    font-size: 0.88rem;
+  }
+  .noticeboard-list .notice-item.npc { border-left-color: var(--text-dim); }
+  .noticeboard-list .notice-title { font-weight: 600; color: var(--ember); }
+  .noticeboard-list .notice-item.npc .notice-title { color: var(--text-dim); }
+  .noticeboard-list .notice-by { margin-top: 0.2rem; font-size: 0.82rem; color: var(--text-dim); }
+  .notice-remove { margin-left: 0.5rem; background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 0.8rem; text-decoration: underline; padding: 0; }
+  .notice-remove:hover { color: var(--ember); }
+  .noticeboard-form label { display: block; margin-top: 0.6rem; color: var(--text-dim); font-size: 0.85rem; }
+  .noticeboard-form input, .noticeboard-form textarea {
+    width: 100%;
+    margin-top: 0.25rem;
+    padding: 6px 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--font-body);
+    box-sizing: border-box;
+  }
+  #noticeboard-char-count { font-size: 0.8rem; color: var(--text-dim); }
+  .noticeboard-form-actions { margin-top: 1rem; display: flex; gap: 8px; }
+  #noticeboard-close { display: block; margin-top: 16px; background: none; border: 1px solid var(--border-warm); color: var(--text-dim); font-family: var(--font-body); padding: 6px 18px; cursor: pointer; }
+  #noticeboard-close:hover { color: var(--text); border-color: var(--ash); }
+
   /* ── True Welcome overlay (second app) ──────────────────────────── */
   .screen-overlay {
     position: fixed;
@@ -1600,9 +1655,36 @@
   </div>
 </div>
 
+<!-- ── Noticeboard Overlay ──────────────────────────────────────── -->
+<div id="noticeboard-overlay">
+  <div id="noticeboard-box">
+    <div id="noticeboard-view">
+      <div id="noticeboard-desc" class="noticeboard-desc"></div>
+      <div id="noticeboard-list" class="noticeboard-list"></div>
+      <button id="noticeboard-post-btn" class="btn">Post Notice (5 Ash Marks)</button>
+    </div>
+    <div id="noticeboard-form" class="noticeboard-form" style="display:none;">
+      <label>Title (optional)</label>
+      <input type="text" id="noticeboard-title" maxlength="120" placeholder="Short title">
+      <label>Message (max 500)</label>
+      <textarea id="noticeboard-message" rows="4" maxlength="500" placeholder="Your notice..."></textarea>
+      <span id="noticeboard-char-count">0 / 500</span>
+      <div class="noticeboard-form-actions">
+        <button id="noticeboard-submit" class="btn">Post (5 Ash Marks)</button>
+        <button id="noticeboard-cancel" class="btn">Cancel</button>
+      </div>
+    </div>
+    <button id="noticeboard-close" onclick="closeNoticeboard()">Leave</button>
+  </div>
+</div>
+
 <script>
 // ── Config ───────────────────────────────────────────────────────
 const API = '';  // use relative paths (same origin)
+
+// Current location (set in renderRoom) for noticeboard and local chat
+let currentGameLocation = '';
+let currentNoticeboardLocation = '';
 
 // ── Dangerous locations (exit button warning + map node stroke) ───
 const DANGEROUS_LOCATIONS = new Set([
@@ -2851,6 +2933,7 @@ function renderRoom(data) {
   }
 
   renderNodeMap(data.location);
+  currentGameLocation = data.location || '';
 
   // Objects
   const objRow = document.getElementById('objects-row');
@@ -2959,13 +3042,127 @@ async function doMove(dir) {
 }
 
 // ── Inspect ──────────────────────────────────────────────────────
+const NOTICEBOARD_OBJECTS = ['noticeboard', 'ember_post'];
+
 async function doInspect(target) {
   try {
     const data = await GET(`/api/inspect/${target}`);
     log(render(data.desc));
+    if (NOTICEBOARD_OBJECTS.includes(target) && currentGameLocation) {
+      await openNoticeboardOverlay(data.desc, currentGameLocation);
+    }
   } catch(e) {
     log(`<em>${e.message}</em>`);
   }
+}
+
+async function openNoticeboardOverlay(desc, location) {
+  try {
+    const data = await GET(`/api/chat/noticeboard?location=${encodeURIComponent(location)}`);
+    document.getElementById('noticeboard-desc').innerHTML = render(desc || '');
+    const listEl = document.getElementById('noticeboard-list');
+    listEl.innerHTML = '';
+    (data.notices || []).forEach(n => {
+      const div = document.createElement('div');
+      div.className = 'notice-item' + (n.is_npc ? ' npc' : '');
+      let title = (n.title || '').trim();
+      const msg = (n.message || '').trim();
+      const by = (n.player_name || 'Unknown').trim();
+      const removeBtn = (!n.is_npc && n.is_own) ? `<button type="button" class="notice-remove" data-notice-id="${escapeHtml(String(n.id))}">Remove</button>` : '';
+      div.innerHTML = (title ? `<div class="notice-title">${escapeHtml(title)}</div>` : '') +
+        `<div class="notice-message">${escapeHtml(msg)}</div>` +
+        `<div class="notice-by">— ${escapeHtml(by)}${removeBtn}</div>`;
+      listEl.appendChild(div);
+    });
+    document.getElementById('noticeboard-view').style.display = '';
+    document.getElementById('noticeboard-form').style.display = 'none';
+    document.getElementById('noticeboard-overlay').classList.add('open');
+    currentNoticeboardLocation = location;
+    document.getElementById('noticeboard-post-btn').onclick = () => showNoticeboardForm(location);
+    listEl.querySelectorAll('.notice-remove').forEach(btn => {
+      btn.onclick = async () => {
+        const id = btn.getAttribute('data-notice-id');
+        if (!id || !currentNoticeboardLocation) return;
+        try {
+          await fetch(`${API}/api/chat/noticeboard/${id}`, { method: 'DELETE', credentials: 'include' });
+          await refreshNoticeboardList(currentNoticeboardLocation);
+        } catch (e) { log(`<em>${e.message || e}</em>`); }
+      };
+    });
+  } catch(e) {
+    log(`<em>${e.message}</em>`);
+  }
+}
+
+async function refreshNoticeboardList(location) {
+  const data = await GET(`/api/chat/noticeboard?location=${encodeURIComponent(location)}`);
+  const listEl = document.getElementById('noticeboard-list');
+  listEl.innerHTML = '';
+  (data.notices || []).forEach(n => {
+    const div = document.createElement('div');
+    div.className = 'notice-item' + (n.is_npc ? ' npc' : '');
+    const title = (n.title || '').trim();
+    const msg = (n.message || '').trim();
+    const by = (n.player_name || 'Unknown').trim();
+    const removeBtn = (!n.is_npc && n.is_own) ? `<button type="button" class="notice-remove" data-notice-id="${escapeHtml(String(n.id))}">Remove</button>` : '';
+    div.innerHTML = (title ? `<div class="notice-title">${escapeHtml(title)}</div>` : '') +
+      `<div class="notice-message">${escapeHtml(msg)}</div>` +
+      `<div class="notice-by">— ${escapeHtml(by)}${removeBtn}</div>`;
+    listEl.appendChild(div);
+  });
+  listEl.querySelectorAll('.notice-remove').forEach(btn => {
+    btn.onclick = async () => {
+      const id = btn.getAttribute('data-notice-id');
+      if (!id || !currentNoticeboardLocation) return;
+      try {
+        await fetch(`${API}/api/chat/noticeboard/${id}`, { method: 'DELETE', credentials: 'include' });
+        await refreshNoticeboardList(currentNoticeboardLocation);
+      } catch (e) { log(`<em>${e.message || e}</em>`); }
+    };
+  });
+}
+
+function showNoticeboardForm(location) {
+  document.getElementById('noticeboard-view').style.display = 'none';
+  document.getElementById('noticeboard-form').style.display = 'block';
+  document.getElementById('noticeboard-title').value = '';
+  document.getElementById('noticeboard-message').value = '';
+  document.getElementById('noticeboard-char-count').textContent = '0 / 500';
+  document.getElementById('noticeboard-message').oninput = () => {
+    const len = document.getElementById('noticeboard-message').value.length;
+    document.getElementById('noticeboard-char-count').textContent = len + ' / 500';
+  };
+  document.getElementById('noticeboard-cancel').onclick = () => {
+    document.getElementById('noticeboard-form').style.display = 'none';
+    document.getElementById('noticeboard-view').style.display = '';
+  };
+  document.getElementById('noticeboard-submit').onclick = () => submitNotice(location);
+}
+
+async function submitNotice(location) {
+  const title = (document.getElementById('noticeboard-title').value || '').trim();
+  const message = (document.getElementById('noticeboard-message').value || '').trim();
+  if (!message) { log('<em>Message is required.</em>'); return; }
+  try {
+    await POST('/api/chat/noticeboard', { location, title, message });
+    refreshSidebar();
+    await refreshNoticeboardList(location);
+    document.getElementById('noticeboard-form').style.display = 'none';
+    document.getElementById('noticeboard-view').style.display = '';
+    log('Notice posted.');
+  } catch(e) {
+    log(`<em>${e.message || e}</em>`);
+  }
+}
+
+function closeNoticeboard() {
+  document.getElementById('noticeboard-overlay').classList.remove('open');
+}
+
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
 }
 
 // ── Dialogue ─────────────────────────────────────────────────────
@@ -3146,6 +3343,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     closeDialogue();
     closeBoard();
+    closeNoticeboard();
     document.getElementById('combat-overlay').classList.remove('open');
   }
 });

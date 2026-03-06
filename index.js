@@ -25,6 +25,22 @@ const PROGRESSION_FLAGS = [
   "found_foundation_stone", "has_room", "has_seen_awakening",
 ];
 
+const NOTICEBOARD_NPC_NOTICES = {
+  tavern: [
+    { id: "npc-tavern-1", title: "House rules", message: "Pay before you sleep. No questions.", player_name: "The City", pinned: 1 },
+  ],
+  market_square: [
+    { id: "npc-ember-1", title: "RATS ATE JORIN", message: "RATS ATE JORIN. DON'T BE JORIN.", player_name: "The City", pinned: 0 },
+    { id: "npc-ember-2", title: "", message: "The board has been here longer than the square. Don't think too hard about it.", player_name: "The City", pinned: 0 },
+  ],
+  sewer_entrance: [
+    { id: "npc-sewer-1", title: "WARNING", message: "DON'T GO DOWN. NOT WATER. NOT WATER.", player_name: "The City", pinned: 1 },
+  ],
+  sewer_upper: [
+    { id: "npc-sewer-2", title: "IT HEARS YOU COUNT", message: "KEEP COUNTING.", player_name: "The City", pinned: 0 },
+  ],
+};
+
 const AWAKENING_ROOM_DESCRIPTION = "The floor is stone. That is the first thing you know — the cold of it against your cheek, the weight of your body on something that does not give. The second thing you know is warmth, coming from somewhere to your left, slow and steady, the way warmth comes from something that has been burning for a very long time.\n\nYou are in a room. There is a hearth. There is a bar. There is a dog near the fire that has lifted its head and is looking at you with eyes that are too still for an animal that has just noticed something unexpected.\n\nBehind the bar, a broad dwarf with burn-scarred braids is already watching you. He does not look surprised. He does not look concerned.\n\nHe looks like he has seen this before.\n\nHe looks like he has been waiting.";
 
 // Point-pool: each stat starts at 5, 28 points to distribute (≈ 3d6 total). Max per stat for future items/equipment.
@@ -971,6 +987,70 @@ if (path === "/api/admin/command" && method === "POST") {
     // ── POST: Mark whispers as read (when user views Whispers tab) ──
     if (path === "/api/chat/whispers/mark-read" && method === "POST") {
       await dbRun(db, `UPDATE whispers SET read = 1 WHERE to_user_id = ?`, [uid]);
+      return json({ ok: true });
+    }
+
+    // ── GET: Noticeboard (player + NPC notices for location) ──
+    if (path === "/api/chat/noticeboard" && method === "GET") {
+      const url = new URL(request.url);
+      const location = (url.searchParams.get("location") || "").trim();
+      if (!location) return err("Missing location.", 400);
+      const now = Date.now();
+      const rows = await dbAll(db,
+        `SELECT id, user_id, title, message, player_name, pinned, created_at FROM noticeboards
+         WHERE location = ? AND deleted = 0 AND (expires_at IS NULL OR expires_at > ?)
+         ORDER BY pinned DESC, created_at DESC`,
+        [location, now]
+      );
+      const rowsWithOwn = rows.map(r => ({ ...r, is_own: r.user_id === uid }));
+      const npc = (NOTICEBOARD_NPC_NOTICES[location] || []).map((n, i) => ({
+        id: n.id || `npc-${location}-${i}`,
+        title: n.title || "",
+        message: n.message || "",
+        player_name: n.player_name || "The City",
+        pinned: n.pinned ? 1 : 0,
+        created_at: 0,
+        is_npc: true,
+      }));
+      const combined = [...npc, ...rowsWithOwn];
+      combined.sort((a, b) => (b.pinned - a.pinned) || ((b.created_at || 0) - (a.created_at || 0)));
+      return json({ notices: combined });
+    }
+
+    // ── POST: Post to noticeboard ──
+    if (path === "/api/chat/noticeboard" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const location = (body.location || "").trim();
+      const title = (body.title || "").trim();
+      const message = (body.message || "").trim();
+      const expiresHours = body.expires_hours != null ? Number(body.expires_hours) : null;
+      if (!location) return err("Missing location.", 400);
+      if (message.length > 500) return err("Message too long (max 500).", 400);
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const ash = Number(row.ash_marks ?? 0);
+      if (ash < 5) return err("Not enough Ash Marks (need 5).", 400);
+      const existing = await dbGet(db, `SELECT id FROM noticeboards WHERE location = ? AND user_id = ? AND deleted = 0`, [location, uid]);
+      if (existing) return err("You already have a notice here. Remove it first.", 400);
+      const now = Date.now();
+      const expiresAt = expiresHours != null && expiresHours > 0 ? now + expiresHours * 3600 * 1000 : null;
+      const playerName = (row.name || "Unknown").trim() || "Unknown";
+      await dbRun(db,
+        `INSERT INTO noticeboards (user_id, location, player_name, title, message, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [uid, location, playerName, title, message, now, expiresAt]
+      );
+      await dbRun(db, `UPDATE players SET ash_marks = ? WHERE id = ?`, [ash - 5, uid]);
+      return json({ ok: true });
+    }
+
+    // ── DELETE: Remove own notice (soft-delete) ──
+    if (path.startsWith("/api/chat/noticeboard/") && method === "DELETE") {
+      const id = path.slice("/api/chat/noticeboard/".length).replace(/[^a-zA-Z0-9_-]/g, "");
+      if (!id) return err("Invalid notice id.", 400);
+      if (id.startsWith("npc-")) return err("Cannot remove city notices.", 400);
+      const row = await dbGet(db, `SELECT id FROM noticeboards WHERE id = ? AND user_id = ?`, [id, uid]);
+      if (!row) return err("Notice not found or not yours.", 404);
+      await dbRun(db, `UPDATE noticeboards SET deleted = 1 WHERE id = ?`, [id]);
       return json({ ok: true });
     }
 
