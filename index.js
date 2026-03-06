@@ -12,8 +12,10 @@ import { RACES } from "./data/races.js";
 import { INSTINCTS } from "./data/instincts.js";
 import { NPC_LOCATIONS, NPC_NAMES, NPC_TOPICS, BARTENDER_FEE } from "./data/npcs.js";
 import { SERIS_NOTICES, FLAVOR_NOTICES, ANONYMOUS_NOTICES, IMPOSSIBLE_TEMPLATES, BOARD_NPC_REACTIONS } from "./data/board.js";
+import { SERIS_INTEREST_ITEMS, getSellValue, displayNameToKey } from "./data/seris.js";
 import { getNPCResponse, boardNPCReaction } from "./services/npc_dialogue.js";
 import { statMod, rollDie, maxPlayerHp, randomEnemy, playerAttack, enemyAttack } from "./services/combat.js";
+import { generateItem } from "./services/item_generator.js";
 
 // ─────────────────────────────────────────────────────────────
 // GAME DATA (remaining in index)
@@ -318,6 +320,14 @@ async function initDb(db) {
     } catch (_) {
       // Column already exists on re-run
     }
+
+    // Item system (Phase 1) — add columns for tier, corrupted, curse, etc.
+    try { await dbRun(db, `ALTER TABLE inventory ADD COLUMN tier INTEGER DEFAULT 1`); } catch (_) {}
+    try { await dbRun(db, `ALTER TABLE inventory ADD COLUMN corrupted INTEGER DEFAULT 0`); } catch (_) {}
+    try { await dbRun(db, `ALTER TABLE inventory ADD COLUMN curse TEXT`); } catch (_) {}
+    try { await dbRun(db, `ALTER TABLE inventory ADD COLUMN curse_identified INTEGER DEFAULT 0`); } catch (_) {}
+    try { await dbRun(db, `ALTER TABLE inventory ADD COLUMN special_property TEXT`); } catch (_) {}
+    try { await dbRun(db, `ALTER TABLE inventory ADD COLUMN display_name TEXT`); } catch (_) {}
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1338,12 +1348,22 @@ if (path === "/api/combat/state" && method === "GET") {
         const lootAsh = Math.floor(Math.random() * 15) + 5;
         await dbRun(db, "UPDATE characters SET ash_marks=ash_marks+? WHERE user_id=?", [lootAsh, uid]);
 
+        // Procedural item drop
+        const playerLevel = 1 + (xpRow.class_stage || 0);
+        const locationId = state.location || "sewer_upper";
+        const enemyTier = enemy.tier ?? 1;
+        const dropped = generateItem(playerLevel, locationId, enemyTier);
+        await dbRun(db, `INSERT INTO inventory (user_id, item, qty, tier, corrupted, curse, curse_identified, special_property, display_name)
+          VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?)`,
+          [uid, dropped.id, dropped.tier, dropped.corrupted ? 1 : 0, dropped.curse || null, dropped.curse_identified || 0, dropped.special_property || null, dropped.display_name || null]);
+
         const mKill = instinct === "ironblood" ? 0 : -1;
         await tickAlignment(db, uid, mKill, 1, instinct);
 
+        const itemLine = dropped.display_name ? ` | **${dropped.display_name}**` : "";
         return json({
           result: "victory",
-          message: `*${enemy.name} falls.*\n\n${attack.narrative}\n\n**+${xpGain} XP** | **+${lootAsh} Ash Marks**`,
+          message: `*${enemy.name} falls.*\n\n${attack.narrative}\n\n**+${xpGain} XP** | **+${lootAsh} Ash Marks**${itemLine}`,
           can_advance: !!canAdvance, player_hp: playerHp,
         });
       }
@@ -1398,9 +1418,73 @@ if (path === "/api/combat/state" && method === "GET") {
 
     // ── GET: Inventory ──
     if (path === "/api/inventory" && method === "GET") {
-      const rows = await dbAll(db, "SELECT item,qty FROM inventory WHERE user_id=? ORDER BY item", [uid]);
-      const items = rows.map(r => r.qty === 1 ? r.item : `${r.item} x${r.qty}`);
+      const rows = await dbAll(db, "SELECT item,qty,display_name FROM inventory WHERE user_id=? ORDER BY item", [uid]);
+      const items = rows.map(r => {
+        const label = r.display_name || r.item;
+        return r.qty === 1 ? label : `${label} x${r.qty}`;
+      });
       return json({ items });
+    }
+
+    // ── POST: Sell (to NPC) ──
+    if (path === "/api/sell" && method === "POST") {
+      const { npc, item: itemId } = body;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (!npc || !itemId) return err("Missing npc or item.", 400);
+
+      const npcLoc = NPC_LOCATIONS[npc];
+      if (!npcLoc || npcLoc !== row.location) return err(`${npc} is not here.`);
+
+      const invRow = await dbGet(db, "SELECT item,qty,display_name,tier FROM inventory WHERE user_id=? AND item=?", [uid, itemId]);
+      if (!invRow) return err("You don't have that item.", 404);
+
+      const displayName = invRow.display_name || invRow.item;
+      const tier = invRow.tier || 1;
+
+      if (npc === "curator") {
+        const value = getSellValue(displayName, tier, "loot");
+        if (value <= 0) return err("Seris won't buy that.", 400);
+
+        const key = displayNameToKey(displayName);
+        const interest = key ? SERIS_INTEREST_ITEMS[key] : null;
+
+        await dbRun(db, invRow.qty <= 1
+          ? "DELETE FROM inventory WHERE user_id=? AND item=?"
+          : "UPDATE inventory SET qty=qty-1 WHERE user_id=? AND item=?",
+          invRow.qty <= 1 ? [uid, itemId] : [uid, itemId]);
+        await dbRun(db, "UPDATE characters SET ash_marks=ash_marks+? WHERE user_id=?", [value, uid]);
+
+        const sold = await getFlag(db, uid, "curator_items_sold");
+        await setFlag(db, uid, "curator_items_sold", (sold || 0) + 1);
+
+        if (interest) {
+          if (interest.arcAdvance && interest.arcStage === 1) await setFlag(db, uid, "seris_arc1_active", 1);
+          if (interest.arcAdvance && !interest.arcStage) await setFlag(db, uid, `seris_sold_${key}`, 1);
+
+          const dialogue = {
+            mild: `*She looks at it with something close to interest.*\n\n"I'll take it. The city leaves marks on things."`,
+            strong: `*She examines it without touching.*\n\n"This resonates. I'll buy it. More than it's worth, probably."`,
+            break: `*Her composure cracks — just slightly.*\n\n"This is what I've been looking for."`,
+            invested: `*She looks at it for a long time.*\n\n"You've been deeper than I thought."`,
+          }[interest.dialogue] || dialogue.mild;
+
+          return json({
+            ok: true,
+            message: `${dialogue}\n\n**+${value} Ash Marks**`,
+            ash_marks: (row.ash_marks || 0) + value,
+            seris_reaction: true,
+          });
+        }
+
+        return json({
+          ok: true,
+          message: `*Seris takes it.*\n\n"${value} marks."\n\n**+${value} Ash Marks**`,
+          ash_marks: (row.ash_marks || 0) + value,
+        });
+      }
+
+      return err("You can't sell to that NPC.", 400);
     }
 
     // ── GET: Wallet ──
