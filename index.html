@@ -388,6 +388,10 @@
   }
 
   .inv-item:hover { color: var(--ember-glow); }
+  .inv-item.equipped { border-left: 2px solid var(--ember-glow); padding-left: 6px; }
+  .inv-loadout { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .inv-loadout span { display: block; margin: 2px 0; }
+  .inv-equip-btn { font-size: 0.7rem; margin-left: 6px; padding: 1px 6px; cursor: pointer; }
 
   /* ── Dialogue overlay ──────────────────────────────────────────── */
   #dialogue-overlay {
@@ -1679,6 +1683,7 @@
 
     <div id="inv-panel">
       <div id="inv-title">Carried</div>
+      <div id="inv-loadout" class="inv-loadout"></div>
       <div id="inv-list"></div>
     </div>
   </div>
@@ -2502,7 +2507,11 @@ async function populateCharacterSheet() {
   document.getElementById('cs-ember').textContent = wallet.ember_shards ?? 0;
   document.getElementById('cs-soul').textContent = wallet.soul_coins ?? 0;
   const items = inv.items || [];
-  document.getElementById('cs-inv-list').textContent = items.length ? items.join(', ') : 'Nothing carried.';
+  const eq = inv.equipment || {};
+  const idToName = {};
+  (inv.itemDetails || []).forEach(it => { idToName[it.id] = it.display_name || it.id; });
+  const loadout = 'Weapon: ' + (idToName[eq.weapon] || '—') + ' · Armor: ' + (idToName[eq.armor] || '—') + ' · Shield: ' + (idToName[eq.shield] || '—');
+  document.getElementById('cs-inv-list').innerHTML = (loadout ? '<div class="inv-loadout" style="margin-bottom:6px">' + escapeHtml(loadout) + '</div>' : '') + (items.length ? escapeHtml(items.join(', ')) : 'Nothing carried.');
   const ul = document.getElementById('cs-flags-list');
   ul.innerHTML = '';
   for (const [id, label] of Object.entries(PROGRESSION_LABELS)) {
@@ -2652,7 +2661,13 @@ async function refreshSheetPanel() {
   statKeys.forEach(s => { statsHtml += '<p>' + s + ': ' + (char[s] ?? '—') + '</p>'; });
   document.getElementById('panel-tab-stats').innerHTML = statsHtml;
   const items = inv.items || [];
-  document.getElementById('panel-tab-inventory').innerHTML = '<p>◈ ' + (wallet.ash_marks ?? 0) + ' Ash · ◆ ' + (wallet.ember_shards ?? 0) + ' Ember · ○ ' + (wallet.soul_coins ?? 0) + ' Soul</p><p>' + (items.length ? items.join(', ') : 'Nothing carried.') + '</p>';
+  const eq = inv.equipment || {};
+  const idToName = {};
+  (inv.itemDetails || []).forEach(it => { idToName[it.id] = it.display_name || it.id; });
+  const loadout = 'Weapon: ' + (idToName[eq.weapon] || '—') + ' · Armor: ' + (idToName[eq.armor] || '—') + ' · Shield: ' + (idToName[eq.shield] || '—');
+  document.getElementById('panel-tab-inventory').innerHTML = '<p>◈ ' + (wallet.ash_marks ?? 0) + ' Ash · ◆ ' + (wallet.ember_shards ?? 0) + ' Ember · ○ ' + (wallet.soul_coins ?? 0) + ' Soul</p>' +
+    '<p class="inv-loadout" style="margin-bottom:6px">' + escapeHtml(loadout) + '</p>' +
+    '<p>' + (items.length ? escapeHtml(items.join(', ')) : 'Nothing carried.') + '</p>';
   let flagsHtml = '<ul>';
   for (const [id, label] of Object.entries(PROGRESSION_LABELS)) {
     flagsHtml += '<li class="' + ((flags[id] && Number(flags[id]) > 0) ? 'unlocked' : 'locked') + '">' + ((flags[id] && Number(flags[id]) > 0) ? label : '???') + '</li>';
@@ -2741,7 +2756,7 @@ async function loadGame() {
 
   updateCharPanel(charData);
   updateWallet(walletData);
-  updateInventory(invData.items);
+  updateInventory(invData);
   renderRoom(lookData);
 
   if (lookData.in_combat) {
@@ -3025,17 +3040,45 @@ function updateWallet(w) {
   document.getElementById('w-soul').textContent  = w.soul_coins  || 0;
 }
 
-function updateInventory(items) {
+function updateInventory(invData) {
+  const loadoutEl = document.getElementById('inv-loadout');
   const el = document.getElementById('inv-list');
+  if (!loadoutEl || !el) return;
+  const itemDetails = invData?.itemDetails || [];
+  const equipment = invData?.equipment || { weapon: null, armor: null, shield: null };
+  const idToName = {};
+  itemDetails.forEach(it => { idToName[it.id] = it.display_name || it.id; });
+  loadoutEl.innerHTML = '<span><strong>Weapon:</strong> ' + (idToName[equipment.weapon] || '— none —') + '</span>' +
+    '<span><strong>Armor:</strong> ' + (idToName[equipment.armor] || '— none —') + '</span>' +
+    '<span><strong>Shield:</strong> ' + (idToName[equipment.shield] || '— none —') + '</span>';
   el.innerHTML = '';
-  if (!items.length) {
+  if (!itemDetails.length) {
     el.innerHTML = '<div style="color:var(--text-dim);font-size:0.82rem">Nothing carried.</div>';
     return;
   }
-  items.forEach(item => {
+  itemDetails.forEach(it => {
     const d = document.createElement('div');
-    d.className = 'inv-item';
-    d.textContent = item;
+    d.className = 'inv-item' + (it.equipped ? ' equipped' : '');
+    const label = (it.display_name || it.id) + (it.qty > 1 ? ' x' + it.qty : '');
+    d.innerHTML = (it.equipped ? '[E] ' : '') + escapeHtml(label);
+    if (it.slot) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'inv-equip-btn';
+      btn.textContent = it.equipped ? 'Unequip' : 'Equip';
+      btn.onclick = async () => {
+        try {
+          if (it.equipped) {
+            await POST('/api/inventory/unequip', { slot: it.slot });
+          } else {
+            await POST('/api/inventory/equip', { item: it.id });
+          }
+          const inv = await GET('/api/inventory');
+          updateInventory(inv);
+        } catch (e) { log('<em>' + escapeHtml(e.message) + '</em>'); }
+      };
+      d.appendChild(btn);
+    }
     el.appendChild(d);
   });
 }
@@ -3704,7 +3747,7 @@ async function refreshSidebar() {
     ]);
     updateCharPanel(charData);
     updateWallet(walletData);
-    updateInventory(invData.items);
+    updateInventory(invData);
   } catch(e) {}
 }
 

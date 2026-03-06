@@ -13,7 +13,7 @@ import { INSTINCTS } from "./data/instincts.js";
 import { NPC_LOCATIONS, NPC_NAMES, NPC_TOPICS, BARTENDER_FEE } from "./data/npcs.js";
 import { SERIS_NOTICES, FLAVOR_NOTICES, ANONYMOUS_NOTICES, IMPOSSIBLE_TEMPLATES, BOARD_NPC_REACTIONS } from "./data/board.js";
 import { SERIS_INTEREST_ITEMS, getSellValue, displayNameToKey, TIER_BASE_VALUES } from "./data/seris.js";
-import { VENDOR_STOCK, VENDOR_NPCS } from "./data/vendor_stock.js";
+import { VENDOR_STOCK, VENDOR_NPCS, CAELIR_STOCK, VEYRA_STOCK } from "./data/vendor_stock.js";
 import { getNPCResponse, boardNPCReaction } from "./services/npc_dialogue.js";
 import { statMod, rollDie, maxPlayerHp, randomEnemy, playerAttack, enemyAttack } from "./services/combat.js";
 import { generateItem } from "./services/item_generator.js";
@@ -89,6 +89,21 @@ function validatePointBuy(stats) {
   if (sum !== STAT_TOTAL_EXPECTED)
     return { ok: false, message: `Stats must use the full pool: total ${sum} should be ${STAT_TOTAL_EXPECTED} (6×${STAT_BASE} base + ${STAT_POOL} points).` };
   return { ok: true };
+}
+
+/** Returns 'weapon' | 'armor' | 'shield' | null for equippable items. */
+function getItemSlot(itemId, displayName) {
+  const name = (displayName || itemId || "").toLowerCase();
+  const vendorWeapon = CAELIR_STOCK.find(e => e.id === itemId);
+  if (vendorWeapon) return "weapon";
+  const vendorArmor = VEYRA_STOCK.find(e => e.id === itemId);
+  if (vendorArmor) return name.includes("shield") ? "shield" : "armor";
+  if (name.includes("shield")) return "shield";
+  const weaponWords = ["blade", "knife", "hatchet", "spike", "club", "shard", "hook", "longsword", "dagger", "shortbow", "spear", "mace", "sword", "cleaver", "crossbow", "glaive", "maul", "greatsword", "war-axe", "longbow", "pike", "warhammer", "executioner", "reaper", "soulbow", "lance", "crusher"];
+  if (weaponWords.some(w => name.includes(w))) return "weapon";
+  const armorWords = ["rags", "wrap", "scraps", "patchwork", "hide", "leather", "jerkin", "coat", "vest", "mail", "padding", "armor", "cuirass", "hauberk", "plate", "brigandine", "carapace", "shell", "mantle", "aegis", "shroud", "robe", "vestments", "cloak", "brigandine"];
+  if (armorWords.some(w => name.includes(w))) return "armor";
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -470,6 +485,14 @@ async function initDb(db) {
     try { await dbRun(db, `ALTER TABLE inventory ADD COLUMN curse_identified INTEGER DEFAULT 0`); } catch (_) {}
     try { await dbRun(db, `ALTER TABLE inventory ADD COLUMN special_property TEXT`); } catch (_) {}
     try { await dbRun(db, `ALTER TABLE inventory ADD COLUMN display_name TEXT`); } catch (_) {}
+    try { await dbRun(db, `ALTER TABLE inventory ADD COLUMN equipped INTEGER DEFAULT 0`); } catch (_) {}
+
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS equipment_slots (
+      user_id INTEGER NOT NULL,
+      slot TEXT NOT NULL,
+      item TEXT NOT NULL,
+      PRIMARY KEY (user_id, slot)
+    )`);
 
     // PvPvE system (Phase 1)
     await dbRun(db, `CREATE TABLE IF NOT EXISTS player_relationships (
@@ -741,6 +764,7 @@ if (path === "/api/character/reset" && method === "POST") {
   await dbRun(db, `UPDATE characters SET instinct=NULL, strength=5, dexterity=5, constitution=5, intelligence=5, wisdom=5, charisma=5, stats_set=0,
     alignment_morality=0, alignment_order=0, ash_marks=0, ember_shards=0, soul_coins=0, xp=0, class_stage=0, current_hp=0 WHERE user_id=?`, [targetUid]);
   await dbRun(db, "DELETE FROM player_flags WHERE user_id=?", [targetUid]);
+  await dbRun(db, "DELETE FROM equipment_slots WHERE user_id=?", [targetUid]);
   await dbRun(db, "DELETE FROM inventory WHERE user_id=?", [targetUid]);
   await dbRun(db, "DELETE FROM combat_state WHERE user_id=?", [targetUid]);
   await dbRun(db, "DELETE FROM pvp_state WHERE user_id=?", [targetUid]);
@@ -1645,11 +1669,21 @@ if (path === "/api/combat/state" && method === "GET") {
       } else {
         enemy = randomEnemy(row.location);
       }
+      const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
+      let weaponDie = 6, armorReduction = 0, shieldBonus = 0;
+      for (const eq of eqRows) {
+        const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
+        const tier = Math.min(invRow?.tier ?? 1, 3);
+        if (eq.slot === "weapon") weaponDie = [6, 8, 10, 12][tier];
+        else if (eq.slot === "armor") armorReduction = [0, 2, 4, 6][tier];
+        else if (eq.slot === "shield") shieldBonus = 2;
+      }
       const state = {
         enemy_id: enemy.id, enemy_name: enemy.name,
         enemy_hp: enemy.hp, enemy_hp_max: enemy.hp,
         player_hp: hp.current, player_hp_max: hp.max,
         ability_used: false, turn: 1, location: row.location,
+        weapon_die: weaponDie, armor_reduction: armorReduction, shield_bonus: shieldBonus,
       };
       await dbRun(db, "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
         [uid, JSON.stringify(state)]);
@@ -1678,9 +1712,11 @@ if (path === "/api/combat/state" && method === "GET") {
       if (action === "ability" && state.ability_used) return err("Ability already used.");
 
       const useAbility = action === "ability";
-      const attack     = playerAttack(stats, enemy, useAbility, instinct);
-      const enemyDmg   = action === "ability" && attack.skipRetaliation ? 0
-                       : Math.floor(enemyAttack(enemy, stats) * (attack.damageReduction ? (1 - attack.damageReduction) : 1));
+      const equipment = { weaponDie: state.weapon_die ?? 6 };
+      const attack     = playerAttack(stats, enemy, useAbility, instinct, equipment);
+      let rawEnemyDmg  = action === "ability" && attack.skipRetaliation ? 0 : enemyAttack(enemy, stats, state.shield_bonus ?? 0);
+      rawEnemyDmg      = Math.floor(rawEnemyDmg * (attack.damageReduction ? (1 - attack.damageReduction) : 1));
+      const enemyDmg   = Math.max(0, rawEnemyDmg - (state.armor_reduction ?? 0));
 
       if (useAbility) state.ability_used = true;
 
@@ -1984,18 +2020,60 @@ if (path === "/api/combat/state" && method === "GET") {
 
     // ── GET: Inventory ──
     if (path === "/api/inventory" && method === "GET") {
-      const rows = await dbAll(db, "SELECT item,qty,display_name,tier FROM inventory WHERE user_id=? ORDER BY item", [uid]);
+      const rows = await dbAll(db, "SELECT item,qty,display_name,tier,equipped FROM inventory WHERE user_id=? ORDER BY item", [uid]);
+      const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
+      const equipment = { weapon: null, armor: null, shield: null };
+      for (const eq of eqRows) {
+        if (equipment.hasOwnProperty(eq.slot)) equipment[eq.slot] = eq.item;
+      }
+      const equipmentMap = new Set(eqRows.map(e => e.item));
       const items = rows.map(r => {
         const label = r.display_name || r.item;
         return r.qty === 1 ? label : `${label} x${r.qty}`;
       });
-      const itemDetails = rows.map(r => ({
-        id: r.item,
-        display_name: r.display_name || r.item,
-        qty: r.qty,
-        tier: r.tier ?? 1,
-      }));
-      return json({ items, itemDetails });
+      const itemDetails = rows.map(r => {
+        const slot = getItemSlot(r.item, r.display_name);
+        const equipped = !!(r.equipped || equipmentMap.has(r.item));
+        return {
+          id: r.item,
+          display_name: r.display_name || r.item,
+          qty: r.qty,
+          tier: r.tier ?? 1,
+          slot: slot ?? null,
+          equipped,
+        };
+      });
+      return json({ items, itemDetails, equipment });
+    }
+
+    // ── POST: Equip ──
+    if (path === "/api/inventory/equip" && method === "POST") {
+      const { item: itemId } = body;
+      if (!itemId) return err("Missing item.", 400);
+      const invRow = await dbGet(db, "SELECT item,qty,display_name,tier FROM inventory WHERE user_id=? AND item=?", [uid, itemId]);
+      if (!invRow) return err("You don't have that item.", 404);
+      const slot = getItemSlot(itemId, invRow.display_name);
+      if (!slot) return err("Not equippable.", 400);
+      const old = await dbGet(db, "SELECT item FROM equipment_slots WHERE user_id=? AND slot=?", [uid, slot]);
+      if (old) {
+        await dbRun(db, "UPDATE inventory SET equipped=0 WHERE user_id=? AND item=?", [uid, old.item]);
+        await dbRun(db, "DELETE FROM equipment_slots WHERE user_id=? AND slot=?", [uid, slot]);
+      }
+      await dbRun(db, "INSERT INTO equipment_slots (user_id, slot, item) VALUES (?, ?, ?)", [uid, slot, itemId]);
+      await dbRun(db, "UPDATE inventory SET equipped=1 WHERE user_id=? AND item=?", [uid, itemId]);
+      return json({ ok: true, slot, item: itemId });
+    }
+
+    // ── POST: Unequip ──
+    if (path === "/api/inventory/unequip" && method === "POST") {
+      const { slot } = body;
+      if (!slot || !["weapon", "armor", "shield"].includes(slot)) return err("Invalid slot.", 400);
+      const old = await dbGet(db, "SELECT item FROM equipment_slots WHERE user_id=? AND slot=?", [uid, slot]);
+      if (old) {
+        await dbRun(db, "UPDATE inventory SET equipped=0 WHERE user_id=? AND item=?", [uid, old.item]);
+        await dbRun(db, "DELETE FROM equipment_slots WHERE user_id=? AND slot=?", [uid, slot]);
+      }
+      return json({ ok: true, slot });
     }
 
     // ── POST: Sell (to NPC) ──

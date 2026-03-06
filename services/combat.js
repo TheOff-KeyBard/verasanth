@@ -23,9 +23,10 @@ export function randomEnemy(location) {
   return { ...cd.enemies[id], id };
 }
 
-export function playerAttack(stats, enemy, useAbility, instinct) {
+export function playerAttack(stats, enemy, useAbility, instinct, equipment = {}) {
   const strMod = statMod(stats.strength);
   const roll   = rollDie(20) + strMod;
+  const weaponDie = equipment.weaponDie || 6;
   let dmg = 0, narrative = "";
 
   if (useAbility) {
@@ -52,7 +53,7 @@ export function playerAttack(stats, enemy, useAbility, instinct) {
   }
 
   if (roll >= enemy.defense) {
-    dmg = rollDie(6) + strMod;
+    dmg = rollDie(weaponDie) + strMod;
     dmg = Math.max(1, dmg);
     narrative = `You strike for **${dmg}** damage.`;
   } else {
@@ -61,10 +62,10 @@ export function playerAttack(stats, enemy, useAbility, instinct) {
   return { dmg, narrative };
 }
 
-export function enemyAttack(enemy, stats) {
+export function enemyAttack(enemy, stats, shieldBonus = 0) {
   const defMod = statMod(stats.dexterity);
   const roll   = rollDie(20) + (enemy.attack_mod || 0);
-  if (roll >= 10 + defMod) {
+  if (roll >= 10 + defMod + shieldBonus) {
     return Math.max(1, rollDie(enemy.attack_die || 6));
   }
   return 0;
