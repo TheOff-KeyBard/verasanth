@@ -22,6 +22,20 @@ import { getRelationship, setRelationship, getPartyMembers, triggerBetrayalCasca
 // GAME DATA (remaining in index)
 // ─────────────────────────────────────────────────────────────
 
+// Sewer depth: three levels for consistency (Hollow Below = level 1 end, Iron Threshold = level 2 start)
+const SEWER_LEVEL_1 = ["sewer_entrance", "sewer_upper", "sewer_den", "sewer_channel", "sewer_deep"];
+const SEWER_LEVEL_2 = ["sewer_gate", "sewer_mid_flooded", "sewer_mid_barracks", "sewer_mid_cistern", "sewer_mid_drain"];
+const SEWER_LEVEL_3 = ["sewer_deep_threshold", "sewer_deep_vault", "sewer_deep_foundation"];
+
+// Story markings: (location, object_id) -> flag. When player inspects, set flag so NPC dialogue can unlock.
+const SEWER_STORY_MARKINGS = {
+  sewer_upper: { wall_markings: "seen_sewer_wall_markings", graffiti: "seen_sewer_graffiti" },
+  sewer_mid_barracks: { wall_orders: "seen_dask_roster" },
+  sewer_mid_flooded: { tier2_graffiti: "seen_tier2_graffiti" },
+  sewer_deep: { rusted_pipe: "seen_rusted_pipe" },
+  sewer_deep_foundation: { deep_air: "seen_foundation_dask" },
+};
+
 const PROGRESSION_FLAGS = [
   "seen_sewer_wall_markings", "seen_sewer_graffiti", "seen_dask_roster", "seen_tier2_graffiti",
   "seen_rusted_pipe", "seen_foundation_dask", "warned_mid_sewer", "has_seen_market_square",
@@ -979,6 +993,8 @@ if (path === "/api/admin/command" && method === "POST") {
       const room = WORLD[row.location];
       const obj  = room?.objects?.[target];
       if (!obj) return err(`Nothing called '${target}' here.`, 404);
+      const flagName = SEWER_STORY_MARKINGS[row.location]?.[target];
+      if (flagName) await setFlag(db, uid, flagName, 1);
       return json({ target, desc: obj.desc, actions: obj.actions || [] });
     }
 
@@ -1063,43 +1079,41 @@ if (path === "/api/admin/command" && method === "POST") {
       const hasSeenMarket  = await getFlag(db, uid, "has_seen_market_square");
       const warnedMidSewer  = await getFlag(db, uid, "warned_mid_sewer");
       const hasSeenAwakening = await getFlag(db, uid, "has_seen_awakening", 0);
+      const seenSewerWallMarkings = await getFlag(db, uid, "seen_sewer_wall_markings");
+      const seenSewerGraffiti = await getFlag(db, uid, "seen_sewer_graffiti");
+      const seenDaskRoster = await getFlag(db, uid, "seen_dask_roster");
+      const seenTier2Graffiti = await getFlag(db, uid, "seen_tier2_graffiti");
+      const seenRustedPipe = await getFlag(db, uid, "seen_rusted_pipe");
+      const seenFoundationDask = await getFlag(db, uid, "seen_foundation_dask");
       let caelirVisits = 0;
       let caelirDatesRevealed = 0;
       let caelirBladeRevealed = 0;
-      let seenSewerWallMarkings = 0;
       if (npc === "weaponsmith") {
         caelirVisits = await getFlag(db, uid, "caelir_visits");
         caelirDatesRevealed = await getFlag(db, uid, "caelir_dates_revealed");
         caelirBladeRevealed = await getFlag(db, uid, "caelir_blade_revealed");
-        seenSewerWallMarkings = await getFlag(db, uid, "seen_sewer_wall_markings");
       }
       let veyraVisits = 0;
       let veyraMarkAcknowledged = 0;
-      let veyraSeenSewer = 0;
       if (npc === "armorsmith") {
         veyraVisits = await getFlag(db, uid, "veyra_visits");
         veyraMarkAcknowledged = await getFlag(db, uid, "veyra_mark_acknowledged");
-        veyraSeenSewer = await getFlag(db, uid, "seen_sewer_wall_markings");
       }
       let thalaraVisits = 0;
       let thalaraArc1Complete = 0;
       let thalaraArc2Complete = 0;
-      let thalaraSeenSewer = 0;
       if (npc === "alchemist") {
         thalaraVisits = await getFlag(db, uid, "thalara_visits");
         thalaraArc1Complete = await getFlag(db, uid, "thalara_arc1_complete");
         thalaraArc2Complete = await getFlag(db, uid, "thalara_arc2_complete");
-        thalaraSeenSewer = await getFlag(db, uid, "seen_sewer_wall_markings");
       }
       let serisVisits = 0;
       let serisArc1Active = 0;
       let serisArc2Active = 0;
-      let serisSeenSewer = 0;
       if (npc === "curator") {
         serisVisits = await getFlag(db, uid, "seris_visits");
         serisArc1Active = await getFlag(db, uid, "seris_arc1_active");
         serisArc2Active = await getFlag(db, uid, "seris_arc2_active");
-        serisSeenSewer = await getFlag(db, uid, "seen_sewer_wall_markings");
       }
       let othorionVisits = 0;
       let othorionTrust = 0;
@@ -1108,7 +1122,6 @@ if (path === "/api/admin/command" && method === "POST") {
       let serisArc1ActiveOthorion = 0;
       let serisArc2ActiveOthorion = 0;
       let serisArc3Complete = 0;
-      let seenSewerWallMarkingsOthorion = 0;
       let foundFoundationStone = 0;
       if (npc === "othorion") {
         othorionVisits = await getFlag(db, uid, "othorion_visits");
@@ -1118,7 +1131,6 @@ if (path === "/api/admin/command" && method === "POST") {
         serisArc1ActiveOthorion = await getFlag(db, uid, "seris_arc1_active");
         serisArc2ActiveOthorion = await getFlag(db, uid, "seris_arc2_active");
         serisArc3Complete = await getFlag(db, uid, "seris_arc3_complete");
-        seenSewerWallMarkingsOthorion = await getFlag(db, uid, "seen_sewer_wall_markings");
         foundFoundationStone = await getFlag(db, uid, "found_foundation_stone");
       }
       let grommashVisits = 0;
@@ -1148,6 +1160,12 @@ if (path === "/api/admin/command" && method === "POST") {
         has_seen_market_square: !!hasSeenMarket,
         has_seen_awakening: !!hasSeenAwakening,
         warned_mid_sewer: !!warnedMidSewer,
+        seen_sewer_wall_markings: !!seenSewerWallMarkings,
+        seen_sewer_graffiti: !!seenSewerGraffiti,
+        seen_dask_roster: !!seenDaskRoster,
+        seen_tier2_graffiti: !!seenTier2Graffiti,
+        seen_rusted_pipe: !!seenRustedPipe,
+        seen_foundation_dask: !!seenFoundationDask,
         wisdom: row.wisdom,
         charisma: row.charisma,
         intelligence: row.intelligence,
@@ -1159,13 +1177,11 @@ if (path === "/api/admin/command" && method === "POST") {
         playerContext.caelir_visits = caelirVisits;
         playerContext.caelir_dates_revealed = caelirDatesRevealed;
         playerContext.caelir_blade_revealed = caelirBladeRevealed;
-        playerContext.seen_sewer_wall_markings = seenSewerWallMarkings;
         playerContext.race = row.race || "";
       }
       if (npc === "armorsmith") {
         playerContext.veyra_visits = veyraVisits;
         playerContext.veyra_mark_acknowledged = veyraMarkAcknowledged;
-        playerContext.seen_sewer_wall_markings = veyraSeenSewer;
         playerContext.race = row.race || "";
         playerContext.constitution = row.constitution;
       }
@@ -1173,14 +1189,12 @@ if (path === "/api/admin/command" && method === "POST") {
         playerContext.thalara_visits = thalaraVisits;
         playerContext.thalara_arc1_complete = thalaraArc1Complete;
         playerContext.thalara_arc2_complete = thalaraArc2Complete;
-        playerContext.seen_sewer_wall_markings = thalaraSeenSewer;
       }
       if (npc === "curator") {
         playerContext.seris_visits = serisVisits;
         playerContext.seris_items_sold = itemsSold;
         playerContext.seris_arc1_active = serisArc1Active;
         playerContext.seris_arc2_active = serisArc2Active;
-        playerContext.seen_sewer_wall_markings = serisSeenSewer;
       }
       if (npc === "othorion") {
         playerContext.othorion_visits = othorionVisits;
@@ -1190,7 +1204,6 @@ if (path === "/api/admin/command" && method === "POST") {
         playerContext.seris_arc1_active = serisArc1ActiveOthorion;
         playerContext.seris_arc2_active = serisArc2ActiveOthorion;
         playerContext.seris_arc3_complete = serisArc3Complete;
-        playerContext.seen_sewer_wall_markings = seenSewerWallMarkingsOthorion;
         playerContext.deep_sewer = !!foundFoundationStone;
         playerContext.race = row.race || "";
       }
