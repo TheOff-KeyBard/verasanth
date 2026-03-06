@@ -2733,15 +2733,15 @@ async function loadGame() {
         return;
       }
       var toName = parts[0];
-      var msg = parts.slice(1).join(' ');
-      if (!msg) {
+      var whisperMsg = parts.slice(1).join(' ');
+      if (!whisperMsg) {
         showChatError('Use: /w PlayerName message');
         return;
       }
       if (Date.now() < chatSendCooldownUntil) return;
       sendBtn.disabled = true;
       if (errorEl) errorEl.style.display = 'none';
-      POST('/api/chat/whisper', { to_name: toName, message: msg }).then(function() {
+      POST('/api/chat/whisper', { to_name: toName, message: whisperMsg }).then(function() {
         input.value = '';
         chatSendCooldownUntil = Date.now() + CHAT_SEND_COOLDOWN_WHISPER_MS;
         setTimeout(function() { sendBtn.disabled = false; }, CHAT_SEND_COOLDOWN_WHISPER_MS);
@@ -2757,7 +2757,7 @@ async function loadGame() {
       return;
     }
 
-    const msg = raw;
+    const chatMsg = raw;
     var cooldownMs = activeChatTab === 'global' ? CHAT_SEND_COOLDOWN_GLOBAL_MS : CHAT_SEND_COOLDOWN_LOCAL_MS;
     if (activeChatTab === 'whispers') {
       showChatError('Type /w Name message to whisper.');
@@ -2766,12 +2766,12 @@ async function loadGame() {
     if (Date.now() < chatSendCooldownUntil) return;
     sendBtn.disabled = true;
     if (errorEl) errorEl.style.display = 'none';
-    POST('/api/chat/send', { channel: activeChatTab, message: msg }).then(function(data) {
+    POST('/api/chat/send', { channel: activeChatTab, message: chatMsg }).then(function(data) {
       input.value = '';
       var name = (document.getElementById('char-name') && document.getElementById('char-name').textContent) || 'You';
       if (name === '—') name = 'You';
       if (data.id != null && data.created_at != null) {
-        appendMessages([{ id: data.id, player_name: name, message: msg, created_at: data.created_at }], activeChatTab);
+        appendMessages([{ id: data.id, player_name: name, message: chatMsg, created_at: data.created_at }], activeChatTab);
       }
       chatSendCooldownUntil = Date.now() + cooldownMs;
       setTimeout(function() { sendBtn.disabled = false; }, cooldownMs);
