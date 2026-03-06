@@ -1256,6 +1256,7 @@
   }
   #chat-panel .chat-msg { margin-bottom: 6px; }
   #chat-panel .chat-msg .chat-name { color: var(--gold); font-weight: 600; margin-right: 6px; }
+  #chat-panel .chat-msg.chat-msg-local .chat-name { color: var(--ember); }
   #chat-panel .chat-msg .chat-text { color: var(--text); }
   #chat-panel .chat-input-row {
     display: flex; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--border);
@@ -1530,6 +1531,7 @@
     <div class="chat-panel-body">
       <div class="chat-tabs">
         <button type="button" class="chat-tab active" data-chat-tab="global">Global</button>
+        <button type="button" class="chat-tab" data-chat-tab="local">Local</button>
       </div>
       <div class="chat-messages" id="chat-messages"></div>
       <div class="chat-input-row">
@@ -2448,7 +2450,7 @@ async function loadGame() {
   }
 }
 
-// ── Chat panel (Phase 3: global only) ─────────────────────────────
+// ── Chat panel (Phase 3 + 4: global + local) ───────────────────────
 (function initChatPanel() {
   const panel = document.getElementById('chat-panel');
   const bar = document.getElementById('chat-panel-bar');
@@ -2459,10 +2461,14 @@ async function loadGame() {
   const toggleSpan = document.getElementById('chat-toggle');
 
   let chatLastSince = 0;
+  let localLastSince = 0;
   let chatPollInterval = null;
   let chatSendCooldownUntil = 0;
-  const CHAT_POLL_MS = 4000;
-  const CHAT_SEND_COOLDOWN_MS = 2000;
+  let activeChatTab = 'global';
+  const CHAT_POLL_GLOBAL_MS = 4000;
+  const CHAT_POLL_LOCAL_MS = 3000;
+  const CHAT_SEND_COOLDOWN_GLOBAL_MS = 2000;
+  const CHAT_SEND_COOLDOWN_LOCAL_MS = 1000;
 
   function isExpanded() { return panel && !panel.classList.contains('collapsed'); }
 
@@ -2473,14 +2479,15 @@ async function loadGame() {
     return div.innerHTML;
   }
 
-  function appendMessages(messages) {
+  function appendMessages(messages, channel) {
     if (!messagesEl || !messages) return;
+    var isLocal = channel === 'local';
     const seen = new Set(Array.from(messagesEl.querySelectorAll('[data-msg-id]')).map(function(el) { return el.dataset.msgId; }));
     messages.forEach(function(m) {
       if (seen.has(String(m.id))) return;
       seen.add(String(m.id));
       const div = document.createElement('div');
-      div.className = 'chat-msg';
+      div.className = 'chat-msg' + (isLocal ? ' chat-msg-local' : '');
       div.dataset.msgId = m.id;
       div.innerHTML = '<span class="chat-name">' + escapeHtml(m.player_name) + ':</span> <span class="chat-text">' + escapeHtml(m.message) + '</span>';
       messagesEl.appendChild(div);
@@ -2488,24 +2495,57 @@ async function loadGame() {
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
+  function clearMessages() {
+    if (messagesEl) messagesEl.innerHTML = '';
+  }
+
   function pollGlobal() {
-    if (!vToken || !isExpanded()) return;
+    if (!vToken || !isExpanded() || activeChatTab !== 'global') return;
     GET('/api/chat/global?since=' + chatLastSince).then(function(data) {
-      if (data.messages && data.messages.length) appendMessages(data.messages);
+      if (data.messages && data.messages.length) appendMessages(data.messages, 'global');
       if (data.server_time) chatLastSince = data.server_time;
     }).catch(function() {});
   }
 
+  function pollLocal() {
+    if (!vToken || !isExpanded() || activeChatTab !== 'local') return;
+    GET('/api/chat/local?since=' + localLastSince).then(function(data) {
+      if (data.messages && data.messages.length) appendMessages(data.messages, 'local');
+      if (data.server_time) localLastSince = data.server_time;
+    }).catch(function() {});
+  }
+
+  function runPoll() {
+    if (activeChatTab === 'global') pollGlobal();
+    else pollLocal();
+  }
+
   function startPoll() {
     if (chatPollInterval) return;
-    chatLastSince = 0;
-    pollGlobal();
-    chatPollInterval = setInterval(pollGlobal, CHAT_POLL_MS);
+    if (activeChatTab === 'global') { chatLastSince = 0; pollGlobal(); }
+    else { localLastSince = 0; pollLocal(); }
+    var ms = activeChatTab === 'global' ? CHAT_POLL_GLOBAL_MS : CHAT_POLL_LOCAL_MS;
+    chatPollInterval = setInterval(runPoll, ms);
   }
 
   function stopPoll() {
     if (chatPollInterval) clearInterval(chatPollInterval);
     chatPollInterval = null;
+  }
+
+  function switchTab(tab) {
+    activeChatTab = tab;
+    var tabs = document.querySelectorAll('.chat-tab');
+    tabs.forEach(function(t) { t.classList.toggle('active', t.dataset.chatTab === tab); });
+    clearMessages();
+    if (tab === 'global') { chatLastSince = 0; pollGlobal(); }
+    else { localLastSince = 0; pollLocal(); }
+    if (chatPollInterval) {
+      clearInterval(chatPollInterval);
+      chatPollInterval = null;
+      var ms = tab === 'global' ? CHAT_POLL_GLOBAL_MS : CHAT_POLL_LOCAL_MS;
+      chatPollInterval = setInterval(runPoll, ms);
+    }
   }
 
   if (bar) {
@@ -2516,6 +2556,20 @@ async function loadGame() {
       else stopPoll();
     });
   }
+
+  document.querySelectorAll('.chat-tab').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      switchTab(btn.dataset.chatTab);
+    });
+  });
+
+  window.addEventListener('player-moved', function() {
+    localLastSince = 0;
+    if (activeChatTab === 'local') {
+      clearMessages();
+      pollLocal();
+    }
+  });
 
   function showChatError(msg) {
     if (!errorEl) return;
@@ -2528,25 +2582,27 @@ async function loadGame() {
     if (!input || !sendBtn) return;
     const msg = (input.value || '').trim();
     if (!msg) return;
+    var cooldownMs = activeChatTab === 'global' ? CHAT_SEND_COOLDOWN_GLOBAL_MS : CHAT_SEND_COOLDOWN_LOCAL_MS;
     if (Date.now() < chatSendCooldownUntil) return;
     sendBtn.disabled = true;
     if (errorEl) errorEl.style.display = 'none';
-    POST('/api/chat/send', { channel: 'global', message: msg }).then(function(data) {
+    POST('/api/chat/send', { channel: activeChatTab, message: msg }).then(function(data) {
       input.value = '';
       var name = (document.getElementById('char-name') && document.getElementById('char-name').textContent) || 'You';
       if (name === '—') name = 'You';
       if (data.id != null && data.created_at != null) {
-        appendMessages([{ id: data.id, player_name: name, message: msg, created_at: data.created_at }]);
+        appendMessages([{ id: data.id, player_name: name, message: msg, created_at: data.created_at }], activeChatTab);
       }
-      chatSendCooldownUntil = Date.now() + CHAT_SEND_COOLDOWN_MS;
-      setTimeout(function() { sendBtn.disabled = false; }, CHAT_SEND_COOLDOWN_MS);
+      chatSendCooldownUntil = Date.now() + cooldownMs;
+      setTimeout(function() { sendBtn.disabled = false; }, cooldownMs);
     }).catch(function(e) {
       sendBtn.disabled = false;
-      if (e.message && e.message.indexOf('2 seconds') !== -1) {
-        chatSendCooldownUntil = Date.now() + CHAT_SEND_COOLDOWN_MS;
-        setTimeout(function() { sendBtn.disabled = false; }, CHAT_SEND_COOLDOWN_MS);
+      var msgText = e.message || 'Send failed.';
+      if (msgText.indexOf('seconds') !== -1 || msgText.indexOf('Slow down') !== -1) {
+        chatSendCooldownUntil = Date.now() + cooldownMs;
+        setTimeout(function() { sendBtn.disabled = false; }, cooldownMs);
       }
-      showChatError(e.message || 'Send failed.');
+      showChatError(msgText);
     });
   }
 
@@ -2798,6 +2854,7 @@ async function doMove(dir) {
     renderRoom(data);
     log(`<em>You move ${dir}.</em>`);
     refreshSidebar();
+    window.dispatchEvent(new CustomEvent('player-moved', { detail: { location: data.location } }));
   } catch(e) {
     log(`<em>${e.message}</em>`);
   }

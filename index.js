@@ -815,7 +815,7 @@ if (path === "/api/admin/command" && method === "POST") {
       return json({ ok: true });
     }
 
-    // ── GET: Chat global (Phase 2: global only) ──
+    // ── GET: Chat global ──
     if (path === "/api/chat/global" && method === "GET") {
       const since = parseInt(url.searchParams.get("since") || "0", 10) || 0;
       const rows = await dbAll(db, `
@@ -833,27 +833,72 @@ if (path === "/api/admin/command" && method === "POST") {
       return json({ messages, server_time: Date.now() });
     }
 
-    // ── POST: Chat send (Phase 2: global only) ──
+    // ── GET: Chat local (Phase 4) ──
+    if (path === "/api/chat/local" && method === "GET") {
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const loc = row.location || "tavern";
+      const since = parseInt(url.searchParams.get("since") || "0", 10) || 0;
+      const rows = await dbAll(db, `
+        SELECT id, player_name, message, created_at
+        FROM chat_messages
+        WHERE channel = 'local' AND location = ? AND deleted = 0 AND created_at > ?
+        ORDER BY created_at ASC
+        LIMIT 100`, [loc, since]);
+      const messages = rows.map((r) => ({
+        id: r.id,
+        player_name: r.player_name,
+        message: r.message,
+        created_at: r.created_at,
+      }));
+      return json({ messages, location: loc, server_time: Date.now() });
+    }
+
+    // ── POST: Chat send (global + local) ──
     if (path === "/api/chat/send" && method === "POST") {
       const { channel, message: rawMessage } = body;
-      if (channel !== "global") return err("Only global chat is supported for now.", 400);
+      if (channel !== "global" && channel !== "local") return err("Invalid channel.", 400);
       const row = await getPlayerSheet(db, uid);
       if (!row) return err("No character.", 404);
       const playerName = (row.name || "Someone").trim() || "Someone";
       const message = sanitizeChatMessage(rawMessage);
       if (!message) return err("Message is required.", 400);
       const now = Date.now();
-      const lastRow = await dbGet(db,
-        `SELECT created_at FROM chat_messages WHERE user_id = ? AND channel = 'global' ORDER BY created_at DESC LIMIT 1`,
-        [uid]);
-      if (lastRow && now - lastRow.created_at < 2000) {
-        return err("Wait 2 seconds between messages.", 429);
+      const loc = row.location || "tavern";
+
+      if (channel === "global") {
+        const lastRow = await dbGet(db,
+          `SELECT created_at FROM chat_messages WHERE user_id = ? AND channel = 'global' ORDER BY created_at DESC LIMIT 1`,
+          [uid]);
+        if (lastRow && now - lastRow.created_at < 2000) {
+          return err("Wait 2 seconds between messages.", 429);
+        }
+        await dbRun(db, `
+          INSERT INTO chat_messages (channel, location, user_id, player_name, message, created_at)
+          VALUES (?, NULL, ?, ?, ?, ?)`, ["global", uid, playerName, message, now]);
+        const insertRow = await dbGet(db, "SELECT id, created_at FROM chat_messages WHERE user_id = ? AND channel = 'global' ORDER BY id DESC LIMIT 1", [uid]);
+        return json({ ok: true, id: insertRow?.id ?? null, created_at: insertRow?.created_at ?? now });
       }
-      await dbRun(db, `
-        INSERT INTO chat_messages (channel, location, user_id, player_name, message, created_at)
-        VALUES (?, NULL, ?, ?, ?, ?)`, ["global", uid, playerName, message, now]);
-      const insertRow = await dbGet(db, "SELECT id, created_at FROM chat_messages WHERE user_id = ? AND channel = 'global' ORDER BY id DESC LIMIT 1", [uid]);
-      return json({ ok: true, id: insertRow?.id ?? null, created_at: insertRow?.created_at ?? now });
+
+      if (channel === "local") {
+        const lastRow = await dbGet(db,
+          `SELECT created_at FROM chat_messages WHERE user_id = ? AND channel = 'local' ORDER BY created_at DESC LIMIT 1`,
+          [uid]);
+        if (lastRow && now - lastRow.created_at < 1000) {
+          return err("Wait 1 second between local messages.", 429);
+        }
+        const countRow = await dbGet(db,
+          `SELECT COUNT(*) as c FROM chat_messages WHERE user_id = ? AND channel = 'local' AND created_at > ?`,
+          [uid, now - 60 * 1000]);
+        if (countRow && countRow.c >= 30) {
+          return err("Too many local messages. Slow down.", 429);
+        }
+        await dbRun(db, `
+          INSERT INTO chat_messages (channel, location, user_id, player_name, message, created_at)
+          VALUES (?, ?, ?, ?, ?, ?)`, ["local", loc, uid, playerName, message, now]);
+        const insertRow = await dbGet(db, "SELECT id, created_at FROM chat_messages WHERE user_id = ? AND channel = 'local' ORDER BY id DESC LIMIT 1", [uid]);
+        return json({ ok: true, id: insertRow?.id ?? null, created_at: insertRow?.created_at ?? now, location: loc });
+      }
     }
 
     // ── GET: Board ──
