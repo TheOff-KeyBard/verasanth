@@ -642,12 +642,14 @@ if (path === "/api/admin/command" && method === "POST") {
       // Build player context for NPCs (Seris/Thalara + Kelvaris stateful intro)
       const itemsSold   = await getFlag(db, uid, "curator_items_sold");
       const deaths      = await getFlag(db, uid, "death_count");
+      const justRespawned = await getFlag(db, uid, "just_respawned");
       const morality    = row.alignment_morality || 0;
       const depthTier   = await getFlag(db, uid, "found_foundation_stone") ? 2
                         : await getFlag(db, uid, "warned_mid_sewer")        ? 1 : 0;
       const kelvarisVisits = await getFlag(db, uid, "kelvaris_visits");
       const hasSeenMarket  = await getFlag(db, uid, "has_seen_market_square");
       const warnedMidSewer  = await getFlag(db, uid, "warned_mid_sewer");
+      const hp = await getPlayerHp(db, uid, row);
 
       const playerContext = {
         items_sold: itemsSold, deaths, morality, depth_tier: depthTier,
@@ -657,12 +659,19 @@ if (path === "/api/admin/command" && method === "POST") {
         stats_set: !!(row.stats_set),
         has_seen_market_square: !!hasSeenMarket,
         warned_mid_sewer: !!warnedMidSewer,
+        wisdom: row.wisdom,
+        charisma: row.charisma,
+        intelligence: row.intelligence,
+        current_hp: hp.current,
+        max_hp: hp.max,
+        just_respawned: !!justRespawned,
       };
 
       const response = await getNPCResponse(env, npc, topic, playerContext);
 
       if (npc === "bartender") {
         await setFlag(db, uid, "kelvaris_visits", kelvarisVisits + 1);
+        if (justRespawned) await setFlag(db, uid, "just_respawned", 0);
       }
 
       return json({ response });
@@ -861,6 +870,7 @@ if (path === "/api/combat/state" && method === "GET") {
         await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [maxHp, uid]);
         const dc = await getFlag(db, uid, "death_count");
         await setFlag(db, uid, "death_count", dc + 1);
+        await setFlag(db, uid, "just_respawned", 1);
         await tickAlignment(db, uid, 0, -2, instinct);
         return json({
           result: "death",
