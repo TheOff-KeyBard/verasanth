@@ -2,8 +2,9 @@ export const BOARD_NPC_REACTIONS = {
   bartender:   "\"The board's been here longer than the square. Don't think too hard about it.\"",
   weaponsmith: "\"I've seen notices appear while no one was near it. I stopped asking why.\"",
   armorsmith:  "\"If a notice feels wrong, ignore it. The board has moods.\"",
-  alchemist:   "\"It posts what it needs to. Or what the city needs. Hard to tell the difference.\"",
+  herbalist:   "\"It posts what it needs to. Or what the city needs. Hard to tell the difference.\"",
   curator:     "\"The board and I have an understanding. It posts. I read.\"",
+  othorion:    "\"The board reflects the city's stated concerns. I track what the city hasn't named yet.\"",
 };
 
 export function boardNPCReaction(npcId) {

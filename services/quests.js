@@ -12,11 +12,12 @@ import {
   getNextAssignableQuest,
   hasDialogueUnlock,
   QUEST_REWARD_ITEMS,
+  QUEST_BY_ID,
 } from "../data/quests.js";
 
 const NPC_TO_QUESTS = {
   othorion: OTHORION_QUESTS,
-  alchemist: THALARA_QUESTS,
+  herbalist: THALARA_QUESTS,
   weaponsmith: CAELIR_QUESTS,
   curator: SERIS_QUESTS,
   warden: GROMMASH_BOUNTIES,
@@ -24,7 +25,7 @@ const NPC_TO_QUESTS = {
 
 const QUEST_TOPICS = {
   weaponsmith: ["work"],
-  alchemist: ["work"],
+  herbalist: ["work"],
   curator: ["work", "shop", "items"],
   othorion: ["work", "research"],
   warden: ["work", "bounty"],
@@ -107,7 +108,12 @@ export async function handleQuestDialogue(db, dbGet, dbAll, dbRun, uid, npc, top
   const nextQuest = getNextAssignableQuest(npc, questCtx, activeQuestIds);
   if (nextQuest) {
     const now = Math.floor(Date.now() / 1000);
-    const progress = nextQuest.objective.type === "enemy_kills" ? JSON.stringify({ kills: { [nextQuest.objective.enemy_id]: 0 } }) : null;
+    let progress = null;
+    if (nextQuest.objective.type === "enemy_kills") {
+      progress = JSON.stringify({ kills: { [nextQuest.objective.enemy_id]: 0 } });
+    } else if (nextQuest.objective.type === "item") {
+      progress = JSON.stringify({ item_collected: {} });
+    }
     await dbRun(db, `INSERT OR IGNORE INTO quests (user_id, quest_id, type, status, progress, assigned_at)
       VALUES (?, ?, 'static', 'active', ?, ?)`,
       [uid, nextQuest.id, progress, now]);
@@ -122,6 +128,59 @@ export async function handleQuestDialogue(db, dbGet, dbAll, dbRun, uid, npc, top
   }
 
   return null;
+}
+
+/**
+ * Silently assign the next available quest for this NPC when player talks to them.
+ * Call after dialogue response is generated to auto-assign on any conversation.
+ */
+export async function assignNextQuestIfAvailable(db, dbGet, dbAll, dbRun, uid, npcId, getFlag) {
+  if (!QUEST_TOPICS[npcId]) return;
+  const questList = NPC_TO_QUESTS[npcId];
+  if (!questList) return;
+
+  const visitedDrain = await getFlag(db, uid, "visited_drain_entrance");
+  const visitedOverflow = await getFlag(db, uid, "visited_overflow_channel");
+  const visitedVermin = await getFlag(db, uid, "visited_vermin_nest");
+  const visitedFungal = await getFlag(db, uid, "visited_fungal_bloom_chamber");
+  const questCtx = {
+    visited_drain_entrance: !!visitedDrain,
+    visited_overflow_channel: !!visitedOverflow,
+    visited_vermin_nest: !!visitedVermin,
+    visited_fungal_bloom_chamber: !!visitedFungal,
+    first_sewer_visit: !!(visitedDrain || visitedOverflow || visitedVermin || visitedFungal),
+    nest_cleared_floor1: !!(await getFlag(db, uid, "nest_cleared_floor1")),
+    boss_floor3: !!(await getFlag(db, uid, "boss_floor3")),
+    othorion_q1_complete: !!(await getFlag(db, uid, "othorion_q1_complete")),
+    othorion_q2_complete: !!(await getFlag(db, uid, "othorion_q2_complete")),
+    thalara_q1_complete: !!(await getFlag(db, uid, "thalara_q1_complete")),
+    thalara_arc_seed: !!(await getFlag(db, uid, "thalara_arc_seed")),
+    caelir_q1_complete: !!(await getFlag(db, uid, "caelir_q1_complete")),
+    caelir_q2_complete: !!(await getFlag(db, uid, "caelir_q2_complete")),
+    seris_arc_interest: !!(await getFlag(db, uid, "seris_arc_interest")),
+    grommash_b1_complete: !!(await getFlag(db, uid, "grommash_b1_complete")),
+    thalara_visits: await getFlag(db, uid, "thalara_visits", 0),
+    caelir_visits: await getFlag(db, uid, "caelir_visits", 0),
+  };
+
+  const activeRows = await dbAll(db, "SELECT quest_id FROM quests WHERE user_id=? AND status='active'", [uid]);
+  const activeQuestIds = activeRows.map((r) => r.quest_id);
+  const completedRows = await dbAll(db, "SELECT quest_id FROM quests WHERE user_id=? AND status='complete'", [uid]);
+  questCtx.completedQuestIds = completedRows.map((r) => r.quest_id);
+
+  const nextQuest = getNextAssignableQuest(npcId, questCtx, activeQuestIds);
+  if (!nextQuest) return;
+
+  const now = Math.floor(Date.now() / 1000);
+  let progress = null;
+  if (nextQuest.objective.type === "enemy_kills") {
+    progress = JSON.stringify({ kills: { [nextQuest.objective.enemy_id]: 0 } });
+  } else if (nextQuest.objective.type === "item") {
+    progress = JSON.stringify({ item_collected: {} });
+  }
+  await dbRun(db, `INSERT OR IGNORE INTO quests (user_id, quest_id, type, status, progress, assigned_at)
+    VALUES (?, ?, 'static', 'active', ?, ?)`,
+    [uid, nextQuest.id, progress, now]);
 }
 
 async function isObjectiveMet(db, dbGet, dbAll, uid, quest, progressJson, getFlag) {
@@ -208,6 +267,34 @@ async function completeQuest(db, dbGet, dbRun, dbAll, uid, quest, getFlag, setFl
     if (trustFlag) {
       const current = await getFlag(db, uid, trustFlag, 0);
       await dbRun(db, "INSERT OR REPLACE INTO player_flags (user_id, flag, value) VALUES (?, ?, ?)", [uid, trustFlag, (current || 0) + quest.reward.trust]);
+    }
+  }
+}
+
+/**
+ * Update item collect progress for fetch quests. Call when player picks up items (e.g. combat loot).
+ * Auto-completes quest when objective is met.
+ */
+export async function checkQuestProgressForItem(db, dbGet, dbAll, dbRun, uid, itemId, qty, getFlag, setFlag) {
+  const rows = await dbAll(db, "SELECT id, quest_id, progress FROM quests WHERE user_id=? AND status='active'", [uid]);
+  const target = String(itemId).toLowerCase().replace(/\s/g, "_");
+
+  for (const row of rows) {
+    const quest = QUEST_BY_ID[row.quest_id];
+    if (!quest || quest.objective?.type !== "item") continue;
+    const objItem = (quest.objective.item || "").toLowerCase().replace(/\s/g, "_");
+    if (objItem !== target) continue;
+
+    const progress = row.progress ? JSON.parse(row.progress) : { item_collected: {} };
+    progress.item_collected = progress.item_collected || {};
+    const prev = progress.item_collected[target] ?? 0;
+    const newCount = prev + qty;
+    progress.item_collected[target] = newCount;
+
+    await dbRun(db, "UPDATE quests SET progress=? WHERE id=?", [JSON.stringify(progress), row.id]);
+
+    if (newCount >= (quest.objective.qty || 1)) {
+      await completeQuest(db, dbGet, dbRun, dbAll, uid, quest, getFlag, setFlag);
     }
   }
 }

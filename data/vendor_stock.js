@@ -37,13 +37,13 @@ export const THALARA_STOCK = [
 export const VENDOR_STOCK = {
   weaponsmith: CAELIR_STOCK,
   armorsmith: VEYRA_STOCK,
-  alchemist: THALARA_STOCK,
+  herbalist: THALARA_STOCK,
   curator: [], // Seris sells nothing; buy-only from player
 };
 
 export const VENDOR_NPCS = {
   weaponsmith: { buy: true, sell: true },
   armorsmith: { buy: true, sell: true },
-  alchemist: { buy: true, sell: true },
+  herbalist: { buy: true, sell: true },
   curator: { buy: false, sell: true },
 };

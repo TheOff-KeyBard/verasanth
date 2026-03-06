@@ -476,6 +476,70 @@
     color: var(--danger);
   }
 
+  #quest-panel {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  #quest-title {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  #quest-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .quest-item {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+
+  .quest-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: 3px;
+  }
+
+  .quest-item-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    flex: 1;
+  }
+
+  .quest-item-npc {
+    font-size: 10px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  .quest-item-progress {
+    font-size: 11px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .quest-item-progress.done {
+    color: var(--ok);
+  }
+
+  .quest-empty {
+    font-size: 12px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
   #bounty-overlay {
     display: none;
     position: fixed;
@@ -642,6 +706,43 @@
     text-align: center;
     padding: 24px 0;
   }
+
+  #sell-panel {
+    border-top: 1px solid var(--border);
+    padding: 10px 0 0;
+    margin-top: 8px;
+  }
+
+  .sell-title {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .sell-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(255,255,255,.04);
+  }
+
+  .sell-item-name { flex: 1; font-size: 12px; color: var(--text); }
+  .sell-item-price { font-size: 12px; color: var(--ok); width: 56px; text-align: right; }
+  .sell-btn {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,.04);
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  .sell-empty { font-size: 12px; color: var(--muted); font-style: italic; }
 
   .post-field {
     margin-bottom: 14px;
@@ -2033,6 +2134,12 @@
       </div>
     </div>
 
+    <!-- ── Quest Panel ───────────────────────────────────────────── -->
+    <div id="quest-panel">
+      <div id="quest-title">Tasks</div>
+      <div id="quest-list"></div>
+    </div>
+
     <div id="inv-panel">
       <div id="inv-title">Carried</div>
       <div id="inv-loadout" class="inv-loadout"></div>
@@ -2076,6 +2183,7 @@
     </div>
     <div id="dialogue-response"></div>
     <div id="dialogue-topics"></div>
+    <div id="sell-panel" style="display:none"></div>
   </div>
 </div>
 
@@ -2238,6 +2346,7 @@ const NODE_POSITIONS = {
   north_road:         { x: 150, y: 100 },
   south_road:         { x: 150, y: 200 },
   east_road:          { x: 220, y: 150 },
+  crucible:           { x: 220, y: 185 },
   west_road:          { x: 80,  y: 150 },
   tavern:             { x: 80,  y: 100 },
   atelier:            { x: 150, y: 50  },
@@ -2291,6 +2400,7 @@ const LOCATION_NAMES = {
   north_road: "North Road — The Threshold District",
   south_road: "South Road — The Low Quarter",
   east_road: "East Road — The Ember Quarter",
+  crucible: "The Crucible",
   west_road: "West Road — The Pale Rise",
   atelier: "Dawnforge Atelier",
   mended_hide: "The Mended Hide",
@@ -2387,7 +2497,7 @@ const NPC_NAMES = {
   bartender:   'Kelvaris',
   weaponsmith: 'Caelir',
   armorsmith:  'Veyra',
-  alchemist:   'Thalara',
+  herbalist:   'Thalara',
   curator:     'Seris Vantrel',
   othorion:    'Othorion Naxir',
   warden:      'Grommash Nazgrel',
@@ -2461,7 +2571,7 @@ const TOPIC_GATES = {
     sewer: 'has_seen_market_square', cistern: 'seen_sewer_wall_markings', crawlers: 'seen_sewer_wall_markings',
     yourself: null, grommash: null,
   },
-  alchemist: {
+  herbalist: {
     city: null, work: null, remedies: null,
     kelvaris: null, veyra: null, caelir: null, seris: null,
     past: null, yourself: null, person_lost: null,
@@ -2490,14 +2600,15 @@ const TOPIC_GATES = {
 
 const TOPIC_TO_NPC = {
   grommash: 'warden', kelvaris: 'bartender', caelir: 'weaponsmith',
-  veyra: 'armorsmith', thalara: 'alchemist', seris: 'curator', othorion: 'othorion',
+  veyra: 'armorsmith', thalara: 'herbalist', seris: 'curator', othorion: 'othorion',
 };
 
 const VENDOR_NPCS = {
   weaponsmith: { buy: true, sell: true },
   armorsmith: { buy: true, sell: true },
-  alchemist: { buy: true, sell: true },
+  herbalist: { buy: true, sell: true },
   curator: { buy: false, sell: true },
+  othorion: { buy: false, sell: true },
 };
 
 // ── API helpers ──────────────────────────────────────────────────
@@ -4013,8 +4124,74 @@ async function openDialogue(npcId) {
     const flags = flagsData && typeof flagsData === 'object' ? flagsData : {};
     showDialogueResponse(talkData.response);
     renderTopics(npcId, flags);
+    renderSellPanel(npcId);
   } catch(e) {
     document.getElementById('dialogue-response').innerHTML = render(e.message);
+  }
+}
+
+async function renderSellPanel(npcId) {
+  const sellPanelEl = document.getElementById('sell-panel');
+  if (!sellPanelEl) return;
+  if (!VENDOR_NPCS[npcId]?.sell) {
+    sellPanelEl.style.display = 'none';
+    return;
+  }
+
+  try {
+    const rawData = await GET('/api/inventory?raw=1');
+    const items = rawData.items || [];
+
+    if (!items.length) {
+      sellPanelEl.innerHTML = '<div class="sell-empty">Nothing to sell.</div>';
+      sellPanelEl.style.display = '';
+      return;
+    }
+
+    sellPanelEl.innerHTML = '<div class="sell-title">Sell</div>';
+    sellPanelEl.style.display = '';
+
+    for (const item of items) {
+      try {
+        const valData = await GET('/api/sell/value/' + encodeURIComponent(item.id));
+        if (!valData.sellable) continue;
+
+        const row = document.createElement('div');
+        row.className = 'sell-row';
+        const btn = document.createElement('button');
+        btn.className = 'sell-btn';
+        btn.textContent = 'Sell';
+        btn.dataset.item = item.id;
+        btn.dataset.qty = item.qty;
+        btn.dataset.npc = npcId;
+        btn.onclick = () => doSell(btn.dataset.item, parseInt(btn.dataset.qty, 10), btn.dataset.npc, btn);
+        row.innerHTML = '<span class="sell-item-name">' + escapeHtml(valData.item) + (item.qty > 1 ? ' x' + item.qty : '') + '</span>' +
+          '<span class="sell-item-price">' + (valData.sell_price * item.qty) + ' AM</span>';
+        row.appendChild(btn);
+        sellPanelEl.appendChild(row);
+      } catch (_) {}
+    }
+
+    if (sellPanelEl.querySelectorAll('.sell-row').length === 0) {
+      sellPanelEl.innerHTML = '<div class="sell-empty">Nothing to sell.</div>';
+    }
+  } catch(e) {
+    sellPanelEl.innerHTML = '<div class="sell-empty">Nothing to sell.</div>';
+    sellPanelEl.style.display = '';
+  }
+}
+
+async function doSell(itemId, qty, npcId, btn) {
+  if (btn) { btn.disabled = true; }
+  try {
+    const result = await POST('/api/sell', { item_id: itemId, qty, npc_id: npcId });
+    log('<em>Sold ' + escapeHtml(result.item) + (result.qty > 1 ? ' x' + result.qty : '') + ' for ' + result.earned + ' AM.</em>');
+    if (result.message) log('<em>' + escapeHtml(result.message) + '</em>');
+    await refreshSidebar();
+    await renderSellPanel(npcId);
+  } catch(e) {
+    if (btn) btn.disabled = false;
+    log('<em>' + escapeHtml(e.message || 'Sell failed') + '</em>');
   }
 }
 
@@ -4455,6 +4632,36 @@ async function refreshSidebar() {
     updateWallet(walletData);
     updateInventory(invData);
     updateStanding(alignData);
+    updateQuests();
+  } catch(e) {}
+}
+
+async function updateQuests() {
+  try {
+    const data = await GET('/api/quests');
+    const listEl = document.getElementById('quest-list');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+
+    if (!data.active || !data.active.length) {
+      listEl.innerHTML = '<div class="quest-empty">No active tasks.</div>';
+      return;
+    }
+
+    data.active.forEach(q => {
+      const done = (q.objective_qty_current ?? 0) >= (q.objective_qty_required ?? 1);
+      const el = document.createElement('div');
+      el.className = 'quest-item';
+      el.innerHTML =
+        '<div class="quest-item-header">' +
+        '<span class="quest-item-name">' + escapeHtml(q.title) + '</span>' +
+        '<span class="quest-item-npc">' + escapeHtml(q.npc_display) + '</span>' +
+        '</div>' +
+        '<div class="quest-item-progress' + (done ? ' done' : '') + '">' +
+        (done ? '✓ Ready to turn in' : (q.progress || '')) +
+        '</div>';
+      listEl.appendChild(el);
+    });
   } catch(e) {}
 }
 

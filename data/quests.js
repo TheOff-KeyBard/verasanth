@@ -41,7 +41,7 @@ export const OTHORION_QUESTS = [
 export const THALARA_QUESTS = [
   {
     id: "thalara_q1",
-    npc: "alchemist",
+    npc: "herbalist",
     title: "Common Reagents",
     dialogue_unlock: "first_meeting_thalara",
     objective: { type: "item", item: "slime_residue", qty: 3 },
@@ -51,7 +51,7 @@ export const THALARA_QUESTS = [
   },
   {
     id: "thalara_q2",
-    npc: "alchemist",
+    npc: "herbalist",
     title: "The Flood Records",
     dialogue_unlock: "thalara_q1_complete",
     objective: { type: "item", item: "flood_record_page", qty: 1 },
@@ -61,7 +61,7 @@ export const THALARA_QUESTS = [
   },
   {
     id: "thalara_q3",
-    npc: "alchemist",
+    npc: "herbalist",
     title: "Someone's Kit",
     dialogue_unlock: "thalara_arc_seed",
     objective: { type: "item", item: "personal_effects_bundle", qty: 1 },
@@ -152,11 +152,15 @@ export const GROMMASH_BOUNTIES = [
 
 const NPC_TO_QUESTS = {
   othorion: OTHORION_QUESTS,
-  alchemist: THALARA_QUESTS,
+  herbalist: THALARA_QUESTS,
   weaponsmith: CAELIR_QUESTS,
   curator: SERIS_QUESTS,
   warden: GROMMASH_BOUNTIES,
 };
+
+/** Map quest_id -> quest def for progress/complete lookups */
+export const ALL_QUESTS = [...OTHORION_QUESTS, ...THALARA_QUESTS, ...CAELIR_QUESTS, ...SERIS_QUESTS, ...GROMMASH_BOUNTIES];
+export const QUEST_BY_ID = Object.fromEntries(ALL_QUESTS.map((q) => [q.id, q]));
 
 /**
  * Resolve dialogue_unlock to a boolean from player flags.

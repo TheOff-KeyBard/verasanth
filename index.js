@@ -18,9 +18,11 @@ import { getNPCResponse, boardNPCReaction } from "./services/npc_dialogue.js";
 import { statMod, rollDie, maxPlayerHp, randomEnemy, playerAttack, enemyAttack, tickStatusEffects, resolveEnemyTrait, getTraitDamageModifier, getStatusEffectOnHit, getTraitOnHitEffect } from "./services/combat.js";
 import { generateItem } from "./services/item_generator.js";
 import { getCombatLoot, ROOM_LOOT } from "./data/sewer_loot.js";
+import { rollLoot, ITEM_DATA } from "./data/items.js";
 import { SEWER_CONDITIONS } from "./data/sewer_conditions.js";
 import { getRelationship, setRelationship, getPartyMembers, triggerBetrayalCascade } from "./services/pvp.js";
-import { handleQuestDialogue, recordEnemyKill } from "./services/quests.js";
+import { handleQuestDialogue, recordEnemyKill, checkQuestProgressForItem, assignNextQuestIfAvailable } from "./services/quests.js";
+import { QUEST_BY_ID } from "./data/quests.js";
 import { rotateSewerCondition } from "./services/sewer_rotation.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -245,6 +247,16 @@ async function setFlag(db, uid, flag, value = 1) {
   await dbRun(db,
     "INSERT INTO player_flags(user_id,flag,value) VALUES(?,?,?) ON CONFLICT(user_id,flag) DO UPDATE SET value=excluded.value",
     [uid, flag.toLowerCase(), Number(value)]
+  );
+}
+
+async function addItemToInventory(db, uid, itemId, qty = 1) {
+  const displayName = ITEM_DATA[itemId]?.name || itemId;
+  const tier = 1;
+  await dbRun(db,
+    `INSERT INTO inventory (user_id, item, qty, tier, display_name) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, item) DO UPDATE SET qty = qty + excluded.qty`,
+    [uid, itemId, qty, tier, displayName]
   );
 }
 
@@ -1500,7 +1512,7 @@ if (path === "/api/admin/command" && method === "POST") {
       let thalaraVisits = 0;
       let thalaraArc1Complete = 0;
       let thalaraArc2Complete = 0;
-      if (npc === "alchemist") {
+      if (npc === "herbalist") {
         thalaraVisits = await getFlag(db, uid, "thalara_visits");
         thalaraArc1Complete = await getFlag(db, uid, "thalara_arc1_complete");
         thalaraArc2Complete = await getFlag(db, uid, "thalara_arc2_complete");
@@ -1584,7 +1596,7 @@ if (path === "/api/admin/command" && method === "POST") {
         playerContext.race = row.race || "";
         playerContext.constitution = row.constitution;
       }
-      if (npc === "alchemist") {
+      if (npc === "herbalist") {
         playerContext.thalara_visits = thalaraVisits;
         playerContext.thalara_arc1_complete = thalaraArc1Complete;
         playerContext.thalara_arc2_complete = thalaraArc2Complete;
@@ -1634,7 +1646,7 @@ if (path === "/api/admin/command" && method === "POST") {
           await setFlag(db, uid, "veyra_mark_acknowledged", 1);
         }
       }
-      if (npc === "alchemist") {
+      if (npc === "herbalist") {
         await setFlag(db, uid, "thalara_visits", thalaraVisits + 1);
       }
       if (npc === "curator") {
@@ -1646,6 +1658,8 @@ if (path === "/api/admin/command" && method === "POST") {
       if (npc === "warden") {
         await setFlag(db, uid, "grommash_visits", grommashVisits + 1);
       }
+
+      await assignNextQuestIfAvailable(db, dbGet, dbAll, dbRun, uid, npc, getFlag);
 
       return json({ response });
     }
@@ -2239,6 +2253,20 @@ if (path === "/api/combat/state" && method === "GET") {
           itemLines.push(procedural.display_name || procedural.id);
         }
 
+        // Weight-based loot from fetch quest economy
+        const rollDrops = rollLoot(state.enemy_id);
+        for (const { itemId, qty } of rollDrops) {
+          await addItemToInventory(db, uid, itemId, qty);
+          await checkQuestProgressForItem(db, dbGet, dbAll, dbRun, uid, itemId, qty, getFlag, setFlag);
+          const itemName = ITEM_DATA[itemId]?.name || itemId;
+          itemLines.push(qty > 1 ? `${itemName} x${qty}` : itemName);
+        }
+
+        // Boss kill flags for quest system
+        if (bossFlag) {
+          await setFlag(db, uid, `boss_killed_${state.enemy_id}`, 1);
+        }
+
         const mKill = instinct === "ironblood" ? 0 : -1;
         await updateAlignment(db, uid, mKill, 1, instinct);
 
@@ -2520,6 +2548,10 @@ if (path === "/api/combat/state" && method === "GET") {
     // ── GET: Inventory ──
     if (path === "/api/inventory" && method === "GET") {
       const rows = await dbAll(db, "SELECT item,qty,display_name,tier,equipped FROM inventory WHERE user_id=? ORDER BY item", [uid]);
+      const raw = url.searchParams.get("raw");
+      if (raw) {
+        return json({ items: rows.map((r) => ({ id: r.item, qty: r.qty })) });
+      }
       const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
       const equipment = { weapon: null, armor: null, shield: null };
       for (const eq of eqRows) {
@@ -2543,6 +2575,52 @@ if (path === "/api/combat/state" && method === "GET") {
         };
       });
       return json({ items, itemDetails, equipment });
+    }
+
+    // ── GET: Quests (active and recent) ──
+    if (path === "/api/quests" && method === "GET") {
+      const active = await dbAll(db,
+        "SELECT * FROM quests WHERE user_id=? AND status='active' ORDER BY assigned_at DESC", [uid]);
+      const recent = await dbAll(db,
+        "SELECT * FROM quests WHERE user_id=? AND status='complete' ORDER BY completed_at DESC LIMIT 5", [uid]);
+      const enrich = (q) => {
+        const def = QUEST_BY_ID[q.quest_id] || {};
+        const obj = def.objective || {};
+        const prog = q.progress ? JSON.parse(q.progress) : {};
+        let progress = "";
+        let objective_qty_current = 0;
+        let objective_qty_required = 1;
+        if (obj.type === "item") {
+          objective_qty_current = (prog.item_collected || {})[obj.item] ?? 0;
+          objective_qty_required = obj.qty || 1;
+          progress = `${objective_qty_current}/${objective_qty_required}`;
+        } else if (obj.type === "enemy_kills") {
+          objective_qty_current = (prog.kills || {})[obj.enemy_id] ?? 0;
+          objective_qty_required = obj.count || 1;
+          progress = `${objective_qty_current}/${objective_qty_required}`;
+        } else if (obj.type === "flag") {
+          progress = "—";
+        }
+        const npc = def.npc || q.quest_id.split("_")[0] || "?";
+        return {
+          ...q,
+          title: def.title || q.quest_id,
+          progress,
+          objective_qty_current,
+          objective_qty_required,
+          npc_display: npc.charAt(0).toUpperCase() + npc.slice(1),
+        };
+      };
+      return json({ active: active.map(enrich), recent: recent.map(enrich) });
+    }
+
+    // ── GET: Sell value (check before selling) ──
+    if (path.startsWith("/api/sell/value/") && method === "GET") {
+      const itemId = path.slice("/api/sell/value/".length);
+      const itemDef = ITEM_DATA[itemId];
+      if (!itemDef) return err("Unknown item.", 404);
+      const sellPrice = itemDef.value === 0 ? 0 : Math.max(1, Math.floor(itemDef.value * 0.5));
+      return json({ item: itemDef.name, sell_price: sellPrice, sellable: itemDef.value > 0 });
     }
 
     // ── POST: Equip ──
@@ -2577,36 +2655,42 @@ if (path === "/api/combat/state" && method === "GET") {
 
     // ── POST: Sell (to NPC) ──
     if (path === "/api/sell" && method === "POST") {
-      const { npc, item: itemId } = body;
+      const itemId = body.item_id || body.item;
+      const npcId = body.npc_id || body.npc;
+      const sellQty = Math.max(1, Math.min(parseInt(body.qty, 10) || 1, 999));
       const row = await getPlayerSheet(db, uid);
       if (!row) return err("No character.", 404);
-      if (!npc || !itemId) return err("Missing npc or item.", 400);
+      if (!npcId || !itemId) return err("item_id and npc_id required.", 400);
 
-      const npcLoc = NPC_LOCATIONS[npc];
-      if (!npcLoc || npcLoc !== row.location) return err(`${npc} is not here.`);
+      const itemDef = ITEM_DATA[itemId];
+      if (itemDef && itemDef.value === 0) return err(`${itemDef.name} cannot be sold.`, 400);
+
+      const npcLoc = NPC_LOCATIONS[npcId];
+      if (!npcLoc || npcLoc !== row.location) return err(`${npcId} is not here.`);
 
       const invRow = await dbGet(db, "SELECT item,qty,display_name,tier FROM inventory WHERE user_id=? AND item=?", [uid, itemId]);
-      if (!invRow) return err("You don't have that item.", 404);
+      if (!invRow || invRow.qty < sellQty) return err(`You don't have ${sellQty > 1 ? sellQty + "x " : ""}${invRow?.display_name || itemId}.`, 400);
 
       const displayName = invRow.display_name || invRow.item;
       const tier = invRow.tier || 1;
 
-      if (npc === "curator") {
-        const value = getSellValue(displayName, tier, "loot");
+      if (npcId === "curator") {
+        const value = getSellValue(displayName, tier, "loot") || (itemDef ? Math.floor(itemDef.value * 0.5) : 0);
         if (value <= 0) return err("Seris won't buy that.", 400);
-        const serisValue = Math.floor(value * 1.5);
+        const serisValue = Math.floor(value * 1.5) * sellQty;
 
         const key = displayNameToKey(displayName);
         const interest = key ? SERIS_INTEREST_ITEMS[key] : null;
 
-        await dbRun(db, invRow.qty <= 1
-          ? "DELETE FROM inventory WHERE user_id=? AND item=?"
-          : "UPDATE inventory SET qty=qty-1 WHERE user_id=? AND item=?",
-          invRow.qty <= 1 ? [uid, itemId] : [uid, itemId]);
+        if (invRow.qty <= sellQty) {
+          await dbRun(db, "DELETE FROM inventory WHERE user_id=? AND item=?", [uid, itemId]);
+        } else {
+          await dbRun(db, "UPDATE inventory SET qty=qty-? WHERE user_id=? AND item=?", [sellQty, uid, itemId]);
+        }
         await dbRun(db, "UPDATE characters SET ash_marks=ash_marks+? WHERE user_id=?", [serisValue, uid]);
 
         const sold = await getFlag(db, uid, "curator_items_sold");
-        await setFlag(db, uid, "curator_items_sold", (sold || 0) + 1);
+        await setFlag(db, uid, "curator_items_sold", (sold || 0) + sellQty);
 
         if (interest) {
           if (interest.arcAdvance && interest.arcStage === 1) await setFlag(db, uid, "seris_arc1_active", 1);
@@ -2621,6 +2705,9 @@ if (path === "/api/combat/state" && method === "GET") {
 
           return json({
             ok: true,
+            item: displayName,
+            qty: sellQty,
+            earned: serisValue,
             message: `${dialogue}\n\n**+${serisValue} Ash Marks**`,
             ash_marks: (row.ash_marks || 0) + serisValue,
             seris_reaction: true,
@@ -2629,25 +2716,32 @@ if (path === "/api/combat/state" && method === "GET") {
 
         return json({
           ok: true,
+          item: displayName,
+          qty: sellQty,
+          earned: serisValue,
           message: `*Seris takes it.*\n\n"${serisValue} marks."\n\n**+${serisValue} Ash Marks**`,
           ash_marks: (row.ash_marks || 0) + serisValue,
         });
       }
 
-      if (npc === "weaponsmith" || npc === "armorsmith" || npc === "alchemist") {
-        if (!VENDOR_NPCS[npc]?.sell) return err("You can't sell to that NPC.", 400);
-        const base = TIER_BASE_VALUES[Math.min(tier || 1, 6)] ?? 10;
-        const value = Math.floor(base * 0.5);
+      if (npcId === "weaponsmith" || npcId === "armorsmith" || npcId === "herbalist") {
+        if (!VENDOR_NPCS[npcId]?.sell) return err("You can't sell to that NPC.", 400);
+        const base = (itemDef ? itemDef.value : TIER_BASE_VALUES[Math.min(tier || 1, 6)] ?? 10);
+        const value = Math.max(1, Math.floor(base * 0.5)) * sellQty;
 
-        await dbRun(db, invRow.qty <= 1
-          ? "DELETE FROM inventory WHERE user_id=? AND item=?"
-          : "UPDATE inventory SET qty=qty-1 WHERE user_id=? AND item=?",
-          invRow.qty <= 1 ? [uid, itemId] : [uid, itemId]);
+        if (invRow.qty <= sellQty) {
+          await dbRun(db, "DELETE FROM inventory WHERE user_id=? AND item=?", [uid, itemId]);
+        } else {
+          await dbRun(db, "UPDATE inventory SET qty=qty-? WHERE user_id=? AND item=?", [sellQty, uid, itemId]);
+        }
         await dbRun(db, "UPDATE characters SET ash_marks=ash_marks+? WHERE user_id=?", [value, uid]);
 
-        const npcName = NPC_NAMES[npc] || npc;
+        const npcName = NPC_NAMES[npcId] || npcId;
         return json({
           ok: true,
+          item: displayName,
+          qty: sellQty,
+          earned: value,
           message: `*${npcName} takes it.*\n\n"${value} marks."\n\n**+${value} Ash Marks**`,
           ash_marks: (row.ash_marks || 0) + value,
         });
