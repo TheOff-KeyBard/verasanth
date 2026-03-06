@@ -30,6 +30,25 @@ const QUEST_TOPICS = {
   warden: ["work", "bounty"],
 };
 
+function computeArchetype(mercy, order, heat) {
+  if (heat >= 16) return "Ash Wraith";
+  if (heat >= 11) return "Dread";
+  if (heat >= 7) return "Butcher";
+  if (heat >= 4) return "Killer";
+  if (heat >= 1) return "Ruffian";
+  const mHi = mercy >= 60, mLo = mercy <= -60;
+  const oHi = order >= 60, oLo = order <= -60;
+  if (mHi && oHi) return "Protector";
+  if (mHi && oLo) return "Vigilante";
+  if (mHi) return "Wanderer";
+  if (mLo && oHi) return "Mercenary";
+  if (mLo && oLo) return "Butcher";
+  if (mLo) return "Predator";
+  if (oHi) return "Enforcer";
+  if (oLo) return "Cutpurse";
+  return "Survivor";
+}
+
 /**
  * Handle quest turn-in or assignment when player talks to NPC with work topic.
  * Returns { response } if handled, null to fall through to AI.
@@ -163,7 +182,12 @@ async function completeQuest(db, dbGet, dbRun, dbAll, uid, quest, getFlag, setFl
     await dbRun(db, "UPDATE characters SET ash_marks=ash_marks+? WHERE user_id=?", [quest.reward.ash_marks, uid]);
   }
   if (quest.reward.order_score) {
-    await dbRun(db, "UPDATE players SET order_score=order_score+? WHERE user_id=?", [quest.reward.order_score, uid]);
+    const row = await dbGet(db, "SELECT alignment_morality, alignment_order, crime_heat FROM characters WHERE user_id=?", [uid]);
+    if (row) {
+      const newOrder = Math.max(-200, Math.min(200, (row.alignment_order || 0) + quest.reward.order_score));
+      const archetype = computeArchetype(row.alignment_morality || 0, newOrder, row.crime_heat || 0);
+      await dbRun(db, "UPDATE characters SET alignment_order=?, archetype=? WHERE user_id=?", [newOrder, archetype, uid]);
+    }
   }
   if (quest.reward.item) {
     const entry = QUEST_REWARD_ITEMS[quest.reward.item];

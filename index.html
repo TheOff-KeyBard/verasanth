@@ -1100,6 +1100,8 @@
   .cs-align-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 0.9rem; }
   .cs-align-bar { margin-bottom: 10px; }
   .cs-align-fill { background: var(--ember-dim); }
+  .cs-heat-fill { background: var(--danger); }
+  .cs-bounty-indicator { color: var(--gold); font-size: 0.9rem; margin-bottom: 8px; }
   .cs-currency { margin-bottom: 12px; color: var(--gold); font-size: 0.9rem; }
   .cs-inv-list { color: var(--text-dim); font-size: 0.9rem; }
   .cs-flags-list { list-style: none; }
@@ -1540,12 +1542,13 @@
       <div id="cs-tab-standing" class="sheet-tab-panel" style="display:none;">
         <p class="cs-standing-archetype"><strong>Archetype:</strong> <span id="cs-archetype">—</span></p>
         <p id="cs-grommash-read" class="cs-muted">—</p>
-        <div class="cs-align-row"><span>Mercy</span><span id="cs-mercy-label">—</span></div>
+        <p id="cs-bounty-indicator" class="cs-bounty-indicator" style="display:none;">⚠ Bounty Active</p>
+        <div class="cs-align-row"><span>Mercy</span></div>
         <div class="cs-hp-bar cs-align-bar"><div id="cs-mercy-fill" class="cs-hp-fill cs-align-fill" style="width:50%"></div></div>
-        <div class="cs-align-row"><span>Order</span><span id="cs-order-label">—</span></div>
+        <div class="cs-align-row"><span>Order</span></div>
         <div class="cs-hp-bar cs-align-bar"><div id="cs-order-fill" class="cs-hp-fill cs-align-fill" style="width:50%"></div></div>
-        <div class="cs-align-row"><span>Heat</span><span id="cs-heat-label">—</span></div>
-        <div class="cs-hp-bar cs-align-bar"><div id="cs-heat-fill" class="cs-hp-fill cs-align-fill" style="width:0%"></div></div>
+        <div class="cs-align-row"><span>Heat</span></div>
+        <div class="cs-hp-bar cs-align-bar cs-heat-bar"><div id="cs-heat-fill" class="cs-hp-fill cs-align-fill cs-heat-fill" style="width:0%"></div></div>
       </div>
       <div id="cs-tab-stats" class="sheet-tab-panel" style="display:none;">
         <div class="cs-hp-row"><span>HP</span> <span id="cs-hp-text">— / —</span></div>
@@ -2573,9 +2576,8 @@ async function populateCharacterSheet() {
   const au = char.alignment_ui || {};
   document.getElementById('cs-archetype').textContent = au.archetype || 'Survivor';
   document.getElementById('cs-grommash-read').textContent = au.grommash_read || 'Neither asset nor threat. Yet.';
-  document.getElementById('cs-mercy-label').textContent = au.mercy_label || 'Neutral';
-  document.getElementById('cs-order-label').textContent = au.order_label || 'Neutral';
-  document.getElementById('cs-heat-label').textContent = au.heat_label || 'Clean';
+  const bountyEl = document.getElementById('cs-bounty-indicator');
+  if (bountyEl) bountyEl.style.display = au.has_bounty ? 'block' : 'none';
   document.getElementById('cs-mercy-fill').style.width = ((au.mercy_bar ?? 5) / 10 * 100) + '%';
   document.getElementById('cs-order-fill').style.width = ((au.order_bar ?? 5) / 10 * 100) + '%';
   document.getElementById('cs-heat-fill').style.width = ((au.heat_bar ?? 0) / 10 * 100) + '%';
@@ -2699,10 +2701,11 @@ async function refreshSheetPanel() {
   const locName = getLocationName(char.location);
   document.getElementById('panel-tab-identity').innerHTML = '<p><strong>Race</strong> ' + (char.race || '—') + '</p><p><strong>Instinct</strong> ' + (char.instinct || '—') + '</p><p class="cs-muted">Last seen: ' + locName + '</p>';
   const au = char.alignment_ui || {};
-  const standingHtml = '<p><strong>Archetype:</strong> ' + (au.archetype || 'Survivor') + '</p><p class="cs-muted">' + (au.grommash_read || 'Neither asset nor threat. Yet.') + '</p>' +
-    '<p><strong>Mercy</strong> ' + (au.mercy_label || 'Neutral') + '</p><div class="cs-hp-bar"><div class="cs-hp-fill cs-align-fill" style="width:' + ((au.mercy_bar ?? 5) / 10 * 100) + '%"></div></div>' +
-    '<p><strong>Order</strong> ' + (au.order_label || 'Neutral') + '</p><div class="cs-hp-bar"><div class="cs-hp-fill cs-align-fill" style="width:' + ((au.order_bar ?? 5) / 10 * 100) + '%"></div></div>' +
-    '<p><strong>Heat</strong> ' + (au.heat_label || 'Clean') + '</p><div class="cs-hp-bar"><div class="cs-hp-fill cs-align-fill" style="width:' + ((au.heat_bar ?? 0) / 10 * 100) + '%"></div></div>';
+  let standingHtml = '<p><strong>Archetype:</strong> ' + (au.archetype || 'Survivor') + '</p><p class="cs-muted">' + (au.grommash_read || 'Neither asset nor threat. Yet.') + '</p>';
+  if (au.has_bounty) standingHtml += '<p class="cs-bounty-indicator">⚠ Bounty Active</p>';
+  standingHtml += '<p><strong>Mercy</strong></p><div class="cs-hp-bar"><div class="cs-hp-fill cs-align-fill" style="width:' + ((au.mercy_bar ?? 5) / 10 * 100) + '%"></div></div>' +
+    '<p><strong>Order</strong></p><div class="cs-hp-bar"><div class="cs-hp-fill cs-align-fill" style="width:' + ((au.order_bar ?? 5) / 10 * 100) + '%"></div></div>' +
+    '<p><strong>Heat</strong></p><div class="cs-hp-bar cs-heat-bar"><div class="cs-hp-fill cs-align-fill cs-heat-fill" style="width:' + ((au.heat_bar ?? 0) / 10 * 100) + '%"></div></div>';
   document.getElementById('panel-tab-standing').innerHTML = standingHtml;
   const hp = char.current_hp ?? 0;
   const maxHp = char.max_hp || 10;

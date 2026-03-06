@@ -80,6 +80,8 @@ export function playerAttack(stats, enemy, useAbility, instinct, equipment = {})
 
 /**
  * Enemy attack. Uses accuracy-based hit check and damage range.
+ * Blueprint: accuracy% = chance enemy hits; dodge when d20+DEX+shield >= threshold.
+ * Formula: hit when dodgeRoll < threshold; threshold from combat_rebalance.md.
  * Returns { dmg, hit } — dmg is 0 on miss.
  */
 export function enemyAttack(enemy, stats, shieldBonus = 0) {
@@ -138,6 +140,21 @@ export function resolveEnemyTrait(enemy, state) {
         : 0;
       return { replacementAttack: { damage: dmg, hit: hits } };
     }
+    case "summon": {
+      if (traitState.summon_used) break;
+      const enemyHp = state.enemy_hp ?? 0;
+      const enemyHpMax = state.enemy_hp_max ?? enemy.hp;
+      if (enemyHp > enemyHpMax / 2) break;
+      traitState.summon_used = true;
+      const minionId = enemy.trait_params?.minion_id ?? "gutter_rat";
+      return { skipAction: true, summonMinion: minionId };
+    }
+    case "spore_burst":
+      // On death only — handled in victory/death resolution in index.js
+      break;
+    case "guard":
+      // Damage reduction applied via getTraitDamageModifier — no action change
+      break;
     default:
       break;
   }
