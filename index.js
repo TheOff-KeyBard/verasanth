@@ -901,6 +901,79 @@ if (path === "/api/admin/command" && method === "POST") {
       }
     }
 
+    // ── POST: Chat whisper (Phase 5) ──
+    if (path === "/api/chat/whisper" && method === "POST") {
+      const { to_name: toNameRaw, message: rawMessage } = body;
+      const toName = (toNameRaw != null && String(toNameRaw).trim()) ? String(toNameRaw).trim() : "";
+      if (!toName) return err("Recipient name is required.", 400);
+      const message = sanitizeChatMessage(rawMessage);
+      if (!message) return err("Message is required.", 400);
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const fromName = (row.name || "Someone").trim() || "Someone";
+
+      const target = await dbGet(db,
+        `SELECT c.user_id, c.name, p.last_seen FROM characters c JOIN players p ON p.user_id = c.user_id WHERE LOWER(TRIM(c.name)) = LOWER(?)`,
+        [toName]);
+      if (!target || target.user_id === uid) return err("Player not found or not available.", 404);
+      const thirtyMinAgo = Date.now() - 30 * 60 * 1000;
+      if (target.last_seen == null || target.last_seen < thirtyMinAgo) {
+        return err("Player not found or not recently active.", 404);
+      }
+      const toNameDisplay = (target.name || "").trim() || toName;
+
+      const now = Date.now();
+      const lastWhisper = await dbGet(db,
+        `SELECT created_at FROM whispers WHERE from_user_id = ? ORDER BY created_at DESC LIMIT 1`,
+        [uid]);
+      if (lastWhisper && now - lastWhisper.created_at < 3000) {
+        return err("Wait 3 seconds between whispers.", 429);
+      }
+      const countRow = await dbGet(db,
+        `SELECT COUNT(*) as c FROM whispers WHERE from_user_id = ? AND created_at > ?`,
+        [uid, now - 60 * 1000]);
+      if (countRow && countRow.c >= 10) {
+        return err("Too many whispers. Slow down.", 429);
+      }
+
+      await dbRun(db, `
+        INSERT INTO whispers (from_user_id, from_name, to_user_id, to_name, message, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)`, [uid, fromName, target.user_id, toNameDisplay, message, now]);
+      const insertRow = await dbGet(db, "SELECT id, created_at FROM whispers WHERE from_user_id = ? ORDER BY id DESC LIMIT 1", [uid]);
+      return json({ ok: true, id: insertRow?.id ?? null, created_at: insertRow?.created_at ?? now });
+    }
+
+    // ── GET: Chat whispers inbox (Phase 5) ──
+    if (path === "/api/chat/whispers" && method === "GET") {
+      const since = parseInt(url.searchParams.get("since") || "0", 10) || 0;
+      const rows = await dbAll(db, `
+        SELECT id, from_user_id, from_name, message, created_at, read
+        FROM whispers
+        WHERE to_user_id = ? AND created_at > ?
+        ORDER BY created_at ASC
+        LIMIT 100`, [uid, since]);
+      const unreadRow = await dbGet(db, `SELECT COUNT(*) as c FROM whispers WHERE to_user_id = ? AND read = 0`, [uid]);
+      const messages = rows.map((r) => ({
+        id: r.id,
+        from_name: r.from_name,
+        message: r.message,
+        created_at: r.created_at,
+      }));
+      return json({ messages, server_time: Date.now(), unread: unreadRow?.c ?? 0 });
+    }
+
+    // ── GET: Chat whispers unread count only (for badge) ──
+    if (path === "/api/chat/whispers/unread" && method === "GET") {
+      const unreadRow = await dbGet(db, `SELECT COUNT(*) as c FROM whispers WHERE to_user_id = ? AND read = 0`, [uid]);
+      return json({ unread: unreadRow?.c ?? 0 });
+    }
+
+    // ── POST: Mark whispers as read (when user views Whispers tab) ──
+    if (path === "/api/chat/whispers/mark-read" && method === "POST") {
+      await dbRun(db, `UPDATE whispers SET read = 1 WHERE to_user_id = ?`, [uid]);
+      return json({ ok: true });
+    }
+
     // ── GET: Board ──
     if (path === "/api/board" && method === "GET") {
       const row = await getPlayerSheet(db, uid);

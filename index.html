@@ -1250,6 +1250,9 @@
     cursor: pointer; border-bottom: 2px solid transparent;
   }
   #chat-panel .chat-tab.active { color: var(--gold); border-bottom-color: var(--ember); }
+  #chat-panel .chat-tab .chat-tab-unread {
+    margin-left: 4px; font-size: 0.7rem; background: #9b7fa8; color: #0d0b08; padding: 1px 5px; border-radius: 4px;
+  }
   #chat-panel .chat-messages {
     flex: 1; overflow-y: auto; padding: 8px 12px; font-size: 0.9rem; line-height: 1.4;
     scrollbar-width: thin; scrollbar-color: var(--border-warm) transparent;
@@ -1257,6 +1260,8 @@
   #chat-panel .chat-msg { margin-bottom: 6px; }
   #chat-panel .chat-msg .chat-name { color: var(--gold); font-weight: 600; margin-right: 6px; }
   #chat-panel .chat-msg.chat-msg-local .chat-name { color: var(--ember); }
+  #chat-panel .chat-msg.chat-msg-whisper .chat-name { color: #9b7fa8; }
+  #chat-panel .chat-msg.chat-msg-whisper .chat-text { font-style: italic; }
   #chat-panel .chat-msg .chat-text { color: var(--text); }
   #chat-panel .chat-input-row {
     display: flex; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--border);
@@ -1532,6 +1537,7 @@
       <div class="chat-tabs">
         <button type="button" class="chat-tab active" data-chat-tab="global">Global</button>
         <button type="button" class="chat-tab" data-chat-tab="local">Local</button>
+        <button type="button" class="chat-tab" data-chat-tab="whispers">Whispers <span class="chat-tab-unread" id="chat-whispers-unread" style="display:none;">0</span></button>
       </div>
       <div class="chat-messages" id="chat-messages"></div>
       <div class="chat-input-row">
@@ -2462,13 +2468,18 @@ async function loadGame() {
 
   let chatLastSince = 0;
   let localLastSince = 0;
+  let whispersLastSince = 0;
   let chatPollInterval = null;
+  let chatUnreadInterval = null;
   let chatSendCooldownUntil = 0;
   let activeChatTab = 'global';
   const CHAT_POLL_GLOBAL_MS = 4000;
   const CHAT_POLL_LOCAL_MS = 3000;
+  const CHAT_POLL_WHISPERS_MS = 5000;
   const CHAT_SEND_COOLDOWN_GLOBAL_MS = 2000;
   const CHAT_SEND_COOLDOWN_LOCAL_MS = 1000;
+  const CHAT_SEND_COOLDOWN_WHISPER_MS = 3000;
+  const whispersUnreadEl = document.getElementById('chat-whispers-unread');
 
   function isExpanded() { return panel && !panel.classList.contains('collapsed'); }
 
@@ -2482,14 +2493,16 @@ async function loadGame() {
   function appendMessages(messages, channel) {
     if (!messagesEl || !messages) return;
     var isLocal = channel === 'local';
+    var isWhisper = channel === 'whispers';
     const seen = new Set(Array.from(messagesEl.querySelectorAll('[data-msg-id]')).map(function(el) { return el.dataset.msgId; }));
     messages.forEach(function(m) {
       if (seen.has(String(m.id))) return;
       seen.add(String(m.id));
       const div = document.createElement('div');
-      div.className = 'chat-msg' + (isLocal ? ' chat-msg-local' : '');
+      div.className = 'chat-msg' + (isLocal ? ' chat-msg-local' : '') + (isWhisper ? ' chat-msg-whisper' : '');
       div.dataset.msgId = m.id;
-      div.innerHTML = '<span class="chat-name">' + escapeHtml(m.player_name) + ':</span> <span class="chat-text">' + escapeHtml(m.message) + '</span>';
+      var name = isWhisper ? (m.from_name || 'Someone') : (m.player_name || 'Someone');
+      div.innerHTML = '<span class="chat-name">' + escapeHtml(name) + ':</span> <span class="chat-text">' + escapeHtml(m.message) + '</span>';
       messagesEl.appendChild(div);
     });
     messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -2515,22 +2528,63 @@ async function loadGame() {
     }).catch(function() {});
   }
 
+  function pollWhispers() {
+    if (!vToken || !isExpanded() || activeChatTab !== 'whispers') return;
+    GET('/api/chat/whispers?since=' + whispersLastSince).then(function(data) {
+      if (data.messages && data.messages.length) appendMessages(data.messages, 'whispers');
+      if (data.server_time) whispersLastSince = data.server_time;
+      if (whispersUnreadEl) {
+        var n = data.unread != null ? data.unread : 0;
+        whispersUnreadEl.textContent = n;
+        whispersUnreadEl.style.display = n > 0 ? 'inline' : 'none';
+      }
+    }).catch(function() {});
+  }
+
+  function updateWhispersUnread() {
+    if (!vToken || !isExpanded()) return;
+    GET('/api/chat/whispers/unread').then(function(data) {
+      if (whispersUnreadEl) {
+        var n = data.unread != null ? data.unread : 0;
+        whispersUnreadEl.textContent = n;
+        whispersUnreadEl.style.display = n > 0 ? 'inline' : 'none';
+      }
+    }).catch(function() {});
+  }
+
   function runPoll() {
     if (activeChatTab === 'global') pollGlobal();
-    else pollLocal();
+    else if (activeChatTab === 'local') pollLocal();
+    else if (activeChatTab === 'whispers') pollWhispers();
+  }
+
+  function getPollMs() {
+    if (activeChatTab === 'global') return CHAT_POLL_GLOBAL_MS;
+    if (activeChatTab === 'local') return CHAT_POLL_LOCAL_MS;
+    return CHAT_POLL_WHISPERS_MS;
   }
 
   function startPoll() {
     if (chatPollInterval) return;
     if (activeChatTab === 'global') { chatLastSince = 0; pollGlobal(); }
-    else { localLastSince = 0; pollLocal(); }
-    var ms = activeChatTab === 'global' ? CHAT_POLL_GLOBAL_MS : CHAT_POLL_LOCAL_MS;
-    chatPollInterval = setInterval(runPoll, ms);
+    else if (activeChatTab === 'local') { localLastSince = 0; pollLocal(); }
+    else if (activeChatTab === 'whispers') {
+      whispersLastSince = 0;
+      POST('/api/chat/whispers/mark-read').catch(function() {});
+      pollWhispers();
+    }
+    chatPollInterval = setInterval(runPoll, getPollMs());
+    if (!chatUnreadInterval) {
+      updateWhispersUnread();
+      chatUnreadInterval = setInterval(updateWhispersUnread, CHAT_POLL_WHISPERS_MS);
+    }
   }
 
   function stopPoll() {
     if (chatPollInterval) clearInterval(chatPollInterval);
     chatPollInterval = null;
+    if (chatUnreadInterval) clearInterval(chatUnreadInterval);
+    chatUnreadInterval = null;
   }
 
   function switchTab(tab) {
@@ -2539,12 +2593,18 @@ async function loadGame() {
     tabs.forEach(function(t) { t.classList.toggle('active', t.dataset.chatTab === tab); });
     clearMessages();
     if (tab === 'global') { chatLastSince = 0; pollGlobal(); }
-    else { localLastSince = 0; pollLocal(); }
+    else if (tab === 'local') { localLastSince = 0; pollLocal(); }
+    else if (tab === 'whispers') {
+      whispersLastSince = 0;
+      POST('/api/chat/whispers/mark-read').then(function() {
+        if (whispersUnreadEl) whispersUnreadEl.style.display = 'none';
+      }).catch(function() {});
+      pollWhispers();
+    }
     if (chatPollInterval) {
       clearInterval(chatPollInterval);
       chatPollInterval = null;
-      var ms = tab === 'global' ? CHAT_POLL_GLOBAL_MS : CHAT_POLL_LOCAL_MS;
-      chatPollInterval = setInterval(runPoll, ms);
+      chatPollInterval = setInterval(runPoll, getPollMs());
     }
   }
 
@@ -2580,9 +2640,47 @@ async function loadGame() {
 
   function sendMessage() {
     if (!input || !sendBtn) return;
-    const msg = (input.value || '').trim();
-    if (!msg) return;
+    const raw = (input.value || '').trim();
+    if (!raw) return;
+
+    var isWhisper = raw.indexOf('/w ') === 0;
+    if (isWhisper) {
+      var parts = raw.slice(3).trim().split(/\s+/);
+      if (parts.length < 2) {
+        showChatError('Use: /w PlayerName message');
+        return;
+      }
+      var toName = parts[0];
+      var msg = parts.slice(1).join(' ');
+      if (!msg) {
+        showChatError('Use: /w PlayerName message');
+        return;
+      }
+      if (Date.now() < chatSendCooldownUntil) return;
+      sendBtn.disabled = true;
+      if (errorEl) errorEl.style.display = 'none';
+      POST('/api/chat/whisper', { to_name: toName, message: msg }).then(function() {
+        input.value = '';
+        chatSendCooldownUntil = Date.now() + CHAT_SEND_COOLDOWN_WHISPER_MS;
+        setTimeout(function() { sendBtn.disabled = false; }, CHAT_SEND_COOLDOWN_WHISPER_MS);
+      }).catch(function(e) {
+        sendBtn.disabled = false;
+        var msgText = e.message || 'Whisper failed.';
+        if (msgText.indexOf('seconds') !== -1 || msgText.indexOf('Slow down') !== -1) {
+          chatSendCooldownUntil = Date.now() + CHAT_SEND_COOLDOWN_WHISPER_MS;
+          setTimeout(function() { sendBtn.disabled = false; }, CHAT_SEND_COOLDOWN_WHISPER_MS);
+        }
+        showChatError(msgText);
+      });
+      return;
+    }
+
+    const msg = raw;
     var cooldownMs = activeChatTab === 'global' ? CHAT_SEND_COOLDOWN_GLOBAL_MS : CHAT_SEND_COOLDOWN_LOCAL_MS;
+    if (activeChatTab === 'whispers') {
+      showChatError('Type /w Name message to whisper.');
+      return;
+    }
     if (Date.now() < chatSendCooldownUntil) return;
     sendBtn.disabled = true;
     if (errorEl) errorEl.style.display = 'none';
