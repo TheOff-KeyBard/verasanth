@@ -16,6 +16,7 @@ import { SERIS_INTEREST_ITEMS, getSellValue, displayNameToKey } from "./data/ser
 import { getNPCResponse, boardNPCReaction } from "./services/npc_dialogue.js";
 import { statMod, rollDie, maxPlayerHp, randomEnemy, playerAttack, enemyAttack } from "./services/combat.js";
 import { generateItem } from "./services/item_generator.js";
+import { getRelationship, setRelationship, getPartyMembers, triggerBetrayalCascade } from "./services/pvp.js";
 
 // ─────────────────────────────────────────────────────────────
 // GAME DATA (remaining in index)
@@ -328,6 +329,34 @@ async function initDb(db) {
     try { await dbRun(db, `ALTER TABLE inventory ADD COLUMN curse_identified INTEGER DEFAULT 0`); } catch (_) {}
     try { await dbRun(db, `ALTER TABLE inventory ADD COLUMN special_property TEXT`); } catch (_) {}
     try { await dbRun(db, `ALTER TABLE inventory ADD COLUMN display_name TEXT`); } catch (_) {}
+
+    // PvPvE system (Phase 1)
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS player_relationships (
+      player_a INTEGER NOT NULL,
+      player_b INTEGER NOT NULL,
+      state TEXT DEFAULT 'neutral',
+      trust_level TEXT DEFAULT 'stranger',
+      trust_points INTEGER DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY(player_a, player_b),
+      CHECK(player_a < player_b)
+    )`);
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS party_invites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      inviter_id INTEGER NOT NULL,
+      target_id INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      UNIQUE(inviter_id, target_id)
+    )`);
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS pvp_state (
+      user_id INTEGER PRIMARY KEY REFERENCES players(user_id),
+      downed_until INTEGER DEFAULT 0,
+      downed_by INTEGER,
+      created_at INTEGER,
+      updated_at INTEGER
+    )`);
+    try { await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_party_invites_target ON party_invites(target_id)`); } catch (_) {}
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -499,6 +528,7 @@ if (path === "/api/character/reset" && method === "POST") {
   await dbRun(db, "DELETE FROM player_flags WHERE user_id=?", [targetUid]);
   await dbRun(db, "DELETE FROM inventory WHERE user_id=?", [targetUid]);
   await dbRun(db, "DELETE FROM combat_state WHERE user_id=?", [targetUid]);
+  await dbRun(db, "DELETE FROM pvp_state WHERE user_id=?", [targetUid]);
   return json({ ok: true, message: "Character reset. Reload to see True Welcome." });
 }
 
@@ -527,7 +557,22 @@ if (path === "/api/admin/command" && method === "POST") {
     if (!uid && path !== "/api/data/races" && path !== "/api/data/instincts") {
       if (!path.startsWith("/api/data/")) return err("Unauthorized.", 401);
     }
-    if (uid) await updateLastSeen(db, uid);
+    if (uid) {
+      await updateLastSeen(db, uid);
+      const now = Math.floor(Date.now() / 1000);
+      const downed = await dbGet(db, "SELECT downed_until FROM pvp_state WHERE user_id=? AND downed_until>0 AND downed_until<?", [uid, now]);
+      if (downed) {
+        const row = await getPlayerSheet(db, uid);
+        await dbRun(db, "UPDATE characters SET current_hp=0, ash_marks=0 WHERE user_id=?", [uid]);
+        await dbRun(db, "UPDATE players SET location='tavern' WHERE user_id=?", [uid]);
+        const maxHp = maxPlayerHp(row?.constitution || 10);
+        await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [maxHp, uid]);
+        const dc = await getFlag(db, uid, "death_count");
+        await setFlag(db, uid, "death_count", dc + 1);
+        await setFlag(db, uid, "just_respawned", 1);
+        await dbRun(db, "INSERT INTO pvp_state (user_id, downed_until, downed_by, created_at, updated_at) VALUES (?, 0, NULL, ?, ?) ON CONFLICT(user_id) DO UPDATE SET downed_until=0, downed_by=NULL, updated_at=excluded.updated_at", [uid, now, now]);
+      }
+    }
 
     // ── GET: Character ──
     if (path === "/api/character" && method === "GET") {
@@ -762,6 +807,67 @@ if (path === "/api/admin/command" && method === "POST") {
       const obj  = room?.objects?.[target];
       if (!obj) return err(`Nothing called '${target}' here.`, 404);
       return json({ target, desc: obj.desc, actions: obj.actions || [] });
+    }
+
+    // ── Party System ──
+    if (path === "/api/party" && method === "GET") {
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const members = await getPartyMembers(db, dbAll, uid);
+      const invites = await dbAll(db, "SELECT inviter_id, created_at FROM party_invites WHERE target_id=?", [uid]);
+      const inviterNames = await Promise.all(invites.map(async (inv) => {
+        const r = await dbGet(db, "SELECT name FROM characters WHERE user_id=?", [inv.inviter_id]);
+        return { inviter_id: inv.inviter_id, inviter_name: r?.name || "Unknown", created_at: inv.created_at };
+      }));
+      const memberNames = await Promise.all(members.map(async (mid) => {
+        const r = await dbGet(db, "SELECT name FROM characters WHERE user_id=?", [mid]);
+        return { user_id: mid, name: r?.name || "Unknown" };
+      }));
+      return json({ members: memberNames, pending_invites: inviterNames });
+    }
+
+    if (path === "/api/party/invite" && method === "POST") {
+      const { target_name } = body;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (!target_name || typeof target_name !== "string") return err("target_name required.", 400);
+      const targetRow = await dbGet(db, "SELECT user_id FROM characters WHERE LOWER(TRIM(name))=LOWER(?)", [target_name.trim()]);
+      if (!targetRow || targetRow.user_id === uid) return err("Player not found or cannot invite yourself.", 404);
+      const targetUid = targetRow.user_id;
+      const targetLoc = await dbGet(db, "SELECT location FROM players WHERE user_id=?", [targetUid]);
+      if (targetLoc?.location !== row.location) return err("Target must be in the same location.", 400);
+      const rel = await getRelationship(db, dbGet, uid, targetUid);
+      if (rel?.state === "party") return err("Already in a party with them.", 400);
+      const existing = await dbGet(db, "SELECT 1 FROM party_invites WHERE inviter_id=? AND target_id=?", [uid, targetUid]);
+      if (existing) return err("Invite already sent.", 400);
+      const now = Math.floor(Date.now() / 1000);
+      await dbRun(db, "INSERT INTO party_invites (inviter_id, target_id, created_at) VALUES (?, ?, ?)", [uid, targetUid, now]);
+      return json({ ok: true, message: `Invite sent to ${target_name.trim()}.` });
+    }
+
+    if (path === "/api/party/accept" && method === "POST") {
+      const { inviter_id } = body;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const inviterUid = Number(inviter_id);
+      if (!inviterUid) return err("inviter_id required.", 400);
+      const invite = await dbGet(db, "SELECT 1 FROM party_invites WHERE inviter_id=? AND target_id=?", [inviterUid, uid]);
+      if (!invite) return err("No pending invite from that player.", 404);
+      await dbRun(db, "DELETE FROM party_invites WHERE inviter_id=? AND target_id=?", [inviterUid, uid]);
+      await setRelationship(db, dbRun, uid, inviterUid, "party", 1);
+      const inviterName = (await dbGet(db, "SELECT name FROM characters WHERE user_id=?", [inviterUid]))?.name || "Unknown";
+      return json({ ok: true, message: `You have joined a party with ${inviterName}.` });
+    }
+
+    if (path === "/api/party/leave" && method === "POST") {
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const members = await getPartyMembers(db, dbAll, uid);
+      if (members.length === 0) return err("You are not in a party.", 400);
+      for (const mid of members) {
+        await setRelationship(db, dbRun, uid, mid, "neutral", 0);
+      }
+      return json({ ok: true, message: "You have left the party." });
     }
 
     // ── POST: Talk ──
@@ -1398,6 +1504,130 @@ if (path === "/api/combat/state" && method === "GET") {
         player_hp: playerHp, enemy_hp: enemyHp,
         enemy_hp_max: state.enemy_hp_max,
       });
+    }
+
+    // ── GET: Location players (for downed UI) ──
+    if (path === "/api/location/players" && method === "GET") {
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const players = await dbAll(db, `SELECT p.user_id, c.name FROM players p
+        LEFT JOIN characters c ON c.user_id=p.user_id
+        WHERE p.location=? AND p.user_id!=?`, [row.location, uid]);
+      const pvpRows = await dbAll(db, "SELECT user_id, downed_until, downed_by FROM pvp_state WHERE downed_until>?", [Math.floor(Date.now() / 1000)]);
+      const downedMap = Object.fromEntries(pvpRows.map(r => [r.user_id, { downed_until: r.downed_until, downed_by: r.downed_by }]));
+      const list = players.map(p => ({
+        user_id: p.user_id,
+        name: p.name || "Unknown",
+        downed: !!downedMap[p.user_id],
+        downed_until: downedMap[p.user_id]?.downed_until,
+      }));
+      return json({ players: list });
+    }
+
+    // ── Downed player actions ──
+    if (path === "/api/player/revive" && method === "POST") {
+      const { target_id } = body;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const targetUid = Number(target_id);
+      if (!targetUid) return err("target_id required.", 400);
+      const targetLoc = await dbGet(db, "SELECT location FROM players WHERE user_id=?", [targetUid]);
+      if (targetLoc?.location !== row.location) return err("Target is not here.", 400);
+      const pvpRow = await dbGet(db, "SELECT downed_until FROM pvp_state WHERE user_id=? AND downed_until>?", [targetUid, Math.floor(Date.now() / 1000)]);
+      if (!pvpRow) return err("That player is not downed.", 400);
+      const targetChar = await dbGet(db, "SELECT constitution FROM characters WHERE user_id=?", [targetUid]);
+      const maxHp = maxPlayerHp(targetChar?.constitution || 10);
+      const reviveHp = Math.max(1, Math.floor(maxHp * 0.3));
+      await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [reviveHp, targetUid]);
+      await dbRun(db, "INSERT INTO pvp_state (user_id, downed_until, downed_by, created_at, updated_at) VALUES (?, 0, NULL, ?, ?) ON CONFLICT(user_id) DO UPDATE SET downed_until=0, downed_by=NULL, updated_at=excluded.updated_at", [targetUid, Math.floor(Date.now() / 1000), Math.floor(Date.now() / 1000)]);
+      await tickAlignment(db, uid, 15, 0, (row.instinct || "").toLowerCase());
+      const targetName = (await dbGet(db, "SELECT name FROM characters WHERE user_id=?", [targetUid]))?.name || "Unknown";
+      return json({ ok: true, message: `*You revive ${targetName}.*\n\nThey stir. **${reviveHp} HP** restored.` });
+    }
+
+    if (path === "/api/player/loot" && method === "POST") {
+      const { target_id } = body;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const targetUid = Number(target_id);
+      if (!targetUid) return err("target_id required.", 400);
+      const targetLoc = await dbGet(db, "SELECT location FROM players WHERE user_id=?", [targetUid]);
+      if (targetLoc?.location !== row.location) return err("Target is not here.", 400);
+      const pvpRow = await dbGet(db, "SELECT downed_until FROM pvp_state WHERE user_id=? AND downed_until>?", [targetUid, Math.floor(Date.now() / 1000)]);
+      if (!pvpRow) return err("That player is not downed.", 400);
+      const allItems = await dbAll(db, "SELECT item, qty, tier, corrupted, curse, curse_identified, special_property, display_name FROM inventory WHERE user_id=?", [targetUid]);
+      if (allItems.length === 0) return err("They have nothing to take.", 400);
+      const take = allItems[Math.floor(Math.random() * allItems.length)];
+      await dbRun(db, take.qty <= 1 ? "DELETE FROM inventory WHERE user_id=? AND item=?" : "UPDATE inventory SET qty=qty-1 WHERE user_id=? AND item=?", take.qty <= 1 ? [targetUid, take.item] : [targetUid, take.item]);
+      const qtyToGive = Math.min(take.qty || 1, 1);
+      await dbRun(db, `INSERT INTO inventory (user_id, item, qty, tier, corrupted, curse, curse_identified, special_property, display_name)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, item) DO UPDATE SET qty=qty+?`,
+        [uid, take.item, qtyToGive, take.tier || 1, take.corrupted || 0, take.curse || null, take.curse_identified || 0, take.special_property || null, take.display_name || null, qtyToGive]);
+      await tickAlignment(db, uid, 0, -20, (row.instinct || "").toLowerCase());
+      const label = take.display_name || take.item;
+      return json({ ok: true, message: `*You take ${label} from them.*`, item: label });
+    }
+
+    if (path === "/api/player/finish" && method === "POST") {
+      const { target_id } = body;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const targetUid = Number(target_id);
+      if (!targetUid) return err("target_id required.", 400);
+      const targetLoc = await dbGet(db, "SELECT location FROM players WHERE user_id=?", [targetUid]);
+      if (targetLoc?.location !== row.location) return err("Target is not here.", 400);
+      const pvpRow = await dbGet(db, "SELECT downed_until FROM pvp_state WHERE user_id=? AND downed_until>?", [targetUid, Math.floor(Date.now() / 1000)]);
+      if (!pvpRow) return err("That player is not downed.", 400);
+      await dbRun(db, "UPDATE characters SET current_hp=0, ash_marks=0 WHERE user_id=?", [targetUid]);
+      await dbRun(db, "UPDATE players SET location='tavern' WHERE user_id=?", [targetUid]);
+      const maxHp = maxPlayerHp((await dbGet(db, "SELECT constitution FROM characters WHERE user_id=?", [targetUid]))?.constitution || 10);
+      await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [maxHp, targetUid]);
+      const dc = await getFlag(db, targetUid, "death_count");
+      await setFlag(db, targetUid, "death_count", dc + 1);
+      await setFlag(db, targetUid, "just_respawned", 1);
+      await dbRun(db, "INSERT INTO pvp_state (user_id, downed_until, downed_by, created_at, updated_at) VALUES (?, 0, NULL, ?, ?) ON CONFLICT(user_id) DO UPDATE SET downed_until=0, downed_by=NULL, updated_at=excluded.updated_at", [targetUid, Math.floor(Date.now() / 1000), Math.floor(Date.now() / 1000)]);
+      await tickAlignment(db, uid, -30, 0, (row.instinct || "").toLowerCase());
+      const targetName = (await dbGet(db, "SELECT name FROM characters WHERE user_id=?", [targetUid]))?.name || "Unknown";
+      return json({ ok: true, message: `*You finish ${targetName}.*\n\n*They wake in the Shadow Hearth Inn. Their marks are gone.*` });
+    }
+
+    // ── POST: PvP Attack ──
+    if (path === "/api/combat/pvp/attack" && method === "POST") {
+      const { target_name, target_id } = body;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      let targetUid = Number(target_id);
+      if (!targetUid && target_name) {
+        const tr = await dbGet(db, "SELECT user_id FROM characters WHERE LOWER(TRIM(name))=LOWER(?)", [String(target_name).trim()]);
+        if (tr) targetUid = tr.user_id;
+      }
+      if (!targetUid || targetUid === uid) return err("Valid target required.", 400);
+      const targetRow = await getPlayerSheet(db, targetUid);
+      if (!targetRow) return err("Target not found.", 404);
+      if (targetRow.location !== row.location) return err("Target is not here.", 400);
+      const c1 = await dbGet(db, "SELECT 1 FROM combat_state WHERE user_id=?", [uid]);
+      const c2 = await dbGet(db, "SELECT 1 FROM combat_state WHERE user_id=?", [targetUid]);
+      if (c1 || c2) return err("One of you is in PvE combat.", 400);
+      const rel = await getRelationship(db, dbGet, uid, targetUid);
+      const isParty = rel?.state === "party";
+      if (isParty) {
+        await triggerBetrayalCascade(db, dbGet, dbRun, uid, targetUid, (u, f, v) => setFlag(db, u, f, v));
+      } else {
+        await setRelationship(db, dbRun, uid, targetUid, "hostile", rel?.trust_points || 0);
+      }
+      const strMod = statMod(row.strength);
+      const dmg = Math.max(1, rollDie(6) + strMod);
+      const newHp = Math.max(0, (targetRow.current_hp || maxPlayerHp(targetRow.constitution)) - dmg);
+      await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [newHp, targetUid]);
+      if (!isParty) await tickAlignment(db, uid, -10, 0, (row.instinct || "").toLowerCase());
+      const targetName = targetRow.name || "Unknown";
+      if (newHp <= 0) {
+        const now = Math.floor(Date.now() / 1000);
+        await dbRun(db, "INSERT INTO pvp_state (user_id, downed_until, downed_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET downed_until=excluded.downed_until, downed_by=excluded.downed_by, updated_at=excluded.updated_at", [targetUid, now + 60, uid, now, now]);
+        return json({ result: "downed", message: `*You strike ${targetName}.*\n\nThey fall. **60 seconds** until death.`, target_hp: 0, target_downed: true });
+      }
+      return json({ result: "hit", message: `*You strike ${targetName} for **${dmg}** damage.*`, target_hp: newHp });
     }
 
     // ── POST: Rest ──
