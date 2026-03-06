@@ -1697,6 +1697,7 @@ const DANGEROUS_LOCATIONS = new Set([
 // ── Node map positions (fixed layout) ────────────────────────────
 const NODE_POSITIONS = {
   market_square:      { x: 150, y: 150 },
+  wardens_post:       { x: 150, y: 125 },
   north_road:         { x: 150, y: 100 },
   south_road:         { x: 150, y: 200 },
   east_road:          { x: 220, y: 150 },
@@ -1739,6 +1740,7 @@ const LOCATION_NAMES = {
   ashen_sanctuary: "The Ashen Sanctuary",
   alley: "Narrow Alley",
   naxirs_crucible: "Naxir's Crucible",
+  wardens_post: "The Warden's Post",
   sewer_upper: "Upper Sewer — The Ashway",
   sewer_den: "The Cinder Den",
   sewer_channel: "The Black Channel",
@@ -1803,6 +1805,7 @@ const NPC_NAMES = {
   alchemist:   'Thalara',
   curator:     'Seris Vantrel',
   othorion:    'Othorion Naxir',
+  warden:      'Grommash Nazgrel',
 };
 
 const TOPIC_LABELS = {
@@ -1827,6 +1830,8 @@ const TOPIC_LABELS = {
   person_lost:'The One You Lost',
   shop:'The Shop', items:'Your Collection', artifacts:'The Artifacts',
   furnace:'The Furnace', pip:'Pip', research:'Your Research', escape:'Escape',
+  justice:'Justice', arrest:'Arrest', portal:'The Portal',
+  grommash:'Grommash',
   atelier:'The Atelier',
   yourself:'Yourself', me:'Yourself',
 };
@@ -1836,6 +1841,7 @@ const TOPIC_GATES = {
     hearth: null, dog: null, ledger: null, bar: null, walls: null, city: null,
     board: 'has_seen_market_square', sanctuary: 'has_seen_market_square', sewer: 'has_seen_market_square',
     cistern: 'seen_sewer_wall_markings', crawlers: 'seen_sewer_wall_markings', dask: 'seen_sewer_wall_markings',
+    grommash: null,
   },
   weaponsmith: {
     forge: null,
@@ -1861,12 +1867,13 @@ const TOPIC_GATES = {
     home: null,
     caves: null,
     mountain: null,
+    grommash: null,
   },
   armorsmith: {
     forge: null, wall_marks: null, armor_stock: null, kelvaris: null, caelir: null, thalara: null, seris: null, city: null,
     dask: 'seen_sewer_wall_markings', board: 'has_seen_market_square', sanctuary: 'has_seen_market_square',
     sewer: 'has_seen_market_square', cistern: 'seen_sewer_wall_markings', crawlers: 'seen_sewer_wall_markings',
-    yourself: null,
+    yourself: null, grommash: null,
   },
   alchemist: {
     city: null, work: null, remedies: null,
@@ -1874,6 +1881,7 @@ const TOPIC_GATES = {
     past: null, yourself: null, person_lost: null,
     sanctuary: 'has_seen_market_square', board: 'has_seen_market_square', dask: 'seen_sewer_wall_markings',
     sewer: 'has_seen_market_square', cistern: 'seen_sewer_wall_markings', crawlers: 'seen_sewer_wall_markings',
+    grommash: null,
   },
   curator: {
     city: null, shop: null, items: null, artifacts: null,
@@ -1881,11 +1889,16 @@ const TOPIC_GATES = {
     past: null, yourself: null,
     sanctuary: 'has_seen_market_square', board: 'has_seen_market_square', dask: 'seen_sewer_wall_markings',
     sewer: 'has_seen_market_square', cistern: 'seen_sewer_wall_markings', crawlers: 'seen_sewer_wall_markings',
+    grommash: null,
   },
   othorion: {
     city: null, furnace: null, seris: null, artifacts: null, pip: null,
     sewers: null, research: null, escape: null,
-    kelvaris: null, thalara: null, veyra: null, caelir: null,
+    kelvaris: null, thalara: null, veyra: null, caelir: null, grommash: null,
+  },
+  warden: {
+    city: null, justice: null, sewer: null, seris: null, othorion: null, thalara: null,
+    ledger: null, arrest: null, portal: 'seris_arc3_complete',
   },
 };
 

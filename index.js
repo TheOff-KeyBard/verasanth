@@ -23,6 +23,7 @@ const PROGRESSION_FLAGS = [
   "seen_sewer_wall_markings", "seen_sewer_graffiti", "seen_dask_roster", "seen_tier2_graffiti",
   "seen_rusted_pipe", "seen_foundation_dask", "warned_mid_sewer", "has_seen_market_square",
   "found_foundation_stone", "has_room", "has_seen_awakening", "othorion_trust",
+  "seris_arc3_complete",
 ];
 
 const NOTICEBOARD_NPC_NOTICES = {
@@ -831,6 +832,16 @@ if (path === "/api/admin/command" && method === "POST") {
         seenSewerWallMarkingsOthorion = await getFlag(db, uid, "seen_sewer_wall_markings");
         foundFoundationStone = await getFlag(db, uid, "found_foundation_stone");
       }
+      let grommashVisits = 0;
+      let grommashArc1Complete = 0;
+      let grommashArc2Complete = 0;
+      let serisArc3CompleteWarden = 0;
+      if (npc === "warden") {
+        grommashVisits = await getFlag(db, uid, "grommash_visits");
+        grommashArc1Complete = await getFlag(db, uid, "grommash_arc1_complete");
+        grommashArc2Complete = await getFlag(db, uid, "grommash_arc2_complete");
+        serisArc3CompleteWarden = await getFlag(db, uid, "seris_arc3_complete");
+      }
       const hp = await getPlayerHp(db, uid, row);
 
       const playerContext = {
@@ -888,6 +899,13 @@ if (path === "/api/admin/command" && method === "POST") {
         playerContext.deep_sewer = !!foundFoundationStone;
         playerContext.race = row.race || "";
       }
+      if (npc === "warden") {
+        playerContext.grommash_visits = grommashVisits;
+        playerContext.grommash_arc1_complete = grommashArc1Complete;
+        playerContext.grommash_arc2_complete = grommashArc2Complete;
+        playerContext.seris_arc3_complete = serisArc3CompleteWarden;
+        playerContext.strength = row.strength;
+      }
 
       const response = await getNPCResponse(env, npc, topic, playerContext);
 
@@ -912,6 +930,9 @@ if (path === "/api/admin/command" && method === "POST") {
       }
       if (npc === "othorion") {
         await setFlag(db, uid, "othorion_visits", othorionVisits + 1);
+      }
+      if (npc === "warden") {
+        await setFlag(db, uid, "grommash_visits", grommashVisits + 1);
       }
 
       return json({ response });
