@@ -773,6 +773,16 @@ if (path === "/api/admin/command" && method === "POST") {
       const hasSeenMarket  = await getFlag(db, uid, "has_seen_market_square");
       const warnedMidSewer  = await getFlag(db, uid, "warned_mid_sewer");
       const hasSeenAwakening = await getFlag(db, uid, "has_seen_awakening", 0);
+      let caelirVisits = 0;
+      let caelirDatesRevealed = 0;
+      let caelirBladeRevealed = 0;
+      let seenSewerWallMarkings = 0;
+      if (npc === "weaponsmith") {
+        caelirVisits = await getFlag(db, uid, "caelir_visits");
+        caelirDatesRevealed = await getFlag(db, uid, "caelir_dates_revealed");
+        caelirBladeRevealed = await getFlag(db, uid, "caelir_blade_revealed");
+        seenSewerWallMarkings = await getFlag(db, uid, "seen_sewer_wall_markings");
+      }
       const hp = await getPlayerHp(db, uid, row);
 
       const playerContext = {
@@ -791,12 +801,22 @@ if (path === "/api/admin/command" && method === "POST") {
         max_hp: hp.max,
         just_respawned: !!justRespawned,
       };
+      if (npc === "weaponsmith") {
+        playerContext.caelir_visits = caelirVisits;
+        playerContext.caelir_dates_revealed = caelirDatesRevealed;
+        playerContext.caelir_blade_revealed = caelirBladeRevealed;
+        playerContext.seen_sewer_wall_markings = seenSewerWallMarkings;
+        playerContext.race = row.race || "";
+      }
 
       const response = await getNPCResponse(env, npc, topic, playerContext);
 
       if (npc === "bartender") {
         await setFlag(db, uid, "kelvaris_visits", kelvarisVisits + 1);
         if (justRespawned) await setFlag(db, uid, "just_respawned", 0);
+      }
+      if (npc === "weaponsmith") {
+        await setFlag(db, uid, "caelir_visits", caelirVisits + 1);
       }
 
       return json({ response });
