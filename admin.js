@@ -370,6 +370,124 @@ const registry = {
     },
   },
 
+  listChatMessages: {
+    name: "listChatMessages",
+    description: "List recent chat messages for moderation",
+    paramSpec: [
+      { name: "channel", type: "string", optional: true },
+      { name: "limit", type: "number", optional: true, default: 100 },
+      { name: "includeDeleted", type: "number", optional: true, default: 0 },
+    ],
+    handler: async (db, env, params) => {
+      const channel = params.channel != null ? String(params.channel).trim() : "";
+      const limit = Math.min(500, Math.max(1, Number(params.limit) || 100));
+      const includeDeleted = Number(params.includeDeleted) ? 1 : 0;
+      let sql = `SELECT id, channel, location, user_id, player_name, message, created_at, deleted FROM chat_messages WHERE 1=1`;
+      const bind = [];
+      if (channel === "global" || channel === "local") {
+        sql += ` AND channel = ?`;
+        bind.push(channel);
+      }
+      if (!includeDeleted) {
+        sql += ` AND deleted = 0`;
+      }
+      sql += ` ORDER BY created_at DESC LIMIT ?`;
+      bind.push(limit);
+      const rows = await dbAll(db, sql, bind);
+      return { success: true, data: rows, message: `${rows.length} messages.` };
+    },
+  },
+
+  deleteChatMessage: {
+    name: "deleteChatMessage",
+    description: "Soft-delete a chat message",
+    paramSpec: [{ name: "messageID", type: "number" }],
+    handler: async (db, env, params) => {
+      const id = Number(params.messageID);
+      if (!Number.isInteger(id) || id < 1) return { success: false, error: "messageID must be a positive integer" };
+      await dbRun(db, `UPDATE chat_messages SET deleted = 1 WHERE id = ?`, [id]);
+      return { success: true, message: `Message ${id} deleted.` };
+    },
+  },
+
+  banFromChat: {
+    name: "banFromChat",
+    description: "Ban a player from chat (global, local, whisper, noticeboard)",
+    paramSpec: [{ name: "playerID", type: "playerId" }],
+    handler: async (db, env, params) => {
+      const setFlagFn = env.setFlag;
+      if (typeof setFlagFn !== "function") return { success: false, error: "setFlag not available" };
+      await setFlagFn(params.playerID, "chat_banned", 1);
+      return { success: true, message: `Player ${params.playerID} banned from chat.` };
+    },
+  },
+
+  unbanFromChat: {
+    name: "unbanFromChat",
+    description: "Unban a player from chat",
+    paramSpec: [{ name: "playerID", type: "playerId" }],
+    handler: async (db, env, params) => {
+      const setFlagFn = env.setFlag;
+      if (typeof setFlagFn !== "function") return { success: false, error: "setFlag not available" };
+      await setFlagFn(params.playerID, "chat_banned", 0);
+      return { success: true, message: `Player ${params.playerID} unbanned from chat.` };
+    },
+  },
+
+  listNotices: {
+    name: "listNotices",
+    description: "List noticeboard posts (DB only; optional location filter)",
+    paramSpec: [{ name: "location", type: "string", optional: true }],
+    handler: async (db, env, params) => {
+      const location = params.location != null ? String(params.location).trim() : "";
+      let sql = `SELECT id, location, user_id, player_name, title, message, pinned, deleted, created_at FROM noticeboards WHERE 1=1`;
+      const bind = [];
+      if (location) {
+        sql += ` AND location = ?`;
+        bind.push(location);
+      }
+      sql += ` ORDER BY created_at DESC LIMIT 50`;
+      const rows = await dbAll(db, sql, bind);
+      return { success: true, data: rows, message: `${rows.length} notices.` };
+    },
+  },
+
+  pinNotice: {
+    name: "pinNotice",
+    description: "Pin a noticeboard post",
+    paramSpec: [{ name: "noticeID", type: "number" }],
+    handler: async (db, env, params) => {
+      const id = Number(params.noticeID);
+      if (!Number.isInteger(id) || id < 1) return { success: false, error: "noticeID must be a positive integer" };
+      await dbRun(db, `UPDATE noticeboards SET pinned = 1 WHERE id = ?`, [id]);
+      return { success: true, message: `Notice ${id} pinned.` };
+    },
+  },
+
+  unpinNotice: {
+    name: "unpinNotice",
+    description: "Unpin a noticeboard post",
+    paramSpec: [{ name: "noticeID", type: "number" }],
+    handler: async (db, env, params) => {
+      const id = Number(params.noticeID);
+      if (!Number.isInteger(id) || id < 1) return { success: false, error: "noticeID must be a positive integer" };
+      await dbRun(db, `UPDATE noticeboards SET pinned = 0 WHERE id = ?`, [id]);
+      return { success: true, message: `Notice ${id} unpinned.` };
+    },
+  },
+
+  deleteNotice: {
+    name: "deleteNotice",
+    description: "Admin soft-delete a noticeboard post",
+    paramSpec: [{ name: "noticeID", type: "number" }],
+    handler: async (db, env, params) => {
+      const id = Number(params.noticeID);
+      if (!Number.isInteger(id) || id < 1) return { success: false, error: "noticeID must be a positive integer" };
+      await dbRun(db, `UPDATE noticeboards SET deleted = 1 WHERE id = ?`, [id]);
+      return { success: true, message: `Notice ${id} deleted.` };
+    },
+  },
+
   listCommands: {
     name: "listCommands",
     description: "List all admin commands and their paramSpec",

@@ -876,6 +876,7 @@ if (path === "/api/admin/command" && method === "POST") {
       if (channel !== "global" && channel !== "local") return err("Invalid channel.", 400);
       const row = await getPlayerSheet(db, uid);
       if (!row) return err("No character.", 404);
+      if (await getFlag(db, uid, "chat_banned")) return err("You cannot use chat.", 403);
       const playerName = (row.name || "Someone").trim() || "Someone";
       const message = sanitizeChatMessage(rawMessage);
       if (!message) return err("Message is required.", 400);
@@ -926,6 +927,7 @@ if (path === "/api/admin/command" && method === "POST") {
       if (!message) return err("Message is required.", 400);
       const row = await getPlayerSheet(db, uid);
       if (!row) return err("No character.", 404);
+      if (await getFlag(db, uid, "chat_banned")) return err("You cannot use chat.", 403);
       const fromName = (row.name || "Someone").trim() || "Someone";
 
       const target = await dbGet(db,
@@ -1028,6 +1030,7 @@ if (path === "/api/admin/command" && method === "POST") {
       if (message.length > 500) return err("Message too long (max 500).", 400);
       const row = await getPlayerSheet(db, uid);
       if (!row) return err("No character.", 404);
+      if (await getFlag(db, uid, "chat_banned")) return err("You cannot use chat.", 403);
       const ash = Number(row.ash_marks ?? 0);
       if (ash < 5) return err("Not enough Ash Marks (need 5).", 400);
       const existing = await dbGet(db, `SELECT id FROM noticeboards WHERE location = ? AND user_id = ? AND deleted = 0`, [location, uid]);
@@ -1039,7 +1042,7 @@ if (path === "/api/admin/command" && method === "POST") {
         `INSERT INTO noticeboards (user_id, location, player_name, title, message, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [uid, location, playerName, title, message, now, expiresAt]
       );
-      await dbRun(db, `UPDATE players SET ash_marks = ? WHERE id = ?`, [ash - 5, uid]);
+      await dbRun(db, `UPDATE characters SET ash_marks = ? WHERE user_id = ?`, [ash - 5, uid]);
       return json({ ok: true });
     }
 

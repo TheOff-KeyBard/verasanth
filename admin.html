@@ -219,6 +219,7 @@
       <button type="button" data-tab="inventory">Inventory</button>
       <button type="button" data-tab="world">World</button>
       <button type="button" data-tab="flags">Flags</button>
+      <button type="button" data-tab="moderation">Chat Moderation</button>
       <button type="button" data-tab="danger">Danger Zone</button>
     </nav>
 
@@ -370,6 +371,75 @@
       <div class="block">
         <h4>Current flags</h4>
         <p id="flags-list">Look up a player first.</p>
+      </div>
+    </div>
+
+    <div id="tab-moderation" class="tab-panel">
+      <h2>Recent chat</h2>
+      <div class="form-row">
+        <label>Channel</label>
+        <select id="mod-channel">
+          <option value="all">All</option>
+          <option value="global">Global</option>
+          <option value="local">Local</option>
+        </select>
+        <label style="margin-left:12px;"><input type="checkbox" id="mod-include-deleted" /> Include deleted</label>
+        <button type="button" class="action" id="mod-chat-refresh">Refresh</button>
+      </div>
+      <div class="block" style="margin-top:12px; overflow-x:auto;">
+        <h4>Messages</h4>
+        <table id="mod-chat-table" style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border); text-align:left;">
+              <th style="padding:4px 6px;">ID</th>
+              <th style="padding:4px 6px;">Channel</th>
+              <th style="padding:4px 6px;">Location</th>
+              <th style="padding:4px 6px;">Player</th>
+              <th style="padding:4px 6px;">Message</th>
+              <th style="padding:4px 6px;">Time</th>
+              <th style="padding:4px 6px;">Deleted</th>
+              <th style="padding:4px 6px;"></th>
+            </tr>
+          </thead>
+          <tbody id="mod-chat-tbody"></tbody>
+        </table>
+      </div>
+      <h2 style="margin-top:20px;">Ban from chat</h2>
+      <div class="form-row">
+        <label>Player ID</label>
+        <input type="text" id="mod-player-id" placeholder="player ID" style="width:100px" />
+        <button type="button" class="copy-btn" id="mod-use-current-player">Use current player</button>
+        <button type="button" class="action" id="mod-ban-btn">Ban from chat</button>
+        <button type="button" class="action" id="mod-unban-btn">Unban from chat</button>
+      </div>
+      <h2 style="margin-top:20px;">Noticeboards</h2>
+      <div class="form-row">
+        <label>Location</label>
+        <select id="mod-notice-location">
+          <option value="">All locations</option>
+          <option value="tavern">tavern</option>
+          <option value="market_square">market_square</option>
+          <option value="sewer_entrance">sewer_entrance</option>
+          <option value="sewer_upper">sewer_upper</option>
+        </select>
+        <button type="button" class="action" id="mod-notices-refresh">Refresh</button>
+      </div>
+      <div class="block" style="margin-top:12px; overflow-x:auto;">
+        <h4>Notices</h4>
+        <table id="mod-notices-table" style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border); text-align:left;">
+              <th style="padding:4px 6px;">ID</th>
+              <th style="padding:4px 6px;">Location</th>
+              <th style="padding:4px 6px;">Player</th>
+              <th style="padding:4px 6px;">Title</th>
+              <th style="padding:4px 6px;">Message</th>
+              <th style="padding:4px 6px;">Pinned</th>
+              <th style="padding:4px 6px;"></th>
+            </tr>
+          </thead>
+          <tbody id="mod-notices-tbody"></tbody>
+        </table>
       </div>
     </div>
 
@@ -698,6 +768,98 @@
     currentPlayerId = null;
     lastLookup = null;
     document.getElementById("current-player-id").textContent = "—";
+  });
+
+  // ── Chat Moderation ──
+  document.getElementById("mod-use-current-player").addEventListener("click", () => {
+    if (currentPlayerId != null) {
+      document.getElementById("mod-player-id").value = String(currentPlayerId);
+      setResult("Player ID set.", false);
+    } else {
+      setResult("Look up a player first.", true);
+    }
+  });
+  document.getElementById("mod-chat-refresh").addEventListener("click", async () => {
+    const channel = document.getElementById("mod-channel").value;
+    const includeDeleted = document.getElementById("mod-include-deleted").checked ? 1 : 0;
+    const data = await runAdmin("listChatMessages", {
+      channel: channel === "all" ? "" : channel,
+      limit: 100,
+      includeDeleted: includeDeleted,
+    });
+    if (!data.success || !Array.isArray(data.data)) return;
+    const tbody = document.getElementById("mod-chat-tbody");
+    tbody.innerHTML = "";
+    data.data.forEach((row) => {
+      const tr = document.createElement("tr");
+      tr.style.borderBottom = "1px solid var(--border)";
+      const msgShort = (row.message || "").length > 60 ? (row.message || "").slice(0, 57) + "…" : (row.message || "");
+      const timeStr = row.created_at ? new Date(row.created_at).toLocaleString() : "—";
+      const delBtn = row.deleted ? "" : '<button type="button" class="action danger mod-del-msg" style="padding:2px 8px; font-size:0.8rem;" data-id="' + escapeHtml(String(row.id)) + '">Delete</button>';
+      tr.innerHTML = "<td style=\"padding:4px 6px;\">" + escapeHtml(String(row.id)) + "</td><td style=\"padding:4px 6px;\">" + escapeHtml(String(row.channel || "")) + "</td><td style=\"padding:4px 6px;\">" + escapeHtml(String(row.location || "")) + "</td><td style=\"padding:4px 6px;\">" + escapeHtml(String(row.player_name || "") + " (" + row.user_id + ")") + "</td><td style=\"padding:4px 6px; max-width:180px; overflow:hidden; text-overflow:ellipsis;\">" + escapeHtml(msgShort) + "</td><td style=\"padding:4px 6px;\">" + escapeHtml(timeStr) + "</td><td style=\"padding:4px 6px;\">" + (row.deleted ? "Yes" : "No") + "</td><td style=\"padding:4px 6px;\">" + delBtn + "</td>";
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll(".mod-del-msg").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-id");
+        if (!id) return;
+        const result = await runAdmin("deleteChatMessage", { messageID: parseInt(id, 10) });
+        if (result.success) document.getElementById("mod-chat-refresh").click();
+      });
+    });
+  });
+  document.getElementById("mod-ban-btn").addEventListener("click", async () => {
+    const raw = document.getElementById("mod-player-id").value.trim();
+    const playerID = parseInt(raw, 10);
+    if (!raw || !Number.isInteger(playerID) || playerID < 1) {
+      setResult("Enter a valid player ID.", true);
+      return;
+    }
+    await runAdmin("banFromChat", { playerID: playerID });
+  });
+  document.getElementById("mod-unban-btn").addEventListener("click", async () => {
+    const raw = document.getElementById("mod-player-id").value.trim();
+    const playerID = parseInt(raw, 10);
+    if (!raw || !Number.isInteger(playerID) || playerID < 1) {
+      setResult("Enter a valid player ID.", true);
+      return;
+    }
+    await runAdmin("unbanFromChat", { playerID: playerID });
+  });
+  document.getElementById("mod-notices-refresh").addEventListener("click", async () => {
+    const location = document.getElementById("mod-notice-location").value.trim();
+    const data = await runAdmin("listNotices", location ? { location: location } : {});
+    if (!data.success || !Array.isArray(data.data)) return;
+    const tbody = document.getElementById("mod-notices-tbody");
+    tbody.innerHTML = "";
+    data.data.forEach((row) => {
+      const tr = document.createElement("tr");
+      tr.style.borderBottom = "1px solid var(--border)";
+      const msgShort = (row.message || "").length > 50 ? (row.message || "").slice(0, 47) + "…" : (row.message || "");
+      const timeStr = row.created_at ? new Date(row.created_at).toLocaleString() : "—";
+      const playerCell = escapeHtml(String(row.player_name || "") + " (" + row.user_id + ")");
+      const actions = row.deleted ? "" : '<button type="button" class="action mod-pin" style="padding:2px 6px; font-size:0.8rem;" data-id="' + row.id + '">Pin</button> <button type="button" class="action mod-unpin" style="padding:2px 6px; font-size:0.8rem;" data-id="' + row.id + '">Unpin</button> <button type="button" class="action danger mod-del-notice" style="padding:2px 6px; font-size:0.8rem;" data-id="' + row.id + '">Delete</button>';
+      tr.innerHTML = "<td style=\"padding:4px 6px;\">" + row.id + "</td><td style=\"padding:4px 6px;\">" + escapeHtml(String(row.location || "")) + "</td><td style=\"padding:4px 6px;\">" + playerCell + "</td><td style=\"padding:4px 6px;\">" + escapeHtml(String((row.title || "").slice(0, 30))) + "</td><td style=\"padding:4px 6px; max-width:160px; overflow:hidden; text-overflow:ellipsis;\">" + escapeHtml(msgShort) + "</td><td style=\"padding:4px 6px;\">" + (row.pinned ? "Yes" : "No") + "</td><td style=\"padding:4px 6px;\">" + actions + "</td>";
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll(".mod-pin").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const result = await runAdmin("pinNotice", { noticeID: parseInt(btn.getAttribute("data-id"), 10) });
+        if (result.success) document.getElementById("mod-notices-refresh").click();
+      });
+    });
+    tbody.querySelectorAll(".mod-unpin").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const result = await runAdmin("unpinNotice", { noticeID: parseInt(btn.getAttribute("data-id"), 10) });
+        if (result.success) document.getElementById("mod-notices-refresh").click();
+      });
+    });
+    tbody.querySelectorAll(".mod-del-notice").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const result = await runAdmin("deleteNotice", { noticeID: parseInt(btn.getAttribute("data-id"), 10) });
+        if (result.success) document.getElementById("mod-notices-refresh").click();
+      });
+    });
   });
 })();
   </script>
