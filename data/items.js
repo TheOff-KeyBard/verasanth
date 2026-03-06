@@ -13,6 +13,7 @@ export const DUNGEON_TIERS = {
   market_square: 0, tavern: 0, atelier: 0,
   mended_hide: 0, hollow_jar: 0, still_scale: 0,
   naxirs_crucible: 0, wardens_post: 0,
+  cinder_cells_entrance: 0, cinder_cells_hall: 0, cinder_cells_block: 0, cinder_cells_pit: 0,
   north_road: 0, south_road: 0, east_road: 0, west_road: 0,
   alley: 0, ashen_sanctuary: 0, backroom: 0,
   // Sewer Level 1

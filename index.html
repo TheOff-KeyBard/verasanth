@@ -1852,6 +1852,10 @@ const NODE_POSITIONS = {
   sewer_deep_threshold: { x: 150, y: 470 },
   sewer_deep_vault:   { x: 80,  y: 510 },
   sewer_deep_foundation: { x: 150, y: 510 },
+  cinder_cells_entrance: { x: 220, y: 170 },
+  cinder_cells_hall:     { x: 220, y: 200 },
+  cinder_cells_block:    { x: 220, y: 230 },
+  cinder_cells_pit:      { x: 220, y: 260 },
 };
 
 // ── Location display names (for character sheet "Last seen") ───────
@@ -1882,6 +1886,10 @@ const LOCATION_NAMES = {
   sewer_deep_threshold: "The Deep Threshold",
   sewer_deep_vault: "The Sealed Vault",
   sewer_deep_foundation: "The Foundation",
+  cinder_cells_entrance: "The Descent — Cinder Cells Entrance",
+  cinder_cells_hall: "The Entrance Hall",
+  cinder_cells_block: "The Cell Block",
+  cinder_cells_pit: "The Holding Pit",
 };
 function getLocationName(id) { return LOCATION_NAMES[id] || id || "—"; }
 
@@ -1963,6 +1971,7 @@ const TOPIC_LABELS = {
   shop:'The Shop', items:'Your Collection', artifacts:'The Artifacts',
   furnace:'The Furnace', pip:'Pip', research:'Your Research', escape:'Escape',
   justice:'Justice', arrest:'Arrest', portal:'The Portal',
+  cells:'The Cinder Cells',
   grommash:'Grommash',
   atelier:'The Atelier',
   yourself:'Yourself', me:'Yourself',
@@ -2030,7 +2039,7 @@ const TOPIC_GATES = {
   },
   warden: {
     city: null, justice: null, sewer: null, seris: null, othorion: null, thalara: null,
-    ledger: null, arrest: null, portal: 'seris_arc3_complete',
+    ledger: null, arrest: null, portal: 'seris_arc3_complete', cells: null,
   },
 };
 

@@ -15,7 +15,7 @@ import { SERIS_NOTICES, FLAVOR_NOTICES, ANONYMOUS_NOTICES, IMPOSSIBLE_TEMPLATES,
 import { SERIS_INTEREST_ITEMS, getSellValue, displayNameToKey, TIER_BASE_VALUES } from "./data/seris.js";
 import { VENDOR_STOCK, VENDOR_NPCS, CAELIR_STOCK, VEYRA_STOCK } from "./data/vendor_stock.js";
 import { getNPCResponse, boardNPCReaction } from "./services/npc_dialogue.js";
-import { statMod, rollDie, maxPlayerHp, randomEnemy, playerAttack, enemyAttack } from "./services/combat.js";
+import { statMod, rollDie, maxPlayerHp, randomEnemy, playerAttack, enemyAttack, tickStatusEffects, resolveEnemyTrait, getTraitDamageModifier, getStatusEffectOnHit, getTraitOnHitEffect } from "./services/combat.js";
 import { generateItem } from "./services/item_generator.js";
 import { getRelationship, setRelationship, getPartyMembers, triggerBetrayalCascade } from "./services/pvp.js";
 
@@ -954,8 +954,11 @@ if (path === "/api/admin/command" && method === "POST") {
         }
       }
 
-      const npcsHere = Object.entries(NPC_LOCATIONS)
+      let npcsHere = Object.entries(NPC_LOCATIONS)
         .filter(([,l]) => l === loc).map(([id]) => id);
+      if (loc === "cinder_cells_hall" && (row.crime_heat ?? 0) >= 4 && !npcsHere.includes("warden")) {
+        npcsHere = [...npcsHere, "warden"];
+      }
 
       const combatRow = await dbGet(db, "SELECT state_json FROM combat_state WHERE user_id=?", [uid]);
       const inCombat  = !!combatRow;
@@ -965,6 +968,10 @@ if (path === "/api/admin/command" && method === "POST") {
       if (loc === "market_square") {
         exits = [...exits, "down"];
         exit_map.down = "sewer_entrance";
+      }
+      if (loc === "cinder_cells_block" && (row.crime_heat ?? 0) < 11) {
+        exits = exits.filter(e => e !== "deeper");
+        delete exit_map.deeper;
       }
 
       const deathDrops = await getUnclaimedDropsAtLocation(db, loc);
@@ -995,6 +1002,9 @@ if (path === "/api/admin/command" && method === "POST") {
       const room = WORLD[row.location];
       let dest = room?.exits?.[direction];
       if (row.location === "market_square" && direction === "down") dest = "sewer_entrance";
+      if (row.location === "cinder_cells_block" && direction === "deeper" && (row.crime_heat ?? 0) < 11) {
+        dest = null;
+      }
       if (!dest) return err(`You can't go ${direction} from here.`);
       if (!WORLD[dest]) return err("That path leads nowhere.");
 
@@ -1039,8 +1049,15 @@ if (path === "/api/admin/command" && method === "POST") {
         destExits = [...destExits, "down"];
         destExitMap.down = "sewer_entrance";
       }
-      const npcsHere = Object.entries(NPC_LOCATIONS)
+      if (dest === "cinder_cells_block" && (row.crime_heat ?? 0) < 11) {
+        destExits = destExits.filter(e => e !== "deeper");
+        delete destExitMap.deeper;
+      }
+      let npcsHere = Object.entries(NPC_LOCATIONS)
         .filter(([,l]) => l === dest).map(([id]) => id);
+      if (dest === "cinder_cells_hall" && (row.crime_heat ?? 0) >= 4 && !npcsHere.includes("warden")) {
+        npcsHere = [...npcsHere, "warden"];
+      }
 
       const deathDrops = await getUnclaimedDropsAtLocation(db, dest);
       if (deathDrops.length > 0) {
@@ -1153,7 +1170,9 @@ if (path === "/api/admin/command" && method === "POST") {
       if (!row) return err("No character.", 404);
 
       const npcLoc = NPC_LOCATIONS[npc];
-      if (!npcLoc || npcLoc !== row.location) return err(`${npc} is not here.`);
+      const wardenAtCells = npc === "warden" && row.location === "cinder_cells_hall" && (row.crime_heat ?? 0) >= 4;
+      if (!npcLoc && !wardenAtCells) return err(`${npc} is not here.`);
+      if (!wardenAtCells && npcLoc !== row.location) return err(`${npc} is not here.`);
 
       // Build player context for NPCs (Seris/Thalara + Kelvaris stateful intro)
       const itemsSold   = await getFlag(db, uid, "curator_items_sold");
@@ -1661,11 +1680,11 @@ if (path === "/api/combat/state" && method === "GET") {
       if (hp.current <= 0) return err("You can't fight in this condition.");
 
       let enemy;
-      // Optional: set player_flags.force_combat_test=1 for deterministic cinder_rat spawn (playtest).
+      // Optional: set player_flags.force_combat_test=1 for deterministic gutter_rat spawn (playtest).
       const forceCombatTest = await getFlag(db, uid, "force_combat_test");
       if (forceCombatTest) {
-        const cinderRat = COMBAT_DATA.enemies.cinder_rat;
-        enemy = { ...cinderRat, id: cinderRat.id };
+        const gutterRat = COMBAT_DATA.enemies.gutter_rat;
+        enemy = { ...gutterRat, id: gutterRat.id };
       } else {
         enemy = randomEnemy(row.location);
       }
@@ -1682,8 +1701,10 @@ if (path === "/api/combat/state" && method === "GET") {
         enemy_id: enemy.id, enemy_name: enemy.name,
         enemy_hp: enemy.hp, enemy_hp_max: enemy.hp,
         player_hp: hp.current, player_hp_max: hp.max,
-        ability_used: false, turn: 1, location: row.location,
+        ability_used: false, turn: 1, round: 1, location: row.location,
         weapon_die: weaponDie, armor_reduction: armorReduction, shield_bonus: shieldBonus,
+        enemy_staggered: false, status_effects: [], trait_state: {},
+        armor_break_effects: [],
       };
       await dbRun(db, "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
         [uid, JSON.stringify(state)]);
@@ -1703,6 +1724,8 @@ if (path === "/api/combat/state" && method === "GET") {
       const enemy    = COMBAT_DATA.enemies[state.enemy_id];
       const stats    = { strength: row.strength, dexterity: row.dexterity, constitution: row.constitution };
 
+      if (!enemy) return err("Combat state invalid. Flee to reset.");
+
       if (action === "flee") {
         await dbRun(db, "DELETE FROM combat_state WHERE user_id=?", [uid]);
         await updateAlignment(db, uid, 0, -1, instinct);
@@ -1713,21 +1736,86 @@ if (path === "/api/combat/state" && method === "GET") {
 
       const useAbility = action === "ability";
       const equipment = { weaponDie: state.weapon_die ?? 6 };
-      const attack     = playerAttack(stats, enemy, useAbility, instinct, equipment);
-      let rawEnemyDmg  = action === "ability" && attack.skipRetaliation ? 0 : enemyAttack(enemy, stats, state.shield_bonus ?? 0);
-      rawEnemyDmg      = Math.floor(rawEnemyDmg * (attack.damageReduction ? (1 - attack.damageReduction) : 1));
-      const enemyDmg   = Math.max(0, rawEnemyDmg - (state.armor_reduction ?? 0));
 
+      // Ensure new state fields exist (backwards compat)
+      state.status_effects = state.status_effects ?? [];
+      state.trait_state = state.trait_state ?? {};
+      state.armor_break_effects = state.armor_break_effects ?? [];
+      state.round = state.round ?? state.turn ?? 1;
+
+      // 1. Tick status effects (bleed/poison/fire_touch)
+      const statusDmg = tickStatusEffects(state);
+      let playerHp = state.player_hp - statusDmg;
+
+      // 2. Tick armor_break (decay duration)
+      state.armor_break_effects = state.armor_break_effects
+        .map((e) => ({ ...e, duration: e.duration - 1 }))
+        .filter((e) => e.duration > 0);
+
+      const armorBreakReduction = state.armor_break_effects.reduce((s, e) => s + (e.defense_reduction ?? 0), 0);
+      const effectiveArmor = Math.max(0, (state.armor_reduction ?? 0) - armorBreakReduction);
+
+      // 3. Player attack
+      const attack = playerAttack(stats, enemy, useAbility, instinct, equipment);
       if (useAbility) state.ability_used = true;
 
-      let playerHp = state.player_hp;
-      let enemyHp  = state.enemy_hp;
+      let enemyHp = state.enemy_hp;
 
       if (attack.heal) {
         playerHp = Math.min(playerHp + attack.heal, state.player_hp_max);
       } else {
-        enemyHp  = Math.max(0, enemyHp - attack.dmg);
+        const guardMod = getTraitDamageModifier(enemy, state);
+        const playerDmg = Math.floor(attack.dmg * guardMod);
+        enemyHp = Math.max(0, enemyHp - playerDmg);
+        if (attack.staggered) state.enemy_staggered = true;
       }
+
+      // 4. Enemy retaliation (skip if staggered or skipRetaliation)
+      let enemyDmg = 0;
+      let enemyHit = false;
+      let enemySkippedStagger = false;
+      if (!(action === "ability" && attack.skipRetaliation)) {
+        if (state.enemy_staggered) {
+          state.enemy_staggered = false;
+          enemySkippedStagger = true;
+        } else {
+          const traitResult = resolveEnemyTrait(enemy, state);
+          let attackResult;
+          if (traitResult?.skipAction) {
+            attackResult = { dmg: 0, hit: false };
+          } else if (traitResult?.replacementAttack) {
+            attackResult = {
+              dmg: traitResult.replacementAttack.damage,
+              hit: traitResult.replacementAttack.hit,
+            };
+          } else {
+            attackResult = enemyAttack(enemy, stats, state.shield_bonus ?? 0);
+          }
+          enemyDmg = attackResult.dmg ?? 0;
+          enemyHit = attackResult.hit ?? false;
+
+          enemyDmg = Math.floor(enemyDmg * (attack.damageReduction ? 1 - attack.damageReduction : 1));
+          enemyDmg = Math.max(0, enemyDmg - effectiveArmor);
+
+          if (enemyHit) {
+            const statusEffect = getStatusEffectOnHit(enemy);
+            if (statusEffect) {
+              if (statusEffect.type === "poison" && statusEffect.stacks) {
+                const existing = state.status_effects.filter((e) => e.type === "poison");
+                if (existing.length < (statusEffect.max_stacks ?? 3)) {
+                  state.status_effects.push(statusEffect);
+                }
+              } else {
+                state.status_effects.push(statusEffect);
+              }
+            }
+            const onHit = getTraitOnHitEffect(enemy);
+            if (onHit?.drain) enemyHp = Math.min(enemyHp + onHit.drain, state.enemy_hp_max);
+            if (onHit?.armor_break) state.armor_break_effects.push(onHit.armor_break);
+          }
+        }
+      }
+
       playerHp = Math.max(0, playerHp - enemyDmg);
 
       // Victory
@@ -1787,15 +1875,21 @@ if (path === "/api/combat/state" && method === "GET") {
       }
 
       // Ongoing
-      state.enemy_hp  = enemyHp;
+      state.enemy_hp = enemyHp;
       state.player_hp = playerHp;
       state.turn++;
+      state.round = (state.round ?? state.turn) + 1;
       await dbRun(db, "UPDATE combat_state SET state_json=? WHERE user_id=?", [JSON.stringify(state), uid]);
       await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [playerHp, uid]);
 
+      let msg = attack.narrative;
+      if (statusDmg > 0) msg += `\n\n*Bleed/poison/fire — ${statusDmg} damage.*`;
+      if (enemySkippedStagger) msg += `\n\n*${enemy.name} staggers — it loses its turn.*`;
+      else msg += `\n\n*${enemy.name} retaliates — ${enemyDmg > 0 ? `${enemyDmg} damage.` : "misses."}*`;
+
       return json({
         result: "ongoing",
-        message: `${attack.narrative}\n\n*${enemy.name} retaliates — ${enemyDmg > 0 ? `${enemyDmg} damage.` : "misses."}*`,
+        message: msg,
         player_hp: playerHp, enemy_hp: enemyHp,
         enemy_hp_max: state.enemy_hp_max,
       });

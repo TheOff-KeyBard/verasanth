@@ -541,6 +541,7 @@ FORMATTING RULES:
         ledger: arc2Complete ? `He has shown them the open entry. "Some entries stay open. I do not close them until I know."` : `"Records. Patterns. The city writes itself in people." If visits >= 5 and they ask: Arc 2 trigger — show the entry with no resolution.`,
         arrest: `"You know why." "Come quietly." "The cells will hold you until the weight lifts." "Your choices brought you here."`,
         portal: serisGone ? `*A long pause.* "She opened something that does not close." "Order is thinner now. Walk carefully."` : `Do not discuss. Deflect.`,
+        cells: `Never call them a prison. His terms: "the holding place", "the quiet room", "the ash pit", "the cells" (most often). On the heat: *He does not look up from the ledger.* "The city burns away what it cannot use." *Back to the ledger.* On why he keeps them: "Order needs a place to rest its weight." On the runes: *A pause. Longer than his usual pauses.* "They were here when I was born. They will be here when I am not. I do not need to understand them to respect what they do."`,
       };
       const topicKey = topic && (topic in topicGuidance) ? topic : null;
       const topicBlock = topicKey ? topicGuidance[topicKey] : "";

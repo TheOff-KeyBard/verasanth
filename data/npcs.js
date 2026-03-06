@@ -25,7 +25,7 @@ export const NPC_TOPICS = {
   alchemist:   ["city","work","remedies","kelvaris","veyra","caelir","seris","sanctuary","board","dask","sewer","cistern","crawlers","past","yourself","person_lost","grommash"],
   curator:     ["city","shop","items","kelvaris","caelir","veyra","thalara","sanctuary","board","dask","sewer","cistern","crawlers","past","yourself","artifacts","grommash"],
   othorion:    ["city","furnace","seris","artifacts","pip","sewers","research","escape","kelvaris","thalara","veyra","caelir","grommash"],
-  warden:      ["city","justice","sewer","seris","othorion","thalara","ledger","arrest","portal"],
+  warden:      ["city","justice","sewer","seris","othorion","thalara","ledger","arrest","portal","cells"],
 };
 
 
