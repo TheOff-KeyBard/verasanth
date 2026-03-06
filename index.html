@@ -1932,6 +1932,11 @@ const TOPIC_GATES = {
   },
 };
 
+const TOPIC_TO_NPC = {
+  grommash: 'warden', kelvaris: 'bartender', caelir: 'weaponsmith',
+  veyra: 'armorsmith', thalara: 'alchemist', seris: 'curator', othorion: 'othorion',
+};
+
 // ── API helpers ──────────────────────────────────────────────────
 async function api(method, path, body) {
   const opts = {
@@ -3278,10 +3283,10 @@ async function openDialogue(npcId) {
   try {
     const [talkData, topicsData, flagsData] = await Promise.all([
       POST('/api/talk', { npc: npcId, topic: '' }),
-      GET(`/api/data/npc/${npcId}/topics`),
+      GET(`/api/data/npc/${npcId}/topics`).catch(() => ({ topics: [] })),
       GET('/api/character/flags').catch(() => ({})),
     ]);
-    npcTopics[npcId] = topicsData.topics || [];
+    npcTopics[npcId] = topicsData?.topics || [];
     const flags = flagsData && typeof flagsData === 'object' ? flagsData : {};
     showDialogueResponse(talkData.response);
     renderTopics(npcId, flags);
@@ -3309,6 +3314,7 @@ function renderTopics(npcId, flags = {}) {
   wrap.innerHTML = '';
   const gates = TOPIC_GATES[npcId];
   const topics = (npcTopics[npcId] || []).filter(t => {
+    if (t === npcId || TOPIC_TO_NPC[t] === npcId) return false;
     const gate = gates && gates[t];
     return gate == null || (flags[gate] && Number(flags[gate]) > 0);
   });

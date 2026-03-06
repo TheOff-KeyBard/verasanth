@@ -4,7 +4,7 @@ export function statMod(v) { return Math.floor((v - 10) / 2); }
 
 export function rollDie(sides) { return Math.floor(Math.random() * sides) + 1; }
 
-export function maxPlayerHp(con) { return 8 + statMod(con) * 2; }
+export function maxPlayerHp(con) { return 20 + statMod(con) * 3; }
 
 export function randomEnemy(location) {
   const cd = COMBAT_DATA;
@@ -65,7 +65,7 @@ export function enemyAttack(enemy, stats) {
   const defMod = statMod(stats.dexterity);
   const roll   = rollDie(20) + (enemy.attack_mod || 0);
   if (roll >= 10 + defMod) {
-    return Math.max(1, rollDie(enemy.attack_die || 6) + (enemy.attack_mod || 0));
+    return Math.max(1, rollDie(enemy.attack_die || 6));
   }
   return 0;
 }
@@ -74,4 +74,4 @@ export function enemyAttack(enemy, stats) {
 // NPC DIALOGUE — Claude API calls
 // Each NPC gets a tailored system prompt so the response
 // matches the voice and progression system we built.
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────

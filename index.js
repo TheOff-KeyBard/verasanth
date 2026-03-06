@@ -373,9 +373,9 @@ async function initDb(db) {
   await dbRun(db, `CREATE TABLE IF NOT EXISTS characters (
     user_id INTEGER PRIMARY KEY REFERENCES players(user_id),
     name TEXT NOT NULL, race TEXT NOT NULL, instinct TEXT,
-    strength INTEGER DEFAULT 5, dexterity INTEGER DEFAULT 5,
-    constitution INTEGER DEFAULT 5, intelligence INTEGER DEFAULT 5,
-    wisdom INTEGER DEFAULT 5, charisma INTEGER DEFAULT 5,
+    strength INTEGER DEFAULT 10, dexterity INTEGER DEFAULT 10,
+    constitution INTEGER DEFAULT 10, intelligence INTEGER DEFAULT 10,
+    wisdom INTEGER DEFAULT 10, charisma INTEGER DEFAULT 10,
     stats_set INTEGER DEFAULT 0,
     alignment_morality INTEGER DEFAULT 0, alignment_order INTEGER DEFAULT 0,
     ash_marks INTEGER DEFAULT 0, ember_shards INTEGER DEFAULT 0, soul_coins INTEGER DEFAULT 0,
@@ -535,6 +535,11 @@ async function initDb(db) {
         await dbRun(db, "UPDATE players SET mercy_score=?, order_score=?, archetype=? WHERE user_id=?", [mercy, order, archetype, c.user_id]);
       }
       await dbRun(db, "INSERT OR IGNORE INTO _migrations (name) VALUES (?)", ["alignment_v1"]);
+    }
+    const hpMigrated = await dbGet(db, "SELECT 1 FROM _migrations WHERE name=?", ["hp_formula_v1"]);
+    if (!hpMigrated) {
+      await dbRun(db, "UPDATE characters SET current_hp = 0");
+      await dbRun(db, "INSERT OR IGNORE INTO _migrations (name) VALUES (?)", ["hp_formula_v1"]);
     }
 }
 
@@ -794,14 +799,14 @@ if (path === "/api/admin/command" && method === "POST") {
 
       const baseStats = baseStatsBody && typeof baseStatsBody === "object"
         ? {
-            strength: Number(baseStatsBody.strength) || 5,
-            dexterity: Number(baseStatsBody.dexterity) || 5,
-            constitution: Number(baseStatsBody.constitution) || 5,
-            intelligence: Number(baseStatsBody.intelligence) || 5,
-            wisdom: Number(baseStatsBody.wisdom) || 5,
-            charisma: Number(baseStatsBody.charisma) || 5,
+            strength: Number(baseStatsBody.strength) || 10,
+            dexterity: Number(baseStatsBody.dexterity) || 10,
+            constitution: Number(baseStatsBody.constitution) || 10,
+            intelligence: Number(baseStatsBody.intelligence) || 10,
+            wisdom: Number(baseStatsBody.wisdom) || 10,
+            charisma: Number(baseStatsBody.charisma) || 10,
           }
-        : { strength: 5, dexterity: 5, constitution: 5, intelligence: 5, wisdom: 5, charisma: 5 };
+        : { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 };
 
       const baseSum = baseStats.strength + baseStats.dexterity + baseStats.constitution +
         baseStats.intelligence + baseStats.wisdom + baseStats.charisma;
