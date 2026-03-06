@@ -189,6 +189,7 @@ export const SEWER_NODES = {
       ancient_inscription: { desc: "Script you do not recognize. Older than the city. Older than the city's memory.", actions: ["inspect"] },
     },
     items: [],
+    pvpve: { escort_destination: true },
   },
   sluice_gate: {
     name: "The Sluice Gate",
@@ -243,6 +244,7 @@ export const SEWER_NODES = {
       old_safety_chains: { desc: "Most are intact. Some are not. Fall and you might catch one.", actions: ["inspect"] },
     },
     items: [],
+    pvpve: { ambush_choke: true, escort_bottleneck: true, hazard: "fall_risk" },
   },
   heart_pump: {
     name: "The Heart Pump",
@@ -320,6 +322,7 @@ export const SEWER_NODES = {
       city_memory_stone: { desc: "A stone. The city's memory. Or something like it.", actions: ["inspect"] },
     },
     items: [],
+    pvpve: { group_target: true, group_required: true },
   },
   sump_pit: {
     name: "The Sump Pit",

@@ -1093,7 +1093,7 @@ if (path === "/api/admin/command" && method === "POST") {
         description += "\n\nSomething glints near the drain. Ash Marks — someone left them here quickly.";
       }
 
-      return json({
+      const locPayload = {
         location: loc, name: room.name, description,
         exits, exit_map,
         objects: Object.keys(room.objects || {}),
@@ -1102,7 +1102,9 @@ if (path === "/api/admin/command" && method === "POST") {
         in_combat: inCombat,
         fightable: FIGHTABLE_LOCATIONS.has(loc),
         death_drops_present: deathDrops.length > 0,
-      });
+      };
+      if (room.pvpve) locPayload.pvpve = room.pvpve;
+      return json(locPayload);
     }
 
     // ── POST: Move ──
@@ -1209,7 +1211,16 @@ if (path === "/api/admin/command" && method === "POST") {
         destDescription += "\n\nSomething glints near the drain. Ash Marks — someone left them here quickly.";
       }
 
-      return json({
+      // PvPvE: Ash Heart Chamber group warning when solo
+      let pvpveWarning = null;
+      if (dest === "ash_heart_chamber") {
+        const partyMembers = await getPartyMembers(db, dbAll, uid);
+        if (partyMembers.length === 0) {
+          pvpveWarning = "The cathedral floor demanded more than one. The guardians have always known this.";
+        }
+      }
+
+      const movePayload = {
         location: dest, name: destRoom.name, description: destDescription,
         exits: destExits,
         exit_map: destExitMap,
@@ -1217,7 +1228,10 @@ if (path === "/api/admin/command" && method === "POST") {
         items: [], npcs: npcsHere, ambient,
         fightable: FIGHTABLE_LOCATIONS.has(dest),
         death_drops_present: deathDrops.length > 0,
-      });
+      };
+      if (destRoom.pvpve) movePayload.pvpve = destRoom.pvpve;
+      if (pvpveWarning) movePayload.pvpve_warning = pvpveWarning;
+      return json(movePayload);
     }
 
     // ── POST: Death drop claim ──
@@ -2007,6 +2021,22 @@ if (path === "/api/combat/state" && method === "GET") {
 
       playerHp = Math.max(0, playerHp - enemyDmg);
 
+      // Iron Walkway fall_risk: knocked back in combat → fall damage 15, DEX check to catch chain
+      let fallRiskMsg = "";
+      const combatLoc = state.location || "";
+      if (combatLoc === "iron_walkway" && enemyHit && enemyDmg >= 8) {
+        const dexMod = statMod(row.dexterity);
+        const dexRoll = rollDie(20) + dexMod;
+        const FALL_DC = 12;
+        if (dexRoll < FALL_DC) {
+          const fallDmg = 15;
+          playerHp = Math.max(0, playerHp - fallDmg);
+          fallRiskMsg = `\n\n*The blow drives you toward the edge. You miss the chain — **${fallDmg}** fall damage.*`;
+        } else if (enemyDmg > 0) {
+          fallRiskMsg = "\n\n*You catch the chain. The walkway holds.*";
+        }
+      }
+
       // Victory
       if (enemyHp <= 0) {
         await dbRun(db, "DELETE FROM combat_state WHERE user_id=?", [uid]);
@@ -2063,9 +2093,10 @@ if (path === "/api/combat/state" && method === "GET") {
         await updateAlignment(db, uid, mKill, 1, instinct);
 
         const itemLine = itemLines.length ? ` | **${itemLines.join("**, **")}**` : "";
+        const victoryMsg = `*${enemy.name} falls.*\n\n${attack.narrative}${fallRiskMsg ? fallRiskMsg : ""}\n\n**+${xpGain} XP** | **+${lootAsh} Ash Marks**${itemLine}`;
         return json({
           result: "victory",
-          message: `*${enemy.name} falls.*\n\n${attack.narrative}\n\n**+${xpGain} XP** | **+${lootAsh} Ash Marks**${itemLine}`,
+          message: victoryMsg,
           can_advance: !!canAdvance, player_hp: playerHp,
         });
       }
@@ -2083,7 +2114,9 @@ if (path === "/api/combat/state" && method === "GET") {
         await setFlag(db, uid, "death_count", dc + 1);
         await setFlag(db, uid, "just_respawned", 1);
         await updateAlignment(db, uid, 0, -2, instinct);
-        let deathMsg = `*${enemy.name} stands over you.*\n\n*You wake in the Shadow Hearth Inn.*`;
+        let deathMsg = `*${enemy.name} stands over you.*`;
+        if (fallRiskMsg) deathMsg += `\n\nThe blow drove you toward the edge. The chain was not enough.`;
+        deathMsg += `\n\n*You wake in the Shadow Hearth Inn.*`;
         if (ashLost > 0) deathMsg += `\n\nYou lost ${ashLost} Ash Marks. They're still where you fell.`;
         return json({
           result: "death",
@@ -2103,6 +2136,7 @@ if (path === "/api/combat/state" && method === "GET") {
       if (statusDmg > 0) msg += `\n\n*Bleed/poison/fire — ${statusDmg} damage.*`;
       if (enemySkippedStagger) msg += `\n\n*${enemy.name} staggers — it loses its turn.*`;
       else msg += `\n\n*${enemy.name} retaliates — ${enemyDmg > 0 ? `${enemyDmg} damage.` : "misses."}*`;
+      if (fallRiskMsg) msg += fallRiskMsg;
 
       return json({
         result: "ongoing",
