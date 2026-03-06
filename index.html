@@ -1622,8 +1622,9 @@ let mainTwStep = "race";
 let twSelectedRace = "";
 let twSelectedInstinct = "";
 const TW_SHEET_POOL = 30;
-const TW_SHEET_BASE = 10;
-let twSheetBaseStats = { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 };
+const TW_SHEET_BASE = 5;
+const TW_SHEET_STAT_MAX = 18;
+let twSheetBaseStats = { strength: 5, dexterity: 5, constitution: 5, intelligence: 5, wisdom: 5, charisma: 5 };
 const STARTING_ITEMS_DISPLAY = {
   ember_touched: ['charred_focus_wand', 'ash_thread_robe', 'ember_charm'],
   hearthborn:    ['simple_mace', 'tattered_vestments', 'tarnished_holy_symbol'],
@@ -1861,7 +1862,7 @@ function formatStatMods(mods) {
 }
 
 function computedStats(raceKey, instinctKey) {
-  return computedStatsFromBase(raceKey, instinctKey, { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 });
+  return computedStatsFromBase(raceKey, instinctKey, { strength: 5, dexterity: 5, constitution: 5, intelligence: 5, wisdom: 5, charisma: 5 });
 }
 
 function computedStatsFromBase(raceKey, instinctKey, baseStats) {
@@ -1871,8 +1872,8 @@ function computedStatsFromBase(raceKey, instinctKey, baseStats) {
   const instinct = instincts[instinctKey];
   if (!race || !instinct) return null;
   const final = { ...baseStats };
-  Object.entries(race.stat_mods || {}).forEach(([stat, mod]) => { final[stat] = (final[stat] ?? 10) + mod; });
-  Object.entries(instinct.stat_mods || {}).forEach(([stat, mod]) => { final[stat] = (final[stat] ?? 10) + mod; });
+  Object.entries(race.stat_mods || {}).forEach(([stat, mod]) => { final[stat] = (final[stat] ?? TW_SHEET_BASE) + mod; });
+  Object.entries(instinct.stat_mods || {}).forEach(([stat, mod]) => { final[stat] = (final[stat] ?? TW_SHEET_BASE) + mod; });
   if (race.affinity && race.affinity.includes(instinctKey)) {
     const primary = Object.keys(instinct.stat_mods || {})[0];
     if (primary) final[primary] += 1;
@@ -1960,7 +1961,7 @@ function renderTwInstinctStep() {
 
 function twSheetPoolRemain() {
   const sum = Object.values(twSheetBaseStats).reduce((a, b) => a + b, 0);
-  return 90 - sum;
+  return TW_SHEET_POOL - (sum - 6 * TW_SHEET_BASE);
 }
 
 function updateTwSheetSummary() {
@@ -1999,7 +2000,7 @@ function updateTwSheetSummary() {
 }
 
 function renderTwSheetStep() {
-  twSheetBaseStats = { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 };
+  twSheetBaseStats = { strength: 5, dexterity: 5, constitution: 5, intelligence: 5, wisdom: 5, charisma: 5 };
   const nameInput = document.getElementById('tw-create-name');
   if (nameInput) nameInput.value = '';
   const statKeys = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
@@ -2031,10 +2032,10 @@ function renderTwSheetStep() {
       updateTwSheetSummary();
     }
     minusBtn.onclick = () => {
-      if (twSheetBaseStats[stat] > 10) { twSheetBaseStats[stat]--; refresh(); }
+      if (twSheetBaseStats[stat] > TW_SHEET_BASE) { twSheetBaseStats[stat]--; refresh(); }
     };
     plusBtn.onclick = () => {
-      if (twSheetPoolRemain() > 0) { twSheetBaseStats[stat]++; refresh(); }
+      if (twSheetPoolRemain() > 0 && twSheetBaseStats[stat] < TW_SHEET_STAT_MAX) { twSheetBaseStats[stat]++; refresh(); }
     };
     container.appendChild(row);
   });

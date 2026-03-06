@@ -477,18 +477,23 @@ if (path === "/api/admin/command" && method === "POST") {
 
       const baseStats = baseStatsBody && typeof baseStatsBody === "object"
         ? {
-            strength: Number(baseStatsBody.strength) || 10,
-            dexterity: Number(baseStatsBody.dexterity) || 10,
-            constitution: Number(baseStatsBody.constitution) || 10,
-            intelligence: Number(baseStatsBody.intelligence) || 10,
-            wisdom: Number(baseStatsBody.wisdom) || 10,
-            charisma: Number(baseStatsBody.charisma) || 10,
+            strength: Number(baseStatsBody.strength) || 5,
+            dexterity: Number(baseStatsBody.dexterity) || 5,
+            constitution: Number(baseStatsBody.constitution) || 5,
+            intelligence: Number(baseStatsBody.intelligence) || 5,
+            wisdom: Number(baseStatsBody.wisdom) || 5,
+            charisma: Number(baseStatsBody.charisma) || 5,
           }
-        : { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 };
+        : { strength: 5, dexterity: 5, constitution: 5, intelligence: 5, wisdom: 5, charisma: 5 };
 
       const baseSum = baseStats.strength + baseStats.dexterity + baseStats.constitution +
         baseStats.intelligence + baseStats.wisdom + baseStats.charisma;
-      if (baseSum !== 90) return err("Stats must sum to 90 (6×10 base + 30 points).", 400);
+      if (baseSum !== 60) return err("Stats must sum to 60 (6×5 base + 30 points).", 400);
+      const STAT_KEYS_COMPLETE = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"];
+      for (const k of STAT_KEYS_COMPLETE) {
+        const v = baseStats[k];
+        if (!Number.isInteger(v) || v < 5 || v > 18) return err(`Each stat must be between 5 and 18.`, 400);
+      }
 
       const race = RACES[raceKey];
       const instinct = INSTINCTS[instinctKey];
