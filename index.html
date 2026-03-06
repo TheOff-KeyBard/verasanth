@@ -1434,12 +1434,20 @@
     text-align: left;
     padding: 12px 14px;
     min-width: 140px;
+    min-height: 60px;
     border: 1px solid var(--border-warm);
     background: var(--bg2);
     color: var(--ash-light);
     font-size: 0.85rem;
     cursor: pointer;
     transition: all 0.15s;
+    flex: 1 1 200px;
+  }
+  .tw-instinct-card {
+    min-width: 240px;
+    min-height: 80px;
+    line-height: 1.35;
+    overflow-wrap: break-word;
   }
   .tw-race-card:hover, .tw-instinct-card:hover {
     border-color: var(--gold-dim);
@@ -1449,6 +1457,7 @@
   .tw-race-card.selected, .tw-instinct-card.selected {
     border-color: var(--ember);
     color: var(--ember-glow);
+    opacity: 1;
     animation: emberSnap 0.4s ease forwards;
   }
   .tw-instinct-card.affinity { border-color: var(--gold-dim); }
@@ -2904,6 +2913,11 @@ async function showTrueWelcome() {
   document.getElementById('tw-msg').textContent = '';
   document.getElementById('tw-msg').className = 'tw-msg';
   document.getElementById('tw-next-btn').textContent = 'Next';
+  document.getElementById('tw-sheet-back-btn').style.display = 'inline-block';
+  document.getElementById('tw-sheet-back-btn').onclick = () => {
+    document.getElementById('auth-screen').classList.remove('hidden');
+    showScreen('auth');
+  };
   mainTwStep = 'race';
   showScreen('tw');
 }
@@ -3055,7 +3069,14 @@ async function finishTrueWelcome() {
     renderTwInstinctStep();
     mainTwStep = 'instinct';
     document.getElementById('tw-next-btn').textContent = 'Next';
-    document.getElementById('tw-sheet-back-btn').style.display = 'none';
+    document.getElementById('tw-sheet-back-btn').style.display = 'inline-block';
+    document.getElementById('tw-sheet-back-btn').onclick = () => {
+      document.getElementById('tw-step-instinct').style.display = 'none';
+      document.getElementById('tw-step-race').style.display = 'block';
+      mainTwStep = 'race';
+      document.getElementById('tw-title').textContent = 'Choose your lineage';
+      document.getElementById('tw-sheet-back-btn').style.display = 'none';
+    };
     return;
   }
   if (mainTwStep === 'instinct') {
