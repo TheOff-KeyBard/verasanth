@@ -10,6 +10,7 @@ export async function getNPCResponse(env, npcId, topic, playerContext) {
     const hasSeenMarket = playerContext.has_seen_market_square;
     const hasInstinct = playerContext.has_instinct;
     const statsSet = playerContext.stats_set;
+    const hasSeenAwakening = playerContext.has_seen_awakening ? 1 : 0;
 
     const wis = playerContext.wisdom ?? 10;
     const cha = playerContext.charisma ?? 10;
@@ -17,7 +18,7 @@ export async function getNPCResponse(env, npcId, topic, playerContext) {
     const hpPercent = playerContext.current_hp != null && playerContext.max_hp ? playerContext.current_hp / playerContext.max_hp : 1;
     const deaths = playerContext.deaths ?? 0;
     const justRespawned = playerContext.just_respawned ?? false;
-    const isFirstAwakening = visits === 0 && deaths === 0;
+    const isFirstAwakening = visits === 0 && deaths === 0 && hasSeenAwakening === 1;
     const isDeathReturn = justRespawned && deaths >= 1;
     const deathTier = deaths <= 1 ? 'first' : deaths <= 3 ? 'early' : deaths <= 6 ? 'established' : deaths <= 10 ? 'deep' : 'late';
 
@@ -33,7 +34,14 @@ FORMATTING RULES:
     const systemPrompts = {
     bartender: `You are Kelvaris, the bartender of the Shadow Hearth Inn in Verasanth. 
 You are short, direct, and rarely use more than two sentences. You've been in this city a long time. You notice everything but comment on little. Never mention the true nature of this place or where the dead go; the player does not know. Keep everything in-world: the city, the inn, the roads, the square.
-${isFirstAwakening ? 'FIRST AWAKENING: New arrival, no memory. One sentence only. Practical. No warmth, no cruelty. Tell them the door is east, the square is that way. Nothing more.' : ''}
+${isFirstAwakening ? `FIRST AWAKENING — SPECIAL CASE:
+This player just woke up on the floor of your inn. You watched it happen.
+You did not help them up. You never do — they need to find their own feet.
+They are standing now, or close to it. They have their name and nothing else.
+One action in italics (third person, about you). One or two sentences.
+The word "east" must appear. It is the first direction they need.
+Do not say: welcome / remember / city / memory / name.
+Do not explain anything. Give them the next step only.` : ''}
 ${isDeathReturn && deathTier === 'first' ? 'DEATH RETURN (first): Matter-of-fact. "Sit down." or "Still here." or "First time is the worst. It gets different."' : ''}
 ${isDeathReturn && deathTier === 'early' ? 'DEATH RETURN (2-3): Dry. "You went further this time." or "Again." or "The city is patient."' : ''}
 ${isDeathReturn && deathTier === 'established' ? 'DEATH RETURN (4-6): Cold. "It keeps sending you back." or "The city has not decided what to do with you yet."' : ''}

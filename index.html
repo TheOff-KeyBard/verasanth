@@ -841,7 +841,33 @@
   .tw-pool { font-size: 0.9rem; color: var(--text-dim); margin-bottom: 12px; }
   .tw-msg { min-height: 1.2em; font-size: 0.9rem; margin-bottom: 12px; }
   .tw-msg.err { color: var(--danger); }
-  .tw-actions { margin-top: 16px; }
+  .tw-actions { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .btn-ember.secondary { background: transparent; color: var(--ash-light); border-color: var(--border-warm); }
+  .btn-ember.secondary:hover { border-color: var(--gold-dim); color: var(--gold); }
+  .tw-step-sheet { max-height: 75vh; overflow-y: auto; }
+  .tw-sheet-section { margin-bottom: 24px; }
+  .tw-sheet-section-title { font-family: var(--font-title); font-size: 1rem; color: var(--ember-glow); margin-bottom: 4px; }
+  .tw-sheet-section-sub { font-style: italic; color: var(--text-dim); font-size: 0.9rem; margin-bottom: 12px; }
+  .tw-create-name-input {
+    width: 100%; max-width: 320px; margin: 0 auto; display: block;
+    font-family: var(--font-title), serif; font-size: 1.2rem;
+    background: var(--bg2); border: 1px solid var(--border-warm); color: var(--text);
+    padding: 12px 16px; text-align: center;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .tw-create-name-input:focus { outline: none; border-color: var(--ember); box-shadow: 0 0 0 2px rgba(196,98,42,0.25); }
+  .tw-create-name-input::placeholder { color: var(--text-dim); }
+  .tw-sheet-pool { margin-bottom: 12px; font-size: 0.9rem; }
+  .tw-sheet-pool .tw-pool-num { color: var(--ember); }
+  .tw-sheet-pool .tw-pool-num.zero { color: var(--danger); }
+  .tw-sheet-stats-rows { display: flex; flex-direction: column; gap: 8px; }
+  .tw-sheet-stat-row { display: flex; align-items: center; gap: 10px; }
+  .tw-sheet-stat-row .stat-name { min-width: 48px; font-weight: 600; }
+  .tw-sheet-stat-row button { width: 32px; height: 28px; padding: 0; font-size: 1.1rem; line-height: 1; background: var(--bg3); border: 1px solid var(--border); color: var(--ash-light); cursor: pointer; }
+  .tw-sheet-stat-row button:hover { border-color: var(--ember); color: var(--ember-glow); }
+  .tw-sheet-stat-row .base-val { min-width: 32px; text-align: center; }
+  .tw-sheet-stat-row .final-val { min-width: 40px; text-align: right; color: var(--gold-dim); }
+  .tw-sheet-summary-content { font-size: 0.9rem; color: var(--ash-light); }
   .btn-ember {
     background: var(--ember); border: 1px solid var(--ember-dim); color: var(--text-bright);
     padding: 10px 24px; font-family: var(--font-title); cursor: pointer;
@@ -1169,6 +1195,35 @@
     from { transform: translate(0, 0); opacity: 0.9; }
     to { transform: translate(var(--fall-x, 0), var(--fall-y, 90px)); opacity: 0; }
   }
+
+  /* ── First Awakening cinematic ────────────────────────────────────── */
+  #awakening-screen {
+    position: fixed; inset: 0; background: #000; z-index: 200;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .awakening-blackout { position: absolute; inset: 0; background: #000; }
+  .awakening-ash-container { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .awakening-inner {
+    position: relative; z-index: 2; text-align: center; max-width: 90%; transition: opacity 0.5s;
+  }
+  #awakening-lines { font-family: var(--font-body); font-size: 1rem; color: var(--ash-light); line-height: 1.8; }
+  #awakening-lines .awake-line { opacity: 0; animation: awakeningFadeIn 0.8s ease-out forwards; }
+  @keyframes awakeningFadeIn { to { opacity: 1; } }
+  #awakening-name-wrap {
+    font-family: var(--font-title), serif; font-size: clamp(1.5rem, 5vw, 2.5rem);
+    color: var(--ember-glow); margin: 1rem 0; min-height: 1.2em;
+  }
+  #awakening-name-wrap .awake-letter { display: inline-block; opacity: 0; animation: awakeningLetterIn 0.4s ease-out forwards; }
+  @keyframes awakeningLetterIn { to { opacity: 1; text-shadow: 0 0 12px var(--ember); } }
+  .awakening-hold { font-style: italic; color: var(--text-dim); font-size: 0.95rem; margin: 1rem 0; }
+  .awakening-prompt { font-family: var(--font-title); color: var(--ash-light); font-size: 0.9rem; margin: 0.5rem 0; letter-spacing: 0.15em; }
+  .awakening-wake-btn {
+    margin-top: 1.5rem; padding: 12px 28px; font-family: var(--font-title);
+    background: transparent; border: 1px solid var(--ember); color: var(--ember-glow);
+    cursor: pointer; transition: all 0.2s;
+  }
+  .awakening-wake-btn:hover { background: rgba(196,98,42,0.15); }
+  .awakening-ash { position: absolute; width: 4px; height: 4px; background: #c4622a; border-radius: 50%; opacity: 0.9; pointer-events: none; animation: entryAshFall linear forwards; z-index: 210; }
 </style>
 </head>
 <body>
@@ -1181,10 +1236,10 @@
   <!-- Tab switcher -->
   <div id="auth-tabs">
     <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Sign In</button>
-    <button class="auth-tab" id="tab-register" onclick="switchTab('register')">New Character</button>
+    <button class="auth-tab" id="tab-register" onclick="switchTab('register')">New Account</button>
   </div>
 
-  <!-- Login panel -->
+  <!-- Sign In -->
   <div id="auth-form" data-panel="login">
     <div class="form-field">
       <label class="form-label" for="login-username">Username</label>
@@ -1198,7 +1253,7 @@
     <button class="form-submit" id="auth-btn" onclick="doLogin()">Enter Verasanth</button>
   </div>
 
-  <!-- Register panel -->
+  <!-- New Account -->
   <div id="auth-form-register" data-panel="register" style="display:none">
     <div class="form-field">
       <label class="form-label" for="reg-username">Username</label>
@@ -1208,18 +1263,8 @@
       <label class="form-label" for="reg-password">Password</label>
       <input class="form-input" id="reg-password" type="password" placeholder="Choose a password" autocomplete="new-password">
     </div>
-    <div class="form-field">
-      <label class="form-label" for="input-name">Character Name</label>
-      <input class="form-input" id="input-name" type="text" placeholder="What are you called?" maxlength="32" autocomplete="off">
-    </div>
-    <div class="form-field">
-      <label class="form-label" for="input-race">Race</label>
-      <select class="form-select" id="input-race">
-        <option value="">— Choose —</option>
-      </select>
-    </div>
     <div id="auth-error-reg"></div>
-    <button class="form-submit" id="auth-btn-reg" onclick="doRegister()">Begin Your Story</button>
+    <button class="form-submit" id="auth-btn-reg" onclick="doRegister()">Create Account</button>
   </div>
 </div>
 
@@ -1236,11 +1281,28 @@
       <div id="tw-affinity-bonus" class="tw-affinity-bonus" style="display:none;"></div>
       <div id="tw-instinct-grid" class="tw-instinct-grid"></div>
     </div>
-    <div id="tw-step-confirm" style="display:none;">
-      <div id="tw-confirm-card" class="tw-confirm-card"></div>
+    <div id="tw-step-sheet" class="tw-step-sheet" style="display:none;">
+      <div class="tw-sheet-scroll">
+        <section class="tw-sheet-section tw-sheet-name">
+          <h3 class="tw-sheet-section-title">The one thing you remember is your name.</h3>
+          <p class="tw-sheet-section-sub">Everything else is ash.</p>
+          <input type="text" id="tw-create-name" class="tw-create-name-input" placeholder="Your name..." maxlength="32" autocomplete="off">
+        </section>
+        <section class="tw-sheet-section tw-sheet-stats">
+          <h3 class="tw-sheet-section-title">Distribute Your Echoes</h3>
+          <p class="tw-sheet-section-sub">Your body remembers more than your mind does.</p>
+          <div class="tw-sheet-pool"><span>Points remaining:</span> <strong id="tw-sheet-pool-remain" class="tw-pool-num">30</strong></div>
+          <div id="tw-sheet-stats-rows" class="tw-sheet-stats-rows"></div>
+        </section>
+        <section class="tw-sheet-section tw-sheet-summary" id="tw-sheet-summary" style="display:none;">
+          <h3 class="tw-sheet-section-title">Summary</h3>
+          <div id="tw-sheet-summary-content" class="tw-sheet-summary-content"></div>
+        </section>
+      </div>
     </div>
     <div id="tw-msg" class="tw-msg"></div>
     <div class="tw-actions">
+      <button type="button" id="tw-sheet-back-btn" class="btn-ember secondary" style="display:none;">Back</button>
       <button type="button" id="tw-next-btn" class="btn-ember">Next</button>
     </div>
   </div>
@@ -1283,6 +1345,19 @@
       <div class="sheet-divider"></div>
       <button type="button" id="cs-enter-btn" class="btn-enter-verasanth">Enter Verasanth — The City of Slumber</button>
     </div>
+  </div>
+</div>
+
+<!-- ── First Awakening cinematic (full-screen, hidden by default) ─────── -->
+<div id="awakening-screen" class="screen-overlay" style="display:none;" aria-hidden="true">
+  <div id="awakening-blackout" class="awakening-blackout"></div>
+  <div id="awakening-ash-container" class="awakening-ash-container"></div>
+  <div id="awakening-inner" class="awakening-inner" style="opacity:0;">
+    <div id="awakening-lines"></div>
+    <div id="awakening-name-wrap" style="display:none;"><span id="awakening-name"></span></div>
+    <p id="awakening-hold" class="awakening-hold" style="opacity:0;">Hold onto it. This city takes everything else.</p>
+    <p id="awakening-prompt" class="awakening-prompt" style="opacity:0;">— open your eyes —</p>
+    <button type="button" id="awakening-wake-btn" class="awakening-wake-btn" style="opacity:0;">WAKE UP</button>
   </div>
 </div>
 
@@ -1546,6 +1621,9 @@ let mainInstinctsData = null;
 let mainTwStep = "race";
 let twSelectedRace = "";
 let twSelectedInstinct = "";
+const TW_SHEET_POOL = 30;
+const TW_SHEET_BASE = 10;
+let twSheetBaseStats = { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 };
 const STARTING_ITEMS_DISPLAY = {
   ember_touched: ['charred_focus_wand', 'ash_thread_robe', 'ember_charm'],
   hearthborn:    ['simple_mace', 'tattered_vestments', 'tarnished_holy_symbol'],
@@ -1670,6 +1748,110 @@ function needsOnboard(c) {
   return c == null || c.instinct == null || c.instinct === '' || c.stats_set == null || Number(c.stats_set) === 0;
 }
 
+function showAwakeningCinematic(characterName) {
+  const screen = document.getElementById('awakening-screen');
+  const inner = document.getElementById('awakening-inner');
+  const linesEl = document.getElementById('awakening-lines');
+  const nameWrap = document.getElementById('awakening-name-wrap');
+  const nameEl = document.getElementById('awakening-name');
+  const holdEl = document.getElementById('awakening-hold');
+  const promptEl = document.getElementById('awakening-prompt');
+  const wakeBtn = document.getElementById('awakening-wake-btn');
+
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('true-welcome-screen').style.display = 'none';
+  document.getElementById('character-sheet-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'none';
+  screen.style.display = 'flex';
+  screen.setAttribute('aria-hidden', 'false');
+
+  inner.style.opacity = '0';
+  linesEl.innerHTML = '';
+  nameWrap.style.display = 'none';
+  nameEl.innerHTML = '';
+  holdEl.style.opacity = '0';
+  promptEl.style.opacity = '0';
+  wakeBtn.style.opacity = '0';
+
+  const LINES = [
+    "You are on the floor.",
+    "The stone is cold. The air smells of ash and old fire.",
+    "You do not know how you got here.",
+    "You do not know where here is.",
+    "You do not know your name.",
+    "Wait.",
+    "You know one thing.",
+  ];
+
+  function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  (async () => {
+    await delay(500);
+    inner.style.opacity = '1';
+    // MUSIC HOOK: first awakening
+    for (let i = 0; i < 5; i++) {
+      const line = document.createElement('p');
+      line.className = 'awake-line';
+      line.textContent = LINES[i];
+      linesEl.appendChild(line);
+      await delay(800);
+    }
+    await delay(1500);
+    const line6 = document.createElement('p');
+    line6.className = 'awake-line';
+    line6.textContent = 'Wait.';
+    linesEl.appendChild(line6);
+    await delay(1000);
+    const line7 = document.createElement('p');
+    line7.className = 'awake-line';
+    line7.textContent = "You know one thing.";
+    linesEl.appendChild(line7);
+    await delay(800);
+    // MUSIC HOOK: name reveal
+    nameWrap.style.display = 'block';
+    const name = String(characterName || '').trim() || 'You';
+    for (let i = 0; i < name.length; i++) {
+      const span = document.createElement('span');
+      span.className = 'awake-letter';
+      span.textContent = name[i];
+      span.style.animationDelay = (i * 80) + 'ms';
+      nameEl.appendChild(span);
+    }
+    await delay(2000);
+    holdEl.style.opacity = '1';
+    holdEl.style.transition = 'opacity 0.6s';
+    await delay(400);
+    promptEl.style.opacity = '1';
+    promptEl.style.transition = 'opacity 0.6s';
+    await delay(300);
+    wakeBtn.style.opacity = '1';
+    wakeBtn.style.transition = 'opacity 0.6s';
+  })();
+
+  wakeBtn.onclick = async () => {
+    wakeBtn.onclick = null;
+    // MUSIC HOOK: wake up
+    const container = document.getElementById('awakening-ash-container');
+    const rect = screen.getBoundingClientRect();
+    for (let i = 0; i < 40; i++) {
+      const dot = document.createElement('span');
+      dot.className = 'awakening-ash';
+      dot.style.left = (rect.left + Math.random() * rect.width) + 'px';
+      dot.style.top = (rect.top + rect.height - 10 + Math.random() * 20) + 'px';
+      dot.style.setProperty('--fall-y', (80 + Math.random() * 120) + 'px');
+      dot.style.setProperty('--fall-x', (Math.random() * 30 - 15) + 'px');
+      dot.style.animationDuration = (0.8 + Math.random() * 0.8) + 's';
+      dot.style.animationDelay = (Math.random() * 0.4) + 's';
+      container.appendChild(dot);
+    }
+    await delay(3000);
+    screen.style.display = 'none';
+    screen.setAttribute('aria-hidden', 'true');
+    showScreen('game');
+    await loadGame();
+  };
+}
+
 function formatStatMods(mods) {
   if (!mods || typeof mods !== 'object') return '';
   return Object.entries(mods).map(([s, v]) => {
@@ -1679,12 +1861,16 @@ function formatStatMods(mods) {
 }
 
 function computedStats(raceKey, instinctKey) {
+  return computedStatsFromBase(raceKey, instinctKey, { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 });
+}
+
+function computedStatsFromBase(raceKey, instinctKey, baseStats) {
   const races = mainRacesData?.races || {};
   const instincts = mainInstinctsData?.instincts || {};
   const race = races[raceKey];
   const instinct = instincts[instinctKey];
   if (!race || !instinct) return null;
-  const final = { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 };
+  const final = { ...baseStats };
   Object.entries(race.stat_mods || {}).forEach(([stat, mod]) => { final[stat] = (final[stat] ?? 10) + mod; });
   Object.entries(instinct.stat_mods || {}).forEach(([stat, mod]) => { final[stat] = (final[stat] ?? 10) + mod; });
   if (race.affinity && race.affinity.includes(instinctKey)) {
@@ -1724,7 +1910,7 @@ async function showTrueWelcome() {
 
   document.getElementById('tw-step-race').style.display = 'block';
   document.getElementById('tw-step-instinct').style.display = 'none';
-  document.getElementById('tw-step-confirm').style.display = 'none';
+  document.getElementById('tw-step-sheet').style.display = 'none';
   document.getElementById('tw-title').textContent = 'Choose your lineage';
   document.getElementById('tw-msg').textContent = '';
   document.getElementById('tw-msg').className = 'tw-msg';
@@ -1772,20 +1958,89 @@ function renderTwInstinctStep() {
   } else { bonusEl.style.display = 'none'; }
 }
 
-function renderTwConfirmStep() {
+function twSheetPoolRemain() {
+  const sum = Object.values(twSheetBaseStats).reduce((a, b) => a + b, 0);
+  return 90 - sum;
+}
+
+function updateTwSheetSummary() {
+  const remain = twSheetPoolRemain();
+  const nameEl = document.getElementById('tw-create-name');
+  const nameOk = nameEl && nameEl.value.trim().length >= 2;
+  const summaryEl = document.getElementById('tw-sheet-summary');
+  const contentEl = document.getElementById('tw-sheet-summary-content');
+  const nextBtn = document.getElementById('tw-next-btn');
+  const poolEl = document.getElementById('tw-sheet-pool-remain');
+  if (poolEl) {
+    poolEl.textContent = remain;
+    poolEl.classList.toggle('zero', remain <= 0);
+  }
+  if (remain <= 0 && nameOk && contentEl) {
+    const race = mainRacesData?.races?.[twSelectedRace];
+    const instinct = mainInstinctsData?.instincts?.[twSelectedInstinct];
+    const final = computedStatsFromBase(twSelectedRace, twSelectedInstinct, twSheetBaseStats);
+    const items = STARTING_ITEMS_DISPLAY[twSelectedInstinct] || [];
+    const raceDef = mainRacesData?.races?.[twSelectedRace];
+    const instDef = mainInstinctsData?.instincts?.[twSelectedInstinct];
+    const hasAffinity = raceDef && raceDef.affinity && raceDef.affinity.includes(twSelectedInstinct);
+    const primaryStat = instDef && Object.keys(instDef.stat_mods || {})[0];
+    let statsStr = final ? Object.entries(final).map(([k, v]) => k.slice(0, 3).toUpperCase() + ' ' + v).join(' · ') : '';
+    contentEl.innerHTML =
+      '<p><strong>' + (race ? race.name : twSelectedRace) + ' · ' + (instinct ? instinct.label : twSelectedInstinct) + '</strong></p>' +
+      '<p class="tw-stats-preview">' + statsStr + '</p>' +
+      '<p>Starting equipment: ' + (items.length ? items.join(', ') : '—') + '</p>' +
+      (hasAffinity && primaryStat ? '<p class="tw-affinity-bonus">Affinity bonus: +1 ' + primaryStat.charAt(0).toUpperCase() + primaryStat.slice(1) + '</p>' : '');
+    summaryEl.style.display = 'block';
+    nextBtn.textContent = 'Confirm';
+  } else {
+    summaryEl.style.display = 'none';
+    nextBtn.textContent = mainTwStep === 'sheet' ? 'Confirm' : 'Next';
+  }
+}
+
+function renderTwSheetStep() {
+  twSheetBaseStats = { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 };
+  const nameInput = document.getElementById('tw-create-name');
+  if (nameInput) nameInput.value = '';
+  const statKeys = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
+  const container = document.getElementById('tw-sheet-stats-rows');
+  container.innerHTML = '';
   const race = mainRacesData?.races?.[twSelectedRace];
   const instinct = mainInstinctsData?.instincts?.[twSelectedInstinct];
-  const stats = computedStats(twSelectedRace, twSelectedInstinct);
-  const items = STARTING_ITEMS_DISPLAY[twSelectedInstinct] || [];
-  const card = document.getElementById('tw-confirm-card');
-  let statsStr = '';
-  if (stats) {
-    statsStr = Object.entries(stats).map(([k, v]) => k.slice(0, 3).toUpperCase() + ' ' + v).join(' · ');
-  }
-  card.innerHTML =
-    '<h3>' + (race ? race.name : twSelectedRace) + ' · ' + (instinct ? instinct.label : twSelectedInstinct) + '</h3>' +
-    '<div class="tw-stats-preview">' + statsStr + '</div>' +
-    '<div class="tw-equipment">Starting equipment: ' + (items.length ? items.join(', ') : '—') + '</div>';
+  statKeys.forEach(stat => {
+    const row = document.createElement('div');
+    row.className = 'tw-sheet-stat-row';
+    const baseVal = twSheetBaseStats[stat];
+    const finalVal = computedStatsFromBase(twSelectedRace, twSelectedInstinct, { ...twSheetBaseStats, [stat]: baseVal });
+    const finalNum = finalVal ? finalVal[stat] : baseVal;
+    row.innerHTML =
+      '<span class="stat-name">' + stat.slice(0, 3).toUpperCase() + '</span>' +
+      '<button type="button" aria-label="Decrease">−</button>' +
+      '<span class="base-val">' + baseVal + '</span>' +
+      '<button type="button" aria-label="Increase">+</button>' +
+      '<span class="final-val">' + finalNum + '</span>';
+    const minusBtn = row.querySelector('button[aria-label="Decrease"]');
+    const plusBtn = row.querySelector('button[aria-label="Increase"]');
+    const baseSpan = row.querySelector('.base-val');
+    const finalSpan = row.querySelector('.final-val');
+    function refresh() {
+      const base = twSheetBaseStats[stat];
+      baseSpan.textContent = base;
+      const fin = computedStatsFromBase(twSelectedRace, twSelectedInstinct, { ...twSheetBaseStats, [stat]: base });
+      finalSpan.textContent = fin ? fin[stat] : base;
+      updateTwSheetSummary();
+    }
+    minusBtn.onclick = () => {
+      if (twSheetBaseStats[stat] > 10) { twSheetBaseStats[stat]--; refresh(); }
+    };
+    plusBtn.onclick = () => {
+      if (twSheetPoolRemain() > 0) { twSheetBaseStats[stat]++; refresh(); }
+    };
+    container.appendChild(row);
+  });
+  document.getElementById('tw-sheet-summary').style.display = 'none';
+  if (nameInput) nameInput.addEventListener('input', updateTwSheetSummary);
+  updateTwSheetSummary();
 }
 
 async function finishTrueWelcome() {
@@ -1798,25 +2053,47 @@ async function finishTrueWelcome() {
     renderTwInstinctStep();
     mainTwStep = 'instinct';
     document.getElementById('tw-next-btn').textContent = 'Next';
+    document.getElementById('tw-sheet-back-btn').style.display = 'none';
     return;
   }
   if (mainTwStep === 'instinct') {
     if (!twSelectedInstinct) { document.getElementById('tw-msg').textContent = 'Choose an Echo.'; document.getElementById('tw-msg').className = 'tw-msg err'; return; }
     document.getElementById('tw-step-instinct').style.display = 'none';
-    document.getElementById('tw-step-confirm').style.display = 'block';
-    document.getElementById('tw-title').textContent = 'Confirm';
-    renderTwConfirmStep();
-    mainTwStep = 'confirm';
+    document.getElementById('tw-step-sheet').style.display = 'block';
+    document.getElementById('tw-title').textContent = 'The one thing you remember';
+    renderTwSheetStep();
+    mainTwStep = 'sheet';
     document.getElementById('tw-next-btn').textContent = 'Confirm';
+    document.getElementById('tw-sheet-back-btn').style.display = 'inline-block';
+    document.getElementById('tw-sheet-back-btn').onclick = () => {
+      document.getElementById('tw-step-sheet').style.display = 'none';
+      document.getElementById('tw-step-instinct').style.display = 'block';
+      mainTwStep = 'instinct';
+      document.getElementById('tw-next-btn').textContent = 'Next';
+      document.getElementById('tw-sheet-back-btn').style.display = 'none';
+    };
     return;
   }
-  if (mainTwStep === 'confirm') {
+  if (mainTwStep === 'sheet') {
+    const nameEl = document.getElementById('tw-create-name');
+    const name = nameEl ? nameEl.value.trim() : '';
+    if (name.length < 2) { document.getElementById('tw-msg').textContent = 'Enter your name.'; document.getElementById('tw-msg').className = 'tw-msg err'; return; }
+    if (twSheetPoolRemain() > 0) { document.getElementById('tw-msg').textContent = 'Spend all 30 points.'; document.getElementById('tw-msg').className = 'tw-msg err'; return; }
     document.getElementById('tw-next-btn').textContent = '…';
     try {
-      await POST('/api/character/complete', { race: twSelectedRace, instinct: twSelectedInstinct });
+      const data = await POST('/api/character/complete', {
+        race: twSelectedRace,
+        instinct: twSelectedInstinct,
+        name: name,
+        stats: { ...twSheetBaseStats },
+      });
       mainCharacter = await GET('/api/character');
-      showScreen('sheet');
-      await populateCharacterSheet();
+      if (data.first_awakening) {
+        showAwakeningCinematic(name);
+      } else {
+        showScreen('sheet');
+        await populateCharacterSheet();
+      }
     } catch (e) {
       document.getElementById('tw-msg').textContent = e.message || 'Failed.';
       document.getElementById('tw-msg').className = 'tw-msg err';
@@ -1892,17 +2169,6 @@ function setupCharacterSheetTabs() {
 }
 
 async function init() {
-  try {
-    const data = await GET('/api/data/races');
-    const sel = document.getElementById('input-race');
-    for (const [id, info] of Object.entries(data.races)) {
-      const opt = document.createElement('option');
-      opt.value = id;
-      opt.textContent = info.name || id;
-      sel.appendChild(opt);
-    }
-  } catch(e) {}
-
   if (vToken) {
     try {
       const char = await GET('/api/character');
@@ -1921,6 +2187,16 @@ async function init() {
   }
   setupCharacterSheetTabs();
   document.getElementById('tw-next-btn').onclick = finishTrueWelcome;
+  const sheetBackBtn = document.getElementById('tw-sheet-back-btn');
+  if (sheetBackBtn && !sheetBackBtn.onclick) {
+    sheetBackBtn.onclick = () => {
+      document.getElementById('tw-step-sheet').style.display = 'none';
+      document.getElementById('tw-step-instinct').style.display = 'block';
+      mainTwStep = 'instinct';
+      document.getElementById('tw-next-btn').textContent = 'Next';
+      sheetBackBtn.style.display = 'none';
+    };
+  }
   document.getElementById('cs-enter-btn').onclick = () => {
     // MUSIC HOOK: entry transition start
     document.getElementById('character-sheet-screen').style.display = 'none';
@@ -2046,35 +2322,26 @@ async function doLogin() {
 async function doRegister() {
   const username = document.getElementById('reg-username').value.trim();
   const password = document.getElementById('reg-password').value;
-  const name = document.getElementById('input-name').value.trim();
-  const race = document.getElementById('input-race').value;
   const errEl = document.getElementById('auth-error-reg');
   errEl.textContent = '';
 
   if (!username) { errEl.textContent = 'Choose a username.'; return; }
   if (!password) { errEl.textContent = 'Choose a password.'; return; }
-  if (!name)     { errEl.textContent = 'Enter a character name.'; return; }
-  if (!race)     { errEl.textContent = 'Choose a race.'; return; }
 
-  document.getElementById('auth-btn-reg').innerHTML = '<span class="spinner"></span>Entering...';
+  document.getElementById('auth-btn-reg').innerHTML = '<span class="spinner"></span>Creating...';
 
   try {
-    const data = await POST('/api/register', { username, password, name, race });
+    const data = await POST('/api/register', { username, password });
     vToken = data.token;
     localStorage.setItem('v_token', vToken);
     const char = await GET('/api/character');
     mainCharacter = char;
-    document.getElementById('auth-btn-reg').textContent = 'Begin Your Story';
+    document.getElementById('auth-btn-reg').textContent = 'Create Account';
     document.getElementById('auth-screen').classList.add('hidden');
-    if (needsOnboard(char)) {
-      showTrueWelcome();
-    } else {
-      showScreen('sheet');
-      await populateCharacterSheet();
-    }
+    showTrueWelcome();
   } catch(e) {
     errEl.textContent = e.message;
-    document.getElementById('auth-btn-reg').textContent = 'Begin Your Story';
+    document.getElementById('auth-btn-reg').textContent = 'Create Account';
   }
 }
 

@@ -6,7 +6,7 @@
  */
 
 import { runAdminCommand } from "./admin.js";
-import { WORLD } from "./data/world.js";
+import { WORLD, FIRST_VISIT_INTROS } from "./data/world.js";
 import { COMBAT_DATA, FIGHTABLE_LOCATIONS } from "./data/combat.js";
 import { RACES } from "./data/races.js";
 import { INSTINCTS } from "./data/instincts.js";
@@ -22,8 +22,10 @@ import { statMod, rollDie, maxPlayerHp, randomEnemy, playerAttack, enemyAttack }
 const PROGRESSION_FLAGS = [
   "seen_sewer_wall_markings", "seen_sewer_graffiti", "seen_dask_roster", "seen_tier2_graffiti",
   "seen_rusted_pipe", "seen_foundation_dask", "warned_mid_sewer", "has_seen_market_square",
-  "found_foundation_stone", "has_room",
+  "found_foundation_stone", "has_room", "has_seen_awakening",
 ];
+
+const AWAKENING_ROOM_DESCRIPTION = "The floor is stone. That is the first thing you know — the cold of it against your cheek, the weight of your body on something that does not give. The second thing you know is warmth, coming from somewhere to your left, slow and steady, the way warmth comes from something that has been burning for a very long time.\n\nYou are in a room. There is a hearth. There is a bar. There is a dog near the fire that has lifted its head and is looking at you with eyes that are too still for an animal that has just noticed something unexpected.\n\nBehind the bar, a broad dwarf with burn-scarred braids is already watching you. He does not look surprised. He does not look concerned.\n\nHe looks like he has seen this before.\n\nHe looks like he has been waiting.";
 
 // Point-pool: each stat starts at 5, 28 points to distribute (≈ 3d6 total). Max per stat for future items/equipment.
 const STAT_BASE = 5;
@@ -336,42 +338,33 @@ export default {
       await initDb(db);
       // ── Auth: Register ──
 if (path === "/api/register" && method === "POST") {
-  const { username, password, name, race } = body;
-  if (!name || name.trim().length < 2) return err("Name too short.");
-  if (!RACES[race]) return err("Unknown race.");
+  const { username, password } = body;
+  if (!username || !password) return err("Username and password required.", 400);
 
-  // If username/password are provided, create an account record
-  const hasAccount = !!(username && password);
-  let normalizedUsername = null;
+  const normalizedUsername = String(username).trim().toLowerCase();
+  if (normalizedUsername.length < 2) return err("Username too short.");
+  if (String(password).length < 4) return err("Password too short.");
 
-  if (hasAccount) {
-    normalizedUsername = String(username).trim().toLowerCase();
-    if (normalizedUsername.length < 2) return err("Username too short.");
-    if (String(password).length < 4) return err("Password too short.");
-
-    const existing = await dbGet(db,
-      "SELECT 1 FROM accounts WHERE username=?",
-      [normalizedUsername]
-    );
-    if (existing) return err("Username already taken.");
-  }
+  const existing = await dbGet(db,
+    "SELECT 1 FROM accounts WHERE username=?",
+    [normalizedUsername]
+  );
+  if (existing) return err("Username already taken.");
 
   const uid = Math.floor(Math.random() * 900_000_000) + 100_000_000;
   const token = crypto.randomUUID();
 
   await dbRun(db, "INSERT INTO players(user_id,location) VALUES(?,?)", [uid, "tavern"]);
   await dbRun(db, `INSERT INTO characters(user_id,name,race,strength,dexterity,constitution,
-    intelligence,wisdom,charisma,ash_marks) VALUES(?,?,?,5,5,5,5,5,5,5)`,
-    [uid, name.trim(), race]);
+    intelligence,wisdom,charisma,ash_marks) VALUES(?,?,?,10,10,10,10,10,10,0)`,
+    [uid, "", "human"]);
   await dbRun(db, "INSERT INTO sessions(token,user_id) VALUES(?,?)", [token, uid]);
 
-  if (hasAccount) {
-    const pwHash = await hashPassword(password);
-    await dbRun(db,
-      "INSERT INTO accounts(username,password_hash,user_id) VALUES(?,?,?)",
-      [normalizedUsername, pwHash, uid]
-    );
-  }
+  const pwHash = await hashPassword(password);
+  await dbRun(db,
+    "INSERT INTO accounts(username,password_hash,user_id) VALUES(?,?,?)",
+    [normalizedUsername, pwHash, uid]
+  );
 
   return json({ token, user_id: uid });
 }
@@ -470,18 +463,36 @@ if (path === "/api/admin/command" && method === "POST") {
       return json({ instinct, label: INSTINCTS[instinct].label, ok: true });
     }
 
-    // ── POST: Complete character (race + instinct → computed stats + starting items) ──
+    // ── POST: Complete character (race + instinct + name + base stats → final stats + starting items) ──
     if (path === "/api/character/complete" && method === "POST") {
-      const { race: raceKey, instinct: instinctKey } = body;
+      const { race: raceKey, instinct: instinctKey, name: characterName, stats: baseStatsBody } = body;
       const row = await getPlayerSheet(db, uid);
       if (!row) return err("No character.", 404);
       if (row.stats_set) return err("Character already complete.", 400);
       if (!RACES[raceKey]) return err("Unknown race.", 400);
       if (!INSTINCTS[instinctKey]) return err("Invalid instinct.", 400);
 
+      const nameTrimmed = characterName != null ? String(characterName).trim() : (row.name || "");
+      if (nameTrimmed.length < 2) return err("Name too short.", 400);
+
+      const baseStats = baseStatsBody && typeof baseStatsBody === "object"
+        ? {
+            strength: Number(baseStatsBody.strength) || 10,
+            dexterity: Number(baseStatsBody.dexterity) || 10,
+            constitution: Number(baseStatsBody.constitution) || 10,
+            intelligence: Number(baseStatsBody.intelligence) || 10,
+            wisdom: Number(baseStatsBody.wisdom) || 10,
+            charisma: Number(baseStatsBody.charisma) || 10,
+          }
+        : { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 };
+
+      const baseSum = baseStats.strength + baseStats.dexterity + baseStats.constitution +
+        baseStats.intelligence + baseStats.wisdom + baseStats.charisma;
+      if (baseSum !== 90) return err("Stats must sum to 90 (6×10 base + 30 points).", 400);
+
       const race = RACES[raceKey];
       const instinct = INSTINCTS[instinctKey];
-      const finalStats = { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 };
+      const finalStats = { ...baseStats };
       for (const [stat, mod] of Object.entries(race.stat_mods)) {
         finalStats[stat] = (finalStats[stat] ?? 10) + mod;
       }
@@ -490,20 +501,22 @@ if (path === "/api/admin/command" && method === "POST") {
       }
       if (race.affinity && race.affinity.includes(instinctKey)) {
         const primaryStat = Object.keys(instinct.stat_mods)[0];
-        finalStats[primaryStat] += 1;
+        if (primaryStat) finalStats[primaryStat] += 1;
       }
 
       const { strength, dexterity, constitution, intelligence, wisdom, charisma } = finalStats;
       const maxHp = maxPlayerHp(constitution);
-      await dbRun(db, `UPDATE characters SET race=?, instinct=?, strength=?, dexterity=?, constitution=?,
+      await dbRun(db, `UPDATE characters SET name=?, race=?, instinct=?, strength=?, dexterity=?, constitution=?,
         intelligence=?, wisdom=?, charisma=?, stats_set=1, current_hp=? WHERE user_id=?`,
-        [raceKey, instinctKey, strength, dexterity, constitution, intelligence, wisdom, charisma, maxHp, uid]);
+        [nameTrimmed, raceKey, instinctKey, strength, dexterity, constitution, intelligence, wisdom, charisma, maxHp, uid]);
 
       const items = STARTING_ITEMS[instinctKey] || [];
       for (const item of items) {
         await dbRun(db, "INSERT INTO inventory (user_id, item, qty) VALUES (?, ?, 1) ON CONFLICT(user_id, item) DO UPDATE SET qty = qty + 1", [uid, item]);
       }
-      return json({ ok: true, stats: finalStats, max_hp: maxHp, starting_items: items });
+
+      // has_seen_awakening is set on first /api/look when we serve the awakening room description
+      return json({ ok: true, first_awakening: true, stats: finalStats, max_hp: maxHp, starting_items: items });
     }
 
     // ── POST: Set stats ──
@@ -542,6 +555,22 @@ if (path === "/api/admin/command" && method === "POST") {
       const room = WORLD[loc];
       if (!room) return err("Unknown location.");
 
+      let description = room.description;
+      if (loc === "tavern") {
+        const hasSeenAwakening = await getFlag(db, uid, "has_seen_awakening", 0);
+        if (hasSeenAwakening === 0) {
+          description = AWAKENING_ROOM_DESCRIPTION;
+          await setFlag(db, uid, "has_seen_awakening", 1);
+        }
+      } else if (FIRST_VISIT_INTROS[loc]) {
+        const visitFlag = loc === "market_square" ? "has_seen_market_square" : "visited_" + loc;
+        const seen = await getFlag(db, uid, visitFlag, 0);
+        if (seen === 0) {
+          description = FIRST_VISIT_INTROS[loc] + room.description;
+          await setFlag(db, uid, visitFlag, 1);
+        }
+      }
+
       const npcsHere = Object.entries(NPC_LOCATIONS)
         .filter(([,l]) => l === loc).map(([id]) => id);
 
@@ -556,7 +585,7 @@ if (path === "/api/admin/command" && method === "POST") {
       }
 
       return json({
-        location: loc, name: room.name, description: room.description,
+        location: loc, name: room.name, description,
         exits, exit_map,
         objects: Object.keys(room.objects || {}),
         items: [],  // room items seeded statically for now
@@ -590,6 +619,22 @@ if (path === "/api/admin/command" && method === "POST") {
         else if (r < 0.225) ambient = "*Something skitters just beyond your torchlight. The sound stops the moment you turn.*";
       }
 
+      const destRoom = WORLD[dest];
+      let destDescription = destRoom.description;
+      if (dest === "tavern") {
+        const hasSeenAwakening = await getFlag(db, uid, "has_seen_awakening", 0);
+        if (hasSeenAwakening === 0) {
+          destDescription = AWAKENING_ROOM_DESCRIPTION;
+          await setFlag(db, uid, "has_seen_awakening", 1);
+        }
+      } else {
+        const visitFlag = dest === "market_square" ? "has_seen_market_square" : "visited_" + dest;
+        const hadVisited = await getFlag(db, uid, visitFlag, 0);
+        if (FIRST_VISIT_INTROS[dest] && hadVisited === 0) {
+          destDescription = FIRST_VISIT_INTROS[dest] + destRoom.description;
+        }
+      }
+
       // Depth flag
       if (dest.startsWith("sewer_mid") || dest.startsWith("sewer_deep") || dest === "sewer_gate") {
         await setFlag(db, uid, "warned_mid_sewer", 1);
@@ -599,7 +644,6 @@ if (path === "/api/admin/command" && method === "POST") {
       }
       await setFlag(db, uid, "visited_" + dest, 1);
 
-      const destRoom = WORLD[dest];
       let destExits = Object.keys(destRoom.exits || {});
       let destExitMap = { ...(destRoom.exits || {}) };
       if (dest === "market_square") {
@@ -610,7 +654,7 @@ if (path === "/api/admin/command" && method === "POST") {
         .filter(([,l]) => l === dest).map(([id]) => id);
 
       return json({
-        location: dest, name: destRoom.name, description: destRoom.description,
+        location: dest, name: destRoom.name, description: destDescription,
         exits: destExits,
         exit_map: destExitMap,
         objects: Object.keys(destRoom.objects || {}),
@@ -649,6 +693,7 @@ if (path === "/api/admin/command" && method === "POST") {
       const kelvarisVisits = await getFlag(db, uid, "kelvaris_visits");
       const hasSeenMarket  = await getFlag(db, uid, "has_seen_market_square");
       const warnedMidSewer  = await getFlag(db, uid, "warned_mid_sewer");
+      const hasSeenAwakening = await getFlag(db, uid, "has_seen_awakening", 0);
       const hp = await getPlayerHp(db, uid, row);
 
       const playerContext = {
@@ -658,6 +703,7 @@ if (path === "/api/admin/command" && method === "POST") {
         has_instinct: !!(row.instinct && row.instinct.trim()),
         stats_set: !!(row.stats_set),
         has_seen_market_square: !!hasSeenMarket,
+        has_seen_awakening: !!hasSeenAwakening,
         warned_mid_sewer: !!warnedMidSewer,
         wisdom: row.wisdom,
         charisma: row.charisma,
