@@ -44,7 +44,7 @@ export function playerAttack(stats, enemy, useAbility, instinct) {
       narrative = `**Ember Pulse** — Something surges from your core. ${dmg} magic damage.`;
       return { dmg, narrative, magic: true };
     }
-    if (instinct === "hearthbound") {
+    if (instinct === "hearthborn") {
       const heal = rollDie(6) + statMod(stats.constitution);
       narrative = `**Steady** — You pull yourself together. Recover ${heal} HP.`;
       return { dmg: 0, narrative, heal };

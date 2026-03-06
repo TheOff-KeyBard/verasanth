@@ -32,6 +32,15 @@ const STAT_MAX = 18;
 const STAT_KEYS = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"];
 const STAT_TOTAL_EXPECTED = 6 * STAT_BASE + STAT_POOL; // 58
 
+const STARTING_ITEMS = {
+  ember_touched: ["charred_focus_wand", "ash_thread_robe", "ember_charm"],
+  hearthborn:    ["simple_mace", "tattered_vestments", "tarnished_holy_symbol"],
+  streetcraft:   ["rusted_dagger", "patchwork_cloak", "lockpick_kit"],
+  ironblood:     ["worn_longsword", "cracked_shield", "leather_brigandine"],
+  shadowbound:   ["serrated_dagger", "shadow_cloak", "smoke_vial"],
+  warden:        ["iron_spear", "reinforced_shield", "guards_mail"],
+};
+
 function validatePointBuy(stats) {
   let sum = 0;
   for (const key of STAT_KEYS) {
@@ -180,10 +189,12 @@ async function getPlayerHp(db, uid, row) {
 
 // Alignment tick
 const ALIGN_INSTINCT_BIAS = {
-  hearthbound:   [1, 0],
+  hearthborn:    [1, 0],
   ember_touched: [0, 0],
   ironblood:     [0, 0],
   streetcraft:   [0, -1],
+  shadowbound:   [0, 0],
+  warden:        [0, 0],
 };
 
 async function tickAlignment(db, uid, mDelta, oDelta, instinct = "") {
@@ -459,6 +470,42 @@ if (path === "/api/admin/command" && method === "POST") {
       return json({ instinct, label: INSTINCTS[instinct].label, ok: true });
     }
 
+    // ── POST: Complete character (race + instinct → computed stats + starting items) ──
+    if (path === "/api/character/complete" && method === "POST") {
+      const { race: raceKey, instinct: instinctKey } = body;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (row.stats_set) return err("Character already complete.", 400);
+      if (!RACES[raceKey]) return err("Unknown race.", 400);
+      if (!INSTINCTS[instinctKey]) return err("Invalid instinct.", 400);
+
+      const race = RACES[raceKey];
+      const instinct = INSTINCTS[instinctKey];
+      const finalStats = { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 };
+      for (const [stat, mod] of Object.entries(race.stat_mods)) {
+        finalStats[stat] = (finalStats[stat] ?? 10) + mod;
+      }
+      for (const [stat, mod] of Object.entries(instinct.stat_mods)) {
+        finalStats[stat] = (finalStats[stat] ?? 10) + mod;
+      }
+      if (race.affinity && race.affinity.includes(instinctKey)) {
+        const primaryStat = Object.keys(instinct.stat_mods)[0];
+        finalStats[primaryStat] += 1;
+      }
+
+      const { strength, dexterity, constitution, intelligence, wisdom, charisma } = finalStats;
+      const maxHp = maxPlayerHp(constitution);
+      await dbRun(db, `UPDATE characters SET race=?, instinct=?, strength=?, dexterity=?, constitution=?,
+        intelligence=?, wisdom=?, charisma=?, stats_set=1, current_hp=? WHERE user_id=?`,
+        [raceKey, instinctKey, strength, dexterity, constitution, intelligence, wisdom, charisma, maxHp, uid]);
+
+      const items = STARTING_ITEMS[instinctKey] || [];
+      for (const item of items) {
+        await dbRun(db, "INSERT INTO inventory (user_id, item, qty) VALUES (?, ?, 1) ON CONFLICT(user_id, item) DO UPDATE SET qty = qty + 1", [uid, item]);
+      }
+      return json({ ok: true, stats: finalStats, max_hp: maxHp, starting_items: items });
+    }
+
     // ── POST: Set stats ──
     if (path === "/api/character/stats" && method === "POST") {
       const { strength, dexterity, constitution, intelligence, wisdom, charisma } = body;
@@ -682,7 +729,7 @@ if (path === "/api/admin/command" && method === "POST") {
         // Rare glad event
         hpGained = 3;
         response = "*You kneel. The air shifts.*\n\n*Something ancient takes notice — and then, for a single heartbeat, something changes.*\n\n*The Sanctuary feels glad you are here.*\n\n*The feeling passes before you can be certain of it. But it was there.*";
-      } else if (instinct === "hearthbound") {
+      } else if (instinct === "hearthborn") {
         hpGained = 3;
         response = count === 0
           ? "*The silence changes. It was empty before. Now it is not.*\n\n*Something turns its attention toward you — not a god, not a demon, something that predates those distinctions — and waits.*\n\n*Your wounds ease slightly.* **+3 HP**"

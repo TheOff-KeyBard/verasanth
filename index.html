@@ -807,6 +807,28 @@
   }
   .tw-modal h2 { font-family: var(--font-title); font-size: 1.1rem; color: var(--ember-glow); margin-bottom: 12px; }
   .tw-hint { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 16px; }
+  .tw-race-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+  .tw-race-card, .tw-instinct-card {
+    text-align: left;
+    padding: 12px 14px;
+    min-width: 140px;
+    border: 1px solid var(--border-warm);
+    background: var(--bg2);
+    color: var(--ash-light);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .tw-race-card:hover, .tw-instinct-card:hover { border-color: var(--gold-dim); color: var(--text); }
+  .tw-race-card.selected, .tw-instinct-card.selected { border-color: var(--ember); color: var(--ember-glow); }
+  .tw-instinct-card.affinity { border-color: var(--gold-dim); }
+  .tw-instinct-card.affinity .tw-affinity-badge { display: inline; font-size: 0.75rem; color: var(--gold); margin-bottom: 4px; }
+  .tw-instinct-card .tw-affinity-badge { display: none; }
+  .tw-affinity-bonus { font-size: 0.85rem; color: var(--gold); margin-bottom: 10px; }
+  .tw-confirm-card { background: var(--bg2); border: 1px solid var(--border-warm); padding: 16px; margin-bottom: 16px; font-size: 0.9rem; }
+  .tw-confirm-card h3 { font-family: var(--font-title); font-size: 1rem; margin-bottom: 8px; color: var(--ember-glow); }
+  .tw-confirm-card .tw-stats-preview { margin: 10px 0; color: var(--text-dim); }
+  .tw-confirm-card .tw-equipment { margin-top: 10px; color: var(--ash-light); }
   .tw-instinct-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
   .tw-instinct-grid button {
     background: var(--bg3); border: 1px solid var(--border); color: var(--text);
@@ -1204,15 +1226,18 @@
 <!-- ── True Welcome (second app) ─────────────────────────────────── -->
 <div id="true-welcome-screen" class="screen-overlay" style="display:none;" aria-hidden="true">
   <div class="tw-modal">
-    <h2 id="tw-title">Choose your Echo</h2>
-    <div id="tw-step-instinct">
+    <h2 id="tw-title">Choose your lineage</h2>
+    <div id="tw-step-race">
+      <p class="tw-hint">Your lineage shapes your strengths.</p>
+      <div id="tw-race-grid" class="tw-race-grid"></div>
+    </div>
+    <div id="tw-step-instinct" style="display:none;">
       <p class="tw-hint">Your instinct is permanent. It unlocks a once-per-turn combat ability.</p>
+      <div id="tw-affinity-bonus" class="tw-affinity-bonus" style="display:none;"></div>
       <div id="tw-instinct-grid" class="tw-instinct-grid"></div>
     </div>
-    <div id="tw-step-stats" style="display:none;">
-      <p class="tw-hint">Distribute 28 points among your stats (each starts at 5).</p>
-      <div id="tw-stats-grid" class="tw-stats-grid"></div>
-      <div class="tw-pool"><span>Pool: <strong id="tw-pool-remain">28</strong></span></div>
+    <div id="tw-step-confirm" style="display:none;">
+      <div id="tw-confirm-card" class="tw-confirm-card"></div>
     </div>
     <div id="tw-msg" class="tw-msg"></div>
     <div class="tw-actions">
@@ -1256,7 +1281,7 @@
         <ul id="cs-flags-list"></ul>
       </div>
       <div class="sheet-divider"></div>
-      <button type="button" id="cs-enter-btn" class="btn-enter-verasanth">Enter Verasanth — The Shadow Hearth Awaits</button>
+      <button type="button" id="cs-enter-btn" class="btn-enter-verasanth">Enter Verasanth — The City of Slumber</button>
     </div>
   </div>
 </div>
@@ -1272,8 +1297,8 @@
     <p class="entry-copy">They came from somewhere. They always do.</p>
     <p class="entry-copy">The ash took the memory of it. The ash takes everything, eventually.</p>
     <p class="entry-copy">Welcome to Verasanth. You have always been here.</p>
-    <p class="entry-prompt">— step forward when you are ready —</p>
-    <button type="button" id="entry-enter-city">ENTER THE CITY</button>
+    <p class="entry-prompt">— Awaken if you dare —</p>
+    <button type="button" id="entry-enter-city">Awaken</button>
   </div>
 </div>
 
@@ -1516,12 +1541,19 @@ let connectionsList = [];
 let visitedSet = new Set();
 let playerMaxHp = 1;
 let mainCharacter = null;
+let mainRacesData = null;
 let mainInstinctsData = null;
-let mainTwStep = "instinct";
+let mainTwStep = "race";
+let twSelectedRace = "";
 let twSelectedInstinct = "";
-let twStats = { strength: 5, dexterity: 5, constitution: 5, intelligence: 5, wisdom: 5, charisma: 5 };
-const TW_POOL = 28;
-const TW_BASE = 5;
+const STARTING_ITEMS_DISPLAY = {
+  ember_touched: ['charred_focus_wand', 'ash_thread_robe', 'ember_charm'],
+  hearthborn:    ['simple_mace', 'tattered_vestments', 'tarnished_holy_symbol'],
+  streetcraft:   ['rusted_dagger', 'patchwork_cloak', 'lockpick_kit'],
+  ironblood:     ['worn_longsword', 'cracked_shield', 'leather_brigandine'],
+  shadowbound:   ['serrated_dagger', 'shadow_cloak', 'smoke_vial'],
+  warden:        ['iron_spear', 'reinforced_shield', 'guards_mail'],
+};
 
 const NPC_NAMES = {
   bartender:   'Kelvaris',
@@ -1638,80 +1670,166 @@ function needsOnboard(c) {
   return c == null || c.instinct == null || c.instinct === '' || c.stats_set == null || Number(c.stats_set) === 0;
 }
 
-async function showTrueWelcome() {
-  if (!mainInstinctsData) {
-    try { mainInstinctsData = await GET('/api/data/instincts'); } catch(e) { mainInstinctsData = { instincts: {} }; }
+function formatStatMods(mods) {
+  if (!mods || typeof mods !== 'object') return '';
+  return Object.entries(mods).map(([s, v]) => {
+    const sign = v >= 0 ? '+' : '';
+    return s.slice(0, 3).toUpperCase() + ' ' + sign + v;
+  }).join(' · ');
+}
+
+function computedStats(raceKey, instinctKey) {
+  const races = mainRacesData?.races || {};
+  const instincts = mainInstinctsData?.instincts || {};
+  const race = races[raceKey];
+  const instinct = instincts[instinctKey];
+  if (!race || !instinct) return null;
+  const final = { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 };
+  Object.entries(race.stat_mods || {}).forEach(([stat, mod]) => { final[stat] = (final[stat] ?? 10) + mod; });
+  Object.entries(instinct.stat_mods || {}).forEach(([stat, mod]) => { final[stat] = (final[stat] ?? 10) + mod; });
+  if (race.affinity && race.affinity.includes(instinctKey)) {
+    const primary = Object.keys(instinct.stat_mods || {})[0];
+    if (primary) final[primary] += 1;
   }
-  const grid = document.getElementById('tw-instinct-grid');
-  grid.innerHTML = '';
-  const inst = mainInstinctsData.instincts || {};
-  for (const [id, def] of Object.entries(inst)) {
+  return final;
+}
+
+async function showTrueWelcome() {
+  try {
+    const [rData, iData] = await Promise.all([
+      GET('/api/data/races').catch(() => ({ races: {} })),
+      GET('/api/data/instincts').catch(() => ({ instincts: {} })),
+    ]);
+    mainRacesData = rData;
+    mainInstinctsData = iData;
+  } catch (e) {}
+  twSelectedRace = (mainCharacter && mainCharacter.race && mainRacesData?.races?.[mainCharacter.race]) ? mainCharacter.race : 'human';
+  twSelectedInstinct = '';
+
+  const raceGrid = document.getElementById('tw-race-grid');
+  raceGrid.innerHTML = '';
+  const races = mainRacesData?.races || {};
+  for (const [id, def] of Object.entries(races)) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.textContent = def.label || id;
-    btn.className = twSelectedInstinct === id ? 'selected' : '';
+    btn.className = 'tw-race-card' + (twSelectedRace === id ? ' selected' : '');
+    btn.innerHTML = '<strong>' + (def.name || id) + '</strong><br><span class="tw-stat-mods">' + formatStatMods(def.stat_mods) + '</span>';
     btn.onclick = () => {
-      twSelectedInstinct = id;
-      grid.querySelectorAll('button').forEach(b => b.classList.remove('selected'));
+      twSelectedRace = id;
+      raceGrid.querySelectorAll('.tw-race-card').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
     };
-    grid.appendChild(btn);
+    raceGrid.appendChild(btn);
   }
-  document.getElementById('tw-step-instinct').style.display = 'block';
-  document.getElementById('tw-step-stats').style.display = 'none';
-  document.getElementById('tw-title').textContent = 'Choose your Echo';
+
+  document.getElementById('tw-step-race').style.display = 'block';
+  document.getElementById('tw-step-instinct').style.display = 'none';
+  document.getElementById('tw-step-confirm').style.display = 'none';
+  document.getElementById('tw-title').textContent = 'Choose your lineage';
   document.getElementById('tw-msg').textContent = '';
   document.getElementById('tw-msg').className = 'tw-msg';
-  mainTwStep = 'instinct';
+  document.getElementById('tw-next-btn').textContent = 'Next';
+  mainTwStep = 'race';
   showScreen('tw');
 }
 
-function renderTwStats() {
-  const container = document.getElementById('tw-stats-grid');
-  container.innerHTML = '';
-  const keys = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
-  keys.forEach(k => {
-    const lab = document.createElement('label');
-    lab.innerHTML = k.charAt(0).toUpperCase() + k.slice(1) + ' <input type="number" min="5" max="18" value="' + (twStats[k] || 5) + '" data-stat="' + k + '">';
-    lab.querySelector('input').onchange = (e) => { twStats[k] = parseInt(e.target.value, 10) || 5; updateTwPool(); };
-    container.appendChild(lab);
-  });
-  updateTwPool();
+function renderTwInstinctStep() {
+  const grid = document.getElementById('tw-instinct-grid');
+  grid.innerHTML = '';
+  const instincts = mainInstinctsData?.instincts || {};
+  const race = mainRacesData?.races?.[twSelectedRace];
+  const affinityList = (race && race.affinity) ? race.affinity : [];
+  for (const [id, def] of Object.entries(instincts)) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'tw-instinct-card' + (affinityList.includes(id) ? ' affinity' : '') + (twSelectedInstinct === id ? ' selected' : '');
+    card.innerHTML = (affinityList.includes(id) ? '<span class="tw-affinity-badge">Affinity ✦</span>' : '') +
+      '<strong>' + (def.label || id) + '</strong><br>' +
+      '<em class="tw-memory">' + (def.memory || '') + '</em><br>' +
+      '<span class="tw-role">' + (def.role || '') + '</span><br>' +
+      '<span class="tw-ability">' + (def.ability || '') + ': ' + (def.ability_desc || '') + '</span>';
+    card.onclick = () => {
+      twSelectedInstinct = id;
+      grid.querySelectorAll('.tw-instinct-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      const inst = mainInstinctsData?.instincts?.[id];
+      const primary = inst && Object.keys(inst.stat_mods || {})[0];
+      const bonusEl = document.getElementById('tw-affinity-bonus');
+      if (affinityList.includes(id) && primary) {
+        bonusEl.textContent = 'Affinity bonus: +1 ' + primary.charAt(0).toUpperCase() + primary.slice(1);
+        bonusEl.style.display = 'block';
+      } else {
+        bonusEl.style.display = 'none';
+      }
+    };
+    grid.appendChild(card);
+  }
+  const bonusEl = document.getElementById('tw-affinity-bonus');
+  if (twSelectedInstinct && affinityList.includes(twSelectedInstinct)) {
+    const inst = mainInstinctsData?.instincts?.[twSelectedInstinct];
+    const primary = inst && Object.keys(inst.stat_mods || {})[0];
+    if (primary) { bonusEl.textContent = 'Affinity bonus: +1 ' + primary.charAt(0).toUpperCase() + primary.slice(1); bonusEl.style.display = 'block'; }
+  } else { bonusEl.style.display = 'none'; }
 }
 
-function updateTwPool() {
-  const sum = Object.values(twStats).reduce((a, b) => a + b, 0);
-  const spent = sum - (TW_BASE * 6);
-  const remain = TW_POOL - spent;
-  document.getElementById('tw-pool-remain').textContent = remain;
+function renderTwConfirmStep() {
+  const race = mainRacesData?.races?.[twSelectedRace];
+  const instinct = mainInstinctsData?.instincts?.[twSelectedInstinct];
+  const stats = computedStats(twSelectedRace, twSelectedInstinct);
+  const items = STARTING_ITEMS_DISPLAY[twSelectedInstinct] || [];
+  const card = document.getElementById('tw-confirm-card');
+  let statsStr = '';
+  if (stats) {
+    statsStr = Object.entries(stats).map(([k, v]) => k.slice(0, 3).toUpperCase() + ' ' + v).join(' · ');
+  }
+  card.innerHTML =
+    '<h3>' + (race ? race.name : twSelectedRace) + ' · ' + (instinct ? instinct.label : twSelectedInstinct) + '</h3>' +
+    '<div class="tw-stats-preview">' + statsStr + '</div>' +
+    '<div class="tw-equipment">Starting equipment: ' + (items.length ? items.join(', ') : '—') + '</div>';
 }
 
 async function finishTrueWelcome() {
   document.getElementById('tw-msg').textContent = '';
   document.getElementById('tw-msg').className = 'tw-msg';
-  const sum = Object.values(twStats).reduce((a, b) => a + b, 0);
-  const spent = sum - (TW_BASE * 6);
-  if (mainTwStep === 'instinct') {
-    if (!twSelectedInstinct) { document.getElementById('tw-msg').textContent = 'Choose an Echo.'; document.getElementById('tw-msg').className = 'tw-msg err'; return; }
-    await POST('/api/character/instinct', { instinct: twSelectedInstinct });
-    mainCharacter = await GET('/api/character');
-    mainTwStep = 'stats';
-    document.getElementById('tw-step-instinct').style.display = 'none';
-    document.getElementById('tw-step-stats').style.display = 'block';
-    document.getElementById('tw-title').textContent = 'Set your stats';
-    renderTwStats();
+  if (mainTwStep === 'race') {
+    document.getElementById('tw-step-race').style.display = 'none';
+    document.getElementById('tw-step-instinct').style.display = 'block';
+    document.getElementById('tw-title').textContent = 'Choose your Echo';
+    renderTwInstinctStep();
+    mainTwStep = 'instinct';
+    document.getElementById('tw-next-btn').textContent = 'Next';
     return;
   }
-  if (spent !== TW_POOL) { document.getElementById('tw-msg').textContent = 'Use all 28 points.'; document.getElementById('tw-msg').className = 'tw-msg err'; return; }
-  await POST('/api/character/stats', twStats);
-  mainCharacter = await GET('/api/character');
-  showScreen('sheet');
-  await populateCharacterSheet();
+  if (mainTwStep === 'instinct') {
+    if (!twSelectedInstinct) { document.getElementById('tw-msg').textContent = 'Choose an Echo.'; document.getElementById('tw-msg').className = 'tw-msg err'; return; }
+    document.getElementById('tw-step-instinct').style.display = 'none';
+    document.getElementById('tw-step-confirm').style.display = 'block';
+    document.getElementById('tw-title').textContent = 'Confirm';
+    renderTwConfirmStep();
+    mainTwStep = 'confirm';
+    document.getElementById('tw-next-btn').textContent = 'Confirm';
+    return;
+  }
+  if (mainTwStep === 'confirm') {
+    document.getElementById('tw-next-btn').textContent = '…';
+    try {
+      await POST('/api/character/complete', { race: twSelectedRace, instinct: twSelectedInstinct });
+      mainCharacter = await GET('/api/character');
+      showScreen('sheet');
+      await populateCharacterSheet();
+    } catch (e) {
+      document.getElementById('tw-msg').textContent = e.message || 'Failed.';
+      document.getElementById('tw-msg').className = 'tw-msg err';
+      document.getElementById('tw-next-btn').textContent = 'Confirm';
+    }
+  }
 }
 
 async function populateCharacterSheet() {
   const char = mainCharacter || await GET('/api/character');
   mainCharacter = char;
+  if (!mainRacesData) try { mainRacesData = await GET('/api/data/races'); } catch(e) {}
+  if (!mainInstinctsData) try { mainInstinctsData = await GET('/api/data/instincts'); } catch(e) {}
   let wallet = { ash_marks: 0, ember_shards: 0, soul_coins: 0 };
   let inv = { items: [] };
   let flags = {};
@@ -1720,11 +1838,12 @@ async function populateCharacterSheet() {
   try { flags = await GET('/api/character/flags'); } catch(e) {}
   const locName = getLocationName(char.location);
   document.getElementById('cs-name').textContent = char.name || '—';
-  document.getElementById('cs-race').textContent = (char.race && char.race.charAt(0).toUpperCase() + char.race.slice(1)) || '—';
+  const raceDef = mainRacesData?.races?.[char.race];
+  document.getElementById('cs-race').textContent = raceDef ? raceDef.name : (char.race ? char.race.charAt(0).toUpperCase() + char.race.slice(1) : '—');
   const instId = char.instinct || '';
   const instDef = mainInstinctsData?.instincts?.[instId];
   document.getElementById('cs-instinct').textContent = instDef ? instDef.label : (instId || '—');
-  document.getElementById('cs-instinct-desc').textContent = instDef && instDef.description ? instDef.description : '';
+  document.getElementById('cs-instinct-desc').textContent = instDef ? (instDef.memory || '') + (instDef.ability ? ' · ' + instDef.ability + ': ' + (instDef.ability_desc || '') : '') : '';
   document.getElementById('cs-location').textContent = locName;
   const hp = char.current_hp ?? 0;
   const maxHp = char.max_hp || 10;
