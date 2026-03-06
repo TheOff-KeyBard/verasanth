@@ -8,11 +8,21 @@ export function maxPlayerHp(con) { return 20 + statMod(con) * 3; }
 
 /**
  * Pick a random enemy for the given location. Uses floor-based pools and 8% boss chance.
+ * If activeCondition has enemy_spawn_bonus and floor matches, extends pool with bonus enemies.
  */
-export function randomEnemy(location) {
+export function randomEnemy(location, activeCondition = null) {
   const cd = COMBAT_DATA;
   const floor = LOCATION_TO_FLOOR[location] ?? 1;
-  const pool = cd.sewer_floor_pools[floor] ?? cd.sewer_floor_pools[1];
+  let pool = [...(cd.sewer_floor_pools[floor] ?? cd.sewer_floor_pools[1])];
+
+  if (activeCondition?.effects?.enemy_spawn_bonus && activeCondition.floors?.includes(floor)) {
+    for (const [enemyId, count] of Object.entries(activeCondition.effects.enemy_spawn_bonus)) {
+      if (cd.enemies[enemyId]) {
+        for (let i = 0; i < (count || 1); i++) pool.push(enemyId);
+      }
+    }
+  }
+
   const bosses = cd.sewer_floor_bosses;
   const bossChance = cd.BOSS_CHANCE ?? 0.08;
 

@@ -4,6 +4,7 @@
  */
 
 import { generateItem } from "../services/item_generator.js";
+import { LOCATION_TO_FLOOR } from "./combat.js";
 
 // ── Static item display names (for room/boss loot) ──
 const STATIC_ITEM_NAMES = {
@@ -90,11 +91,13 @@ function pick(arr) {
  * @param {string} locationId
  * @param {boolean} isBoss
  * @param {number} playerLevel
+ * @param {Object|null} activeCondition — sewer condition with effects.loot_bonus
  * @returns {{ items: Array<{item, qty, display_name, tier}>, procedural: Object|null }}
  */
-export function getCombatLoot(enemyId, locationId, isBoss, playerLevel) {
+export function getCombatLoot(enemyId, locationId, isBoss, playerLevel, activeCondition = null) {
   const items = [];
   let procedural = null;
+  const floor = LOCATION_TO_FLOOR[locationId] ?? 1;
 
   if (isBoss && BOSS_DROPS[enemyId]) {
     const drops = BOSS_DROPS[enemyId];
@@ -131,6 +134,24 @@ export function getCombatLoot(enemyId, locationId, isBoss, playerLevel) {
     }
   } else {
     procedural = generateItem(playerLevel, locationId, 1);
+  }
+
+  if (activeCondition?.effects?.loot_bonus && activeCondition.floors?.includes(floor)) {
+    for (const [itemId, maxQty] of Object.entries(activeCondition.effects.loot_bonus)) {
+      if (!STATIC_ITEM_NAMES[itemId]) continue;
+      let added = 0;
+      for (let i = 0; i < (maxQty || 1) && added < (maxQty || 1); i++) {
+        if (Math.random() < 0.5) {
+          items.push({
+            item: itemId,
+            qty: 1,
+            display_name: STATIC_ITEM_NAMES[itemId] || itemId,
+            tier: getTierForItem(itemId),
+          });
+          added++;
+        }
+      }
+    }
   }
 
   return { items, procedural };

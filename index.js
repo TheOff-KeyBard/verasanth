@@ -21,6 +21,7 @@ import { getCombatLoot, ROOM_LOOT } from "./data/sewer_loot.js";
 import { SEWER_CONDITIONS } from "./data/sewer_conditions.js";
 import { getRelationship, setRelationship, getPartyMembers, triggerBetrayalCascade } from "./services/pvp.js";
 import { handleQuestDialogue, recordEnemyKill } from "./services/quests.js";
+import { rotateSewerCondition } from "./services/sewer_rotation.js";
 
 // ─────────────────────────────────────────────────────────────
 // GAME DATA (remaining in index)
@@ -691,7 +692,12 @@ async function getActiveSewerCondition(db) {
   } catch (_) {
     data = SEWER_CONDITIONS.find(c => c.id === row.condition_id);
   }
-  return data ? { name: data.name, noticeboard_text: data.noticeboard_text } : null;
+  return data ? { name: data.name, noticeboard_text: data.noticeboard_text, floors: data.floors, effects: data.effects } : null;
+}
+
+async function getBlockedRoutes(db) {
+  const cond = await getActiveSewerCondition(db);
+  return cond?.effects?.route_blocked ?? [];
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -714,6 +720,12 @@ async function hashPassword(password) {
 // ─────────────────────────────────────────────────────────────
 
 export default {
+  async scheduled(controller, env, ctx) {
+    const db = env.DB;
+    if (!db) return;
+    await initDb(db);
+    await rotateSewerCondition(db, dbGet, dbRun);
+  },
   async fetch(request, env) {
     // CORS preflight
     if (request.method === "OPTIONS") {
@@ -1068,6 +1080,13 @@ if (path === "/api/admin/command" && method === "POST") {
           description += " The gate ahead is sealed. Beyond it, something older waits.";
         }
       }
+      const blocked = await getBlockedRoutes(db);
+      for (const e of [...exits]) {
+        if (blocked.includes(exit_map[e])) {
+          exits = exits.filter(x => x !== e);
+          delete exit_map[e];
+        }
+      }
 
       const deathDrops = await getUnclaimedDropsAtLocation(db, loc);
       if (deathDrops.length > 0) {
@@ -1110,6 +1129,8 @@ if (path === "/api/admin/command" && method === "POST") {
         const hasFlag = await getFlag(db, uid, gate.requires_flag, 0);
         if (!hasFlag) dest = null;
       }
+      const blocked = await getBlockedRoutes(db);
+      if (dest && blocked.includes(dest)) return err("The passage is impassable. The noticeboard warned of this.", 400);
       if (!dest) return err(`You can't go ${direction} from here.`);
       if (!WORLD[dest]) return err("That path leads nowhere.");
 
@@ -1168,6 +1189,13 @@ if (path === "/api/admin/command" && method === "POST") {
           destExits = destExits.filter(e => e !== destGate.exit_dir);
           delete destExitMap[destGate.exit_dir];
           destDescription += " The gate ahead is sealed. Beyond it, something older waits.";
+        }
+      }
+      const destBlocked = await getBlockedRoutes(db);
+      for (const e of [...destExits]) {
+        if (destBlocked.includes(destExitMap[e])) {
+          destExits = destExits.filter(x => x !== e);
+          delete destExitMap[e];
         }
       }
       let npcsHere = Object.entries(NPC_LOCATIONS)
@@ -1832,12 +1860,13 @@ if (path === "/api/combat/state" && method === "GET") {
       const hp = await getPlayerHp(db, uid, row);
       if (hp.current <= 0) return err("You can't fight in this condition.");
 
+      const activeCondition = await getActiveSewerCondition(db);
       let enemy;
       const bossNode = BOSS_NODES[row.location];
       const forceBoss = bossNode && !(await getFlag(db, uid, bossNode.flag, 0));
       if (forceBoss) {
         const bossData = COMBAT_DATA.enemies[bossNode.boss_id];
-        enemy = bossData ? { ...bossData, id: bossData.id } : randomEnemy(row.location);
+        enemy = bossData ? { ...bossData, id: bossData.id } : randomEnemy(row.location, activeCondition);
       } else {
         // Optional: set player_flags.force_combat_test=1 for deterministic gutter_rat spawn (playtest).
         const forceCombatTest = await getFlag(db, uid, "force_combat_test");
@@ -1845,7 +1874,7 @@ if (path === "/api/combat/state" && method === "GET") {
           const gutterRat = COMBAT_DATA.enemies.gutter_rat;
           enemy = { ...gutterRat, id: gutterRat.id };
         } else {
-          enemy = randomEnemy(row.location);
+          enemy = randomEnemy(row.location, activeCondition);
         }
       }
       const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
@@ -2006,7 +2035,8 @@ if (path === "/api/combat/state" && method === "GET") {
         const playerLevel = 1 + (xpRow.class_stage || 0);
         const locationId = state.location || "drain_entrance";
         const isBoss = !!bossFlag;
-        const { items: lootItems, procedural } = getCombatLoot(state.enemy_id, locationId, isBoss, playerLevel);
+        const lootCondition = await getActiveSewerCondition(db);
+        const { items: lootItems, procedural } = getCombatLoot(state.enemy_id, locationId, isBoss, playerLevel, lootCondition);
 
         const itemLines = [];
         for (const it of lootItems) {
