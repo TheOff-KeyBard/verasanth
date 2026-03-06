@@ -22,7 +22,7 @@ import { statMod, rollDie, maxPlayerHp, randomEnemy, playerAttack, enemyAttack }
 const PROGRESSION_FLAGS = [
   "seen_sewer_wall_markings", "seen_sewer_graffiti", "seen_dask_roster", "seen_tier2_graffiti",
   "seen_rusted_pipe", "seen_foundation_dask", "warned_mid_sewer", "has_seen_market_square",
-  "found_foundation_stone", "has_room", "has_seen_awakening",
+  "found_foundation_stone", "has_room", "has_seen_awakening", "othorion_trust",
 ];
 
 const NOTICEBOARD_NPC_NOTICES = {
@@ -1394,6 +1394,8 @@ if (path === "/api/combat/state" && method === "GET") {
       for (const id of PROGRESSION_FLAGS) {
         flags[id] = await getFlag(db, uid, id, 0);
       }
+      const othorionTrust = await getFlag(db, uid, "othorion_trust", 0);
+      flags.othorion_trusted = othorionTrust >= 3 ? 1 : 0;
       return json(flags);
     }
 
