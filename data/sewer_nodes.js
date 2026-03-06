@@ -151,9 +151,9 @@ export const SEWER_NODES = {
     description: "Shelves of stone holding documents wrapped in something that kept them mostly intact despite the water. The flood records go back further than the current city. Among them, a page with a name Thalara would recognize — Descent 7, no return date. You don't know whose name it is yet. Thalara will.",
     exits: { west: "flooded_hall" },
     objects: {
-      submerged_shelves: { desc: "Stone shelves. Documents wrapped. The water did not destroy everything.", actions: ["inspect"] },
-      flood_records: { desc: "Dates. Names. A page Thalara would recognize.", actions: ["inspect", "read"] },
-      personal_effects: { desc: "A bundle. Someone's things. Left here when they did not return.", actions: ["inspect"] },
+      submerged_shelves: { desc: "Stone shelves. Documents wrapped. The water did not destroy everything.", actions: ["inspect", "search"] },
+      flood_records: { desc: "Dates. Names. A page Thalara would recognize.", actions: ["inspect", "read", "search"] },
+      personal_effects: { desc: "A bundle. Someone's things. Left here when they did not return.", actions: ["inspect", "search"] },
     },
     items: [],
   },

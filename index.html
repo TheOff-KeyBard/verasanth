@@ -3371,12 +3371,32 @@ const NOTICEBOARD_OBJECTS = ['noticeboard', 'ember_post'];
 async function doInspect(target) {
   try {
     const data = await GET(`/api/inspect/${target}`);
-    log(render(data.desc));
+    let html = render(data.desc);
+    if (data.actions && data.actions.includes('search')) {
+      html += ` <button type="button" class="action-btn" data-search-target="${escapeHtml(target)}">Search</button>`;
+    }
+    log(html);
+    if (data.actions && data.actions.includes('search')) {
+      const logEl = document.getElementById('log');
+      const firstEntry = logEl?.querySelector('.log-entry.fresh');
+      const searchBtn = firstEntry?.querySelector('[data-search-target]');
+      if (searchBtn) searchBtn.onclick = () => doSearch(searchBtn.getAttribute('data-search-target'));
+    }
     if (NOTICEBOARD_OBJECTS.includes(target) && currentGameLocation) {
       await openNoticeboardOverlay(data.desc, currentGameLocation);
     }
   } catch(e) {
     log(`<em>${e.message}</em>`);
+  }
+}
+
+async function doSearch(object) {
+  try {
+    const data = await POST('/api/search', { object });
+    log(render(data.message || ''));
+    refreshSidebar();
+  } catch(e) {
+    log(`<em>${e.message || e}</em>`);
   }
 }
 

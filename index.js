@@ -17,7 +17,10 @@ import { VENDOR_STOCK, VENDOR_NPCS, CAELIR_STOCK, VEYRA_STOCK } from "./data/ven
 import { getNPCResponse, boardNPCReaction } from "./services/npc_dialogue.js";
 import { statMod, rollDie, maxPlayerHp, randomEnemy, playerAttack, enemyAttack, tickStatusEffects, resolveEnemyTrait, getTraitDamageModifier, getStatusEffectOnHit, getTraitOnHitEffect } from "./services/combat.js";
 import { generateItem } from "./services/item_generator.js";
+import { getCombatLoot, ROOM_LOOT } from "./data/sewer_loot.js";
+import { SEWER_CONDITIONS } from "./data/sewer_conditions.js";
 import { getRelationship, setRelationship, getPartyMembers, triggerBetrayalCascade } from "./services/pvp.js";
+import { handleQuestDialogue, recordEnemyKill } from "./services/quests.js";
 
 // ─────────────────────────────────────────────────────────────
 // GAME DATA (remaining in index)
@@ -603,6 +606,39 @@ async function initDb(db) {
       claimed_at INTEGER
     )`);
 
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS sewer_conditions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      condition_id TEXT NOT NULL,
+      active INTEGER DEFAULT 0,
+      started_at INTEGER NOT NULL,
+      ends_at INTEGER NOT NULL,
+      data TEXT
+    )`);
+
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS quests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      quest_id TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'static',
+      status TEXT DEFAULT 'active',
+      progress TEXT,
+      assigned_at INTEGER NOT NULL,
+      expires_at INTEGER,
+      completed_at INTEGER,
+      UNIQUE(user_id, quest_id)
+    )`);
+
+    // Seed sewer condition on first run (Phase 2: display only)
+    const condRow = await dbGet(db, "SELECT 1 FROM sewer_conditions LIMIT 1");
+    if (!condRow) {
+      const cond = SEWER_CONDITIONS[0];
+      const now = Date.now();
+      const endsAt = now + 45 * 60 * 1000;
+      await dbRun(db, `INSERT INTO sewer_conditions (condition_id, active, started_at, ends_at, data)
+        VALUES (?, 1, ?, ?, ?)`,
+        [cond.id, now, endsAt, JSON.stringify(cond)]);
+    }
+
     // One-time migration: seed mercy_score/order_score from characters
     await dbRun(db, `CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY)`);
     const migrated = await dbGet(db, "SELECT 1 FROM _migrations WHERE name=?", ["alignment_v1"]);
@@ -643,6 +679,19 @@ function json(data, status = 200) {
 
 function err(msg, status = 400) {
   return json({ error: msg, detail: msg }, status);
+}
+
+async function getActiveSewerCondition(db) {
+  const now = Date.now();
+  const row = await dbGet(db, "SELECT * FROM sewer_conditions WHERE active=1 AND ends_at>? LIMIT 1", [now]);
+  if (!row) return null;
+  let data;
+  try {
+    data = row.data ? JSON.parse(row.data) : SEWER_CONDITIONS.find(c => c.id === row.condition_id);
+  } catch (_) {
+    data = SEWER_CONDITIONS.find(c => c.id === row.condition_id);
+  }
+  return data ? { name: data.name, noticeboard_text: data.noticeboard_text } : null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -981,6 +1030,9 @@ if (path === "/api/admin/command" && method === "POST") {
       } else if (FIRST_VISIT_INTROS[loc]) {
         const visitFlag = loc === "market_square" ? "has_seen_market_square" : "visited_" + loc;
         const seen = await getFlag(db, uid, visitFlag, 0);
+        if (seen === 0 && (SEWER_LEVEL_1.includes(loc) || SEWER_LEVEL_2.includes(loc) || SEWER_LEVEL_3.includes(loc) || SEWER_LEVEL_4.includes(loc) || SEWER_LEVEL_5.includes(loc))) {
+          await setFlag(db, uid, "first_sewer_visit", 1);
+        }
         if (seen === 0) {
           description = FIRST_VISIT_INTROS[loc] + room.description;
           await setFlag(db, uid, visitFlag, 1);
@@ -1095,6 +1147,9 @@ if (path === "/api/admin/command" && method === "POST") {
         await setFlag(db, uid, "has_seen_market_square", 1);
       }
       await setFlag(db, uid, "visited_" + dest, 1);
+      if (SEWER_LEVEL_1.includes(dest) || SEWER_LEVEL_2.includes(dest) || SEWER_LEVEL_3.includes(dest) || SEWER_LEVEL_4.includes(dest) || SEWER_LEVEL_5.includes(dest)) {
+        await setFlag(db, uid, "first_sewer_visit", 1);
+      }
 
       let destExits = Object.keys(destRoom.exits || {});
       let destExitMap = { ...(destRoom.exits || {}) };
@@ -1162,6 +1217,31 @@ if (path === "/api/admin/command" && method === "POST") {
       const flagName = SEWER_STORY_MARKINGS[row.location]?.[target];
       if (flagName) await setFlag(db, uid, flagName, 1);
       return json({ target, desc: obj.desc, actions: obj.actions || [] });
+    }
+
+    // ── POST: Search (room/object loot) ──
+    if (path === "/api/search" && method === "POST") {
+      const { object } = body;
+      if (!object || typeof object !== "string") return err("object required.", 400);
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const key = `${row.location}:${object}`;
+      const entry = ROOM_LOOT[key];
+      if (!entry) return err("Nothing to find.", 404);
+      const hasFlag = await getFlag(db, uid, entry.flag);
+      if (hasFlag) return err("Nothing to find.", 404);
+      await setFlag(db, uid, entry.flag, 1);
+      const invRow = await dbGet(db, "SELECT item,qty FROM inventory WHERE user_id=? AND item=?", [uid, entry.item]);
+      const displayName = entry.display_name || entry.item;
+      if (invRow) {
+        await dbRun(db, "UPDATE inventory SET qty=qty+? WHERE user_id=? AND item=?", [entry.qty, uid, entry.item]);
+      } else {
+        await dbRun(db, `INSERT INTO inventory (user_id, item, qty, tier, corrupted, curse, curse_identified, special_property, display_name)
+          VALUES (?, ?, ?, 1, 0, NULL, 0, NULL, ?)`,
+          [uid, entry.item, entry.qty, displayName]);
+      }
+      const itemLabel = entry.qty > 1 ? `${displayName} x${entry.qty}` : displayName;
+      return json({ ok: true, item: itemLabel, message: `*You find ${itemLabel}.*` });
     }
 
     // ── Party System ──
@@ -1381,6 +1461,11 @@ if (path === "/api/admin/command" && method === "POST") {
         playerContext.grommash_arc2_complete = grommashArc2Complete;
         playerContext.seris_arc3_complete = serisArc3CompleteWarden;
         playerContext.strength = row.strength;
+      }
+
+      const questResult = await handleQuestDialogue(db, dbGet, dbAll, dbRun, uid, npc, topic, playerContext, getFlag, setFlag);
+      if (questResult) {
+        return json({ response: questResult.response });
       }
 
       const response = await getNPCResponse(env, npc, topic, playerContext);
@@ -1617,7 +1702,7 @@ if (path === "/api/admin/command" && method === "POST") {
         [location, now]
       );
       const rowsWithOwn = rows.map(r => ({ ...r, is_own: r.user_id === uid }));
-      const npc = (NOTICEBOARD_NPC_NOTICES[location] || []).map((n, i) => ({
+      let npc = (NOTICEBOARD_NPC_NOTICES[location] || []).map((n, i) => ({
         id: n.id || `npc-${location}-${i}`,
         title: n.title || "",
         message: n.message || "",
@@ -1626,6 +1711,12 @@ if (path === "/api/admin/command" && method === "POST") {
         created_at: 0,
         is_npc: true,
       }));
+      if (location === "market_square" || location === "sewer_entrance") {
+        const cond = await getActiveSewerCondition(db);
+        if (cond) {
+          npc = [{ id: "sewer-condition", title: cond.name, message: cond.noticeboard_text, player_name: "The City", pinned: 1, created_at: 0, is_npc: true }, ...npc];
+        }
+      }
       const combined = [...npc, ...rowsWithOwn];
       combined.sort((a, b) => (b.pinned - a.pinned) || ((b.created_at || 0) - (a.created_at || 0)));
       return json({ notices: combined });
@@ -1897,6 +1988,10 @@ if (path === "/api/combat/state" && method === "GET") {
         const bossFlag = bossFlags[state.enemy_id];
         if (bossFlag) await setFlag(db, uid, bossFlag, 1);
 
+        const victoryLoc = state.location || "drain_entrance";
+        if (victoryLoc === "vermin_nest") await setFlag(db, uid, "nest_cleared_floor1", 1);
+        await recordEnemyKill(db, dbAll, dbRun, uid, state.enemy_id);
+
         const xpGain = enemy.xp || 50;
         const xpRow  = await dbGet(db, "SELECT xp,class_stage FROM characters WHERE user_id=?", [uid]);
         const newXp  = (xpRow.xp || 0) + xpGain;
@@ -1907,19 +2002,37 @@ if (path === "/api/combat/state" && method === "GET") {
         const lootAsh = Math.floor(Math.random() * 15) + 5;
         await dbRun(db, "UPDATE characters SET ash_marks=ash_marks+? WHERE user_id=?", [lootAsh, uid]);
 
-        // Procedural item drop
+        // Loot — floor-specific from sewer_loot, or procedural fallback
         const playerLevel = 1 + (xpRow.class_stage || 0);
         const locationId = state.location || "drain_entrance";
-        const enemyTier = enemy.tier ?? 1;
-        const dropped = generateItem(playerLevel, locationId, enemyTier);
-        await dbRun(db, `INSERT INTO inventory (user_id, item, qty, tier, corrupted, curse, curse_identified, special_property, display_name)
-          VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?)`,
-          [uid, dropped.id, dropped.tier, dropped.corrupted ? 1 : 0, dropped.curse || null, dropped.curse_identified || 0, dropped.special_property || null, dropped.display_name || null]);
+        const isBoss = !!bossFlag;
+        const { items: lootItems, procedural } = getCombatLoot(state.enemy_id, locationId, isBoss, playerLevel);
+
+        const itemLines = [];
+        for (const it of lootItems) {
+          const specProp = null;
+          const invRow = await dbGet(db, "SELECT item,qty FROM inventory WHERE user_id=? AND item=?", [uid, it.item]);
+          if (invRow) {
+            await dbRun(db, "UPDATE inventory SET qty=qty+?, tier=?, display_name=? WHERE user_id=? AND item=?",
+              [it.qty, it.tier, it.display_name, uid, it.item]);
+          } else {
+            await dbRun(db, `INSERT INTO inventory (user_id, item, qty, tier, corrupted, curse, curse_identified, special_property, display_name)
+              VALUES (?, ?, ?, ?, 0, NULL, 0, ?, ?)`,
+              [uid, it.item, it.qty, it.tier, specProp, it.display_name]);
+          }
+          itemLines.push(it.display_name || it.item);
+        }
+        if (procedural) {
+          await dbRun(db, `INSERT INTO inventory (user_id, item, qty, tier, corrupted, curse, curse_identified, special_property, display_name)
+            VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?)`,
+            [uid, procedural.id, procedural.tier, procedural.corrupted ? 1 : 0, procedural.curse || null, procedural.curse_identified || 0, procedural.special_property || null, procedural.display_name || null]);
+          itemLines.push(procedural.display_name || procedural.id);
+        }
 
         const mKill = instinct === "ironblood" ? 0 : -1;
         await updateAlignment(db, uid, mKill, 1, instinct);
 
-        const itemLine = dropped.display_name ? ` | **${dropped.display_name}**` : "";
+        const itemLine = itemLines.length ? ` | **${itemLines.join("**, **")}**` : "";
         return json({
           result: "victory",
           message: `*${enemy.name} falls.*\n\n${attack.narrative}\n\n**+${xpGain} XP** | **+${lootAsh} Ash Marks**${itemLine}`,
