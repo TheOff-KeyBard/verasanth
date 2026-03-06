@@ -1800,6 +1800,7 @@ const NPC_NAMES = {
   armorsmith:  'Veyra',
   alchemist:   'Thalara',
   curator:     'Seris Vantrel',
+  othorion:    'Othorion Naxir',
 };
 
 const TOPIC_LABELS = {
@@ -1823,6 +1824,7 @@ const TOPIC_LABELS = {
   past:'Your Past',
   person_lost:'The One You Lost',
   shop:'The Shop', items:'Your Collection', artifacts:'The Artifacts',
+  furnace:'The Furnace', pip:'Pip', research:'Your Research', escape:'Escape',
   atelier:'The Atelier',
   yourself:'Yourself', me:'Yourself',
 };
@@ -1877,6 +1879,11 @@ const TOPIC_GATES = {
     past: null, yourself: null,
     sanctuary: 'has_seen_market_square', board: 'has_seen_market_square', dask: 'seen_sewer_wall_markings',
     sewer: 'has_seen_market_square', cistern: 'seen_sewer_wall_markings', crawlers: 'seen_sewer_wall_markings',
+  },
+  othorion: {
+    city: null, furnace: null, seris: null, artifacts: null, pip: null,
+    sewers: 'has_seen_market_square', research: null, escape: null,
+    kelvaris: null, thalara: null, veyra: null, caelir: null,
   },
 };
 

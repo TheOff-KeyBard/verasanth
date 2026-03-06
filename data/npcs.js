@@ -4,6 +4,7 @@ export const NPC_LOCATIONS = {
   armorsmith:  "mended_hide",
   alchemist:   "hollow_jar",
   curator:     "market_square",
+  othorion:    "naxirs_crucible",
 };
 
 export const NPC_NAMES = {
@@ -12,6 +13,7 @@ export const NPC_NAMES = {
   armorsmith:  "Veyra",
   alchemist:   "Thalara",
   curator:     "Seris Vantrel",
+  othorion:    "Othorion Naxir",
 };
 
 export const NPC_TOPICS = {
@@ -20,6 +22,7 @@ export const NPC_TOPICS = {
   armorsmith:  ["forge","wall_marks","armor_stock","kelvaris","caelir","thalara","seris","city","dask","board","sanctuary","sewer","cistern","crawlers","yourself"],
   alchemist:   ["city","work","remedies","kelvaris","veyra","caelir","seris","sanctuary","board","dask","sewer","cistern","crawlers","past","yourself","person_lost"],
   curator:     ["city","shop","items","kelvaris","caelir","veyra","thalara","sanctuary","board","dask","sewer","cistern","crawlers","past","yourself","artifacts"],
+  othorion:    ["city","furnace","seris","artifacts","pip","sewers","research","escape","kelvaris","thalara","veyra","caelir"],
 };
 
 

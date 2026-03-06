@@ -811,6 +811,26 @@ if (path === "/api/admin/command" && method === "POST") {
         serisArc2Active = await getFlag(db, uid, "seris_arc2_active");
         serisSeenSewer = await getFlag(db, uid, "seen_sewer_wall_markings");
       }
+      let othorionVisits = 0;
+      let othorionTrust = 0;
+      let othorionArc1Complete = 0;
+      let othorionArc2Complete = 0;
+      let serisArc1ActiveOthorion = 0;
+      let serisArc2ActiveOthorion = 0;
+      let serisArc3Complete = 0;
+      let seenSewerWallMarkingsOthorion = 0;
+      let foundFoundationStone = 0;
+      if (npc === "othorion") {
+        othorionVisits = await getFlag(db, uid, "othorion_visits");
+        othorionTrust = await getFlag(db, uid, "othorion_trust");
+        othorionArc1Complete = await getFlag(db, uid, "othorion_arc1_complete");
+        othorionArc2Complete = await getFlag(db, uid, "othorion_arc2_complete");
+        serisArc1ActiveOthorion = await getFlag(db, uid, "seris_arc1_active");
+        serisArc2ActiveOthorion = await getFlag(db, uid, "seris_arc2_active");
+        serisArc3Complete = await getFlag(db, uid, "seris_arc3_complete");
+        seenSewerWallMarkingsOthorion = await getFlag(db, uid, "seen_sewer_wall_markings");
+        foundFoundationStone = await getFlag(db, uid, "found_foundation_stone");
+      }
       const hp = await getPlayerHp(db, uid, row);
 
       const playerContext = {
@@ -856,6 +876,18 @@ if (path === "/api/admin/command" && method === "POST") {
         playerContext.seris_arc2_active = serisArc2Active;
         playerContext.seen_sewer_wall_markings = serisSeenSewer;
       }
+      if (npc === "othorion") {
+        playerContext.othorion_visits = othorionVisits;
+        playerContext.othorion_trust = othorionTrust;
+        playerContext.othorion_arc1_complete = othorionArc1Complete;
+        playerContext.othorion_arc2_complete = othorionArc2Complete;
+        playerContext.seris_arc1_active = serisArc1ActiveOthorion;
+        playerContext.seris_arc2_active = serisArc2ActiveOthorion;
+        playerContext.seris_arc3_complete = serisArc3Complete;
+        playerContext.seen_sewer_wall_markings = seenSewerWallMarkingsOthorion;
+        playerContext.deep_sewer = !!foundFoundationStone;
+        playerContext.race = row.race || "";
+      }
 
       const response = await getNPCResponse(env, npc, topic, playerContext);
 
@@ -877,6 +909,9 @@ if (path === "/api/admin/command" && method === "POST") {
       }
       if (npc === "curator") {
         await setFlag(db, uid, "seris_visits", serisVisits + 1);
+      }
+      if (npc === "othorion") {
+        await setFlag(db, uid, "othorion_visits", othorionVisits + 1);
       }
 
       return json({ response });
