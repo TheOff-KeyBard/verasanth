@@ -801,6 +801,16 @@ if (path === "/api/admin/command" && method === "POST") {
         thalaraArc2Complete = await getFlag(db, uid, "thalara_arc2_complete");
         thalaraSeenSewer = await getFlag(db, uid, "seen_sewer_wall_markings");
       }
+      let serisVisits = 0;
+      let serisArc1Active = 0;
+      let serisArc2Active = 0;
+      let serisSeenSewer = 0;
+      if (npc === "curator") {
+        serisVisits = await getFlag(db, uid, "seris_visits");
+        serisArc1Active = await getFlag(db, uid, "seris_arc1_active");
+        serisArc2Active = await getFlag(db, uid, "seris_arc2_active");
+        serisSeenSewer = await getFlag(db, uid, "seen_sewer_wall_markings");
+      }
       const hp = await getPlayerHp(db, uid, row);
 
       const playerContext = {
@@ -839,6 +849,13 @@ if (path === "/api/admin/command" && method === "POST") {
         playerContext.thalara_arc2_complete = thalaraArc2Complete;
         playerContext.seen_sewer_wall_markings = thalaraSeenSewer;
       }
+      if (npc === "curator") {
+        playerContext.seris_visits = serisVisits;
+        playerContext.seris_items_sold = itemsSold;
+        playerContext.seris_arc1_active = serisArc1Active;
+        playerContext.seris_arc2_active = serisArc2Active;
+        playerContext.seen_sewer_wall_markings = serisSeenSewer;
+      }
 
       const response = await getNPCResponse(env, npc, topic, playerContext);
 
@@ -857,6 +874,9 @@ if (path === "/api/admin/command" && method === "POST") {
       }
       if (npc === "alchemist") {
         await setFlag(db, uid, "thalara_visits", thalaraVisits + 1);
+      }
+      if (npc === "curator") {
+        await setFlag(db, uid, "seris_visits", serisVisits + 1);
       }
 
       return json({ response });
