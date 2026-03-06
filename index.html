@@ -3223,6 +3223,10 @@ function renderRoom(data) {
     b.className = 'btn danger-btn';
     actRow.appendChild(b);
   }
+  if (data.death_drops_present) {
+    const b = makeActionBtn('Search the area', doSearchArea);
+    actRow.appendChild(b);
+  }
 
   // Ambient message
   if (data.ambient) {
@@ -3236,6 +3240,18 @@ function makeActionBtn(label, fn) {
   b.textContent = label;
   b.onclick = fn;
   return b;
+}
+
+async function doSearchArea() {
+  try {
+    const data = await POST('/api/death-drop/claim');
+    log(render(data.message));
+    refreshSidebar();
+    const lookData = await GET('/api/look');
+    renderRoom(lookData);
+  } catch(e) {
+    log(`<em>${e.message}</em>`);
+  }
 }
 
 // ── Movement ─────────────────────────────────────────────────────

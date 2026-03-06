@@ -225,6 +225,25 @@ async function getPlayerHp(db, uid, row) {
   return { current: cur, max: maxHp };
 }
 
+// Death penalty: 20% Ash Marks drop, min 1 if any
+async function processDeathDrop(db, uid, deathLocation) {
+  const row = await dbGet(db, "SELECT ash_marks FROM characters WHERE user_id=?", [uid]);
+  const ash = Number(row?.ash_marks ?? 0);
+  if (ash <= 0) return { ashLost: 0 };
+  const ashLost = Math.max(1, Math.floor(ash * 0.2));
+  await dbRun(db, "UPDATE characters SET ash_marks = ash_marks - ? WHERE user_id = ?", [ashLost, uid]);
+  const now = Date.now();
+  await dbRun(db, "INSERT INTO death_drops (owner_id, location, ash_marks, dropped_at) VALUES (?, ?, ?, ?)", [uid, deathLocation, ashLost, now]);
+  return { ashLost };
+}
+
+// Unclaimed death drops at location (non-expired; 30 min)
+const DEATH_DROP_EXPIRY_MS = 1800000;
+async function getUnclaimedDropsAtLocation(db, locationId) {
+  const cutoff = Date.now() - DEATH_DROP_EXPIRY_MS;
+  return await dbAll(db, "SELECT id, ash_marks FROM death_drops WHERE location=? AND claimed_by IS NULL AND dropped_at>? ORDER BY id ASC", [locationId, cutoff]);
+}
+
 // Presence (chat: "recently active" for whispers)
 async function updateLastSeen(db, uid) {
   await dbRun(db, `UPDATE players SET last_seen = unixepoch('now') * 1000 WHERE user_id = ?`, [uid]);
@@ -522,6 +541,17 @@ async function initDb(db) {
       completed INTEGER DEFAULT 0
     )`);
 
+    // Death penalty: Ash Marks drop on death
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS death_drops (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      owner_id INTEGER NOT NULL,
+      location TEXT NOT NULL,
+      ash_marks INTEGER DEFAULT 0,
+      dropped_at INTEGER NOT NULL,
+      claimed_by INTEGER,
+      claimed_at INTEGER
+    )`);
+
     // One-time migration: seed mercy_score/order_score from characters
     await dbRun(db, `CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY)`);
     const migrated = await dbGet(db, "SELECT 1 FROM _migrations WHERE name=?", ["alignment_v1"]);
@@ -749,7 +779,8 @@ if (path === "/api/admin/command" && method === "POST") {
       const downed = await dbGet(db, "SELECT downed_until FROM pvp_state WHERE user_id=? AND downed_until>0 AND downed_until<?", [uid, now]);
       if (downed) {
         const row = await getPlayerSheet(db, uid);
-        await dbRun(db, "UPDATE characters SET current_hp=0, ash_marks=0 WHERE user_id=?", [uid]);
+        await processDeathDrop(db, uid, row?.location || "tavern");
+        await dbRun(db, "UPDATE characters SET current_hp=0 WHERE user_id=?", [uid]);
         await dbRun(db, "UPDATE players SET location='tavern' WHERE user_id=?", [uid]);
         const maxHp = maxPlayerHp(row?.constitution || 10);
         await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [maxHp, uid]);
@@ -912,6 +943,11 @@ if (path === "/api/admin/command" && method === "POST") {
         exit_map.down = "sewer_entrance";
       }
 
+      const deathDrops = await getUnclaimedDropsAtLocation(db, loc);
+      if (deathDrops.length > 0) {
+        description += "\n\nSomething glints near the drain. Ash Marks — someone left them here quickly.";
+      }
+
       return json({
         location: loc, name: room.name, description,
         exits, exit_map,
@@ -920,6 +956,7 @@ if (path === "/api/admin/command" && method === "POST") {
         npcs: npcsHere,
         in_combat: inCombat,
         fightable: FIGHTABLE_LOCATIONS.has(loc),
+        death_drops_present: deathDrops.length > 0,
       });
     }
 
@@ -981,6 +1018,11 @@ if (path === "/api/admin/command" && method === "POST") {
       const npcsHere = Object.entries(NPC_LOCATIONS)
         .filter(([,l]) => l === dest).map(([id]) => id);
 
+      const deathDrops = await getUnclaimedDropsAtLocation(db, dest);
+      if (deathDrops.length > 0) {
+        destDescription += "\n\nSomething glints near the drain. Ash Marks — someone left them here quickly.";
+      }
+
       return json({
         location: dest, name: destRoom.name, description: destDescription,
         exits: destExits,
@@ -988,7 +1030,22 @@ if (path === "/api/admin/command" && method === "POST") {
         objects: Object.keys(destRoom.objects || {}),
         items: [], npcs: npcsHere, ambient,
         fightable: FIGHTABLE_LOCATIONS.has(dest),
+        death_drops_present: deathDrops.length > 0,
       });
+    }
+
+    // ── POST: Death drop claim ──
+    if (path === "/api/death-drop/claim" && method === "POST") {
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const loc = row.location;
+      const cutoff = Date.now() - DEATH_DROP_EXPIRY_MS;
+      const drop = await dbGet(db, "SELECT id, ash_marks FROM death_drops WHERE location=? AND claimed_by IS NULL AND dropped_at>? ORDER BY id ASC LIMIT 1", [loc, cutoff]);
+      if (!drop) return err("Nothing to find here.", 404);
+      const now = Date.now();
+      await dbRun(db, "UPDATE death_drops SET claimed_by=?, claimed_at=? WHERE id=?", [uid, now, drop.id]);
+      await dbRun(db, "UPDATE characters SET ash_marks=ash_marks+? WHERE user_id=?", [drop.ash_marks, uid]);
+      return json({ ok: true, ash_marks: drop.ash_marks, message: "*You gather the scattered marks.*" });
     }
 
     // ── GET: Inspect ──
@@ -1674,8 +1731,10 @@ if (path === "/api/combat/state" && method === "GET") {
 
       // Death
       if (playerHp <= 0) {
+        const deathLoc = state.location || "sewer_upper";
+        const { ashLost } = await processDeathDrop(db, uid, deathLoc);
         await dbRun(db, "DELETE FROM combat_state WHERE user_id=?", [uid]);
-        await dbRun(db, "UPDATE characters SET current_hp=0, ash_marks=0 WHERE user_id=?", [uid]);
+        await dbRun(db, "UPDATE characters SET current_hp=0 WHERE user_id=?", [uid]);
         await dbRun(db, "UPDATE players SET location='tavern' WHERE user_id=?", [uid]);
         const maxHp = maxPlayerHp(row.constitution);
         await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [maxHp, uid]);
@@ -1683,9 +1742,11 @@ if (path === "/api/combat/state" && method === "GET") {
         await setFlag(db, uid, "death_count", dc + 1);
         await setFlag(db, uid, "just_respawned", 1);
         await updateAlignment(db, uid, 0, -2, instinct);
+        let deathMsg = `*${enemy.name} stands over you.*\n\n*You wake in the Shadow Hearth Inn.*`;
+        if (ashLost > 0) deathMsg += `\n\nYou lost ${ashLost} Ash Marks. They're still where you fell.`;
         return json({
           result: "death",
-          message: `*${enemy.name} stands over you.*\n\n*You wake in the Shadow Hearth Inn. Your marks are gone.*`,
+          message: deathMsg,
         });
       }
 
@@ -1777,7 +1838,8 @@ if (path === "/api/combat/state" && method === "GET") {
       if (targetLoc?.location !== row.location) return err("Target is not here.", 400);
       const pvpRow = await dbGet(db, "SELECT downed_until FROM pvp_state WHERE user_id=? AND downed_until>?", [targetUid, Math.floor(Date.now() / 1000)]);
       if (!pvpRow) return err("That player is not downed.", 400);
-      await dbRun(db, "UPDATE characters SET current_hp=0, ash_marks=0 WHERE user_id=?", [targetUid]);
+      const { ashLost } = await processDeathDrop(db, targetUid, targetLoc.location);
+      await dbRun(db, "UPDATE characters SET current_hp=0 WHERE user_id=?", [targetUid]);
       await dbRun(db, "UPDATE players SET location='tavern' WHERE user_id=?", [targetUid]);
       const maxHp = maxPlayerHp((await dbGet(db, "SELECT constitution FROM characters WHERE user_id=?", [targetUid]))?.constitution || 10);
       await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [maxHp, targetUid]);
@@ -1787,7 +1849,9 @@ if (path === "/api/combat/state" && method === "GET") {
       await dbRun(db, "INSERT INTO pvp_state (user_id, downed_until, downed_by, created_at, updated_at) VALUES (?, 0, NULL, ?, ?) ON CONFLICT(user_id) DO UPDATE SET downed_until=0, downed_by=NULL, updated_at=excluded.updated_at", [targetUid, Math.floor(Date.now() / 1000), Math.floor(Date.now() / 1000)]);
       await updateAlignment(db, uid, -30, 0, (row.instinct || "").toLowerCase());
       const targetName = (await dbGet(db, "SELECT name FROM characters WHERE user_id=?", [targetUid]))?.name || "Unknown";
-      return json({ ok: true, message: `*You finish ${targetName}.*\n\n*They wake in the Shadow Hearth Inn. Their marks are gone.*` });
+      let finishMsg = `*You finish ${targetName}.*\n\n*They wake in the Shadow Hearth Inn.*`;
+      if (ashLost > 0) finishMsg += " Their marks are still where they fell.";
+      return json({ ok: true, message: finishMsg });
     }
 
     // ── POST: PvP Attack ──
