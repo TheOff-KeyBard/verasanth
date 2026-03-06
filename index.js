@@ -791,6 +791,16 @@ if (path === "/api/admin/command" && method === "POST") {
         veyraMarkAcknowledged = await getFlag(db, uid, "veyra_mark_acknowledged");
         veyraSeenSewer = await getFlag(db, uid, "seen_sewer_wall_markings");
       }
+      let thalaraVisits = 0;
+      let thalaraArc1Complete = 0;
+      let thalaraArc2Complete = 0;
+      let thalaraSeenSewer = 0;
+      if (npc === "alchemist") {
+        thalaraVisits = await getFlag(db, uid, "thalara_visits");
+        thalaraArc1Complete = await getFlag(db, uid, "thalara_arc1_complete");
+        thalaraArc2Complete = await getFlag(db, uid, "thalara_arc2_complete");
+        thalaraSeenSewer = await getFlag(db, uid, "seen_sewer_wall_markings");
+      }
       const hp = await getPlayerHp(db, uid, row);
 
       const playerContext = {
@@ -823,6 +833,12 @@ if (path === "/api/admin/command" && method === "POST") {
         playerContext.race = row.race || "";
         playerContext.constitution = row.constitution;
       }
+      if (npc === "alchemist") {
+        playerContext.thalara_visits = thalaraVisits;
+        playerContext.thalara_arc1_complete = thalaraArc1Complete;
+        playerContext.thalara_arc2_complete = thalaraArc2Complete;
+        playerContext.seen_sewer_wall_markings = thalaraSeenSewer;
+      }
 
       const response = await getNPCResponse(env, npc, topic, playerContext);
 
@@ -838,6 +854,9 @@ if (path === "/api/admin/command" && method === "POST") {
         if (topic === "wall_marks" && veyraVisits >= 6 && (row.wisdom ?? 10) >= 12 && !veyraMarkAcknowledged) {
           await setFlag(db, uid, "veyra_mark_acknowledged", 1);
         }
+      }
+      if (npc === "alchemist") {
+        await setFlag(db, uid, "thalara_visits", thalaraVisits + 1);
       }
 
       return json({ response });
