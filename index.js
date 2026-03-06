@@ -363,7 +363,7 @@ async function addCrimeHeat(db, uid, heat, crimeType, opts = {}) {
   const { mercyChange = 0, orderChange = 0, location = null, victimId = null } = typeof opts === "string" ? { location: opts } : opts;
   const row = await dbGet(db, "SELECT alignment_morality, alignment_order, crime_heat FROM characters WHERE user_id=?", [uid]);
   if (!row) return;
-  const newHeat = (row.crime_heat || 0) + heat;
+  const newHeat = Math.min(20, (row.crime_heat || 0) + heat);
   const archetype = computeArchetype(row.alignment_morality || 0, row.alignment_order || 0, newHeat);
   await dbRun(db, "UPDATE characters SET crime_heat=?, archetype=? WHERE user_id=?", [newHeat, archetype, uid]);
   const now = Math.floor(Date.now() / 1000);
@@ -873,8 +873,11 @@ if (path === "/api/character/reset" && method === "POST") {
     targetUid = uidFromAuth;
   }
   await dbRun(db, "UPDATE players SET location=?, mercy_score=0, order_score=0, crime_heat=0, archetype='Survivor', last_decay=NULL WHERE user_id=?", ["tavern", targetUid]);
-  await dbRun(db, `UPDATE characters SET instinct=NULL, strength=5, dexterity=5, constitution=5, intelligence=5, wisdom=5, charisma=5, stats_set=0,
+  await dbRun(db, `UPDATE characters SET instinct=NULL, strength=10, dexterity=10, constitution=10, intelligence=10, wisdom=10, charisma=10, stats_set=0,
     alignment_morality=0, alignment_order=0, crime_heat=0, archetype='Survivor', last_decay=NULL, ash_marks=0, ember_shards=0, soul_coins=0, xp=0, class_stage=0, current_hp=0 WHERE user_id=?`, [targetUid]);
+  await dbRun(db, "DELETE FROM crime_log WHERE user_id=?", [targetUid]);
+  await dbRun(db, "UPDATE bounties SET status='expired' WHERE target_id=?", [targetUid]);
+  await dbRun(db, "DELETE FROM sentences WHERE user_id=?", [targetUid]);
   await dbRun(db, "DELETE FROM player_flags WHERE user_id=?", [targetUid]);
   await dbRun(db, "DELETE FROM equipment_slots WHERE user_id=?", [targetUid]);
   await dbRun(db, "DELETE FROM inventory WHERE user_id=?", [targetUid]);
@@ -910,7 +913,7 @@ if (path === "/api/admin/command" && method === "POST") {
     }
     if (uid) {
       await updateLastSeen(db, uid);
-      await decayAlignment(db, uid);
+      decayAlignment(db, uid).catch(() => {});
       const now = Math.floor(Date.now() / 1000);
       const downed = await dbGet(db, "SELECT downed_until FROM pvp_state WHERE user_id=? AND downed_until>0 AND downed_until<?", [uid, now]);
       if (downed) {
@@ -940,13 +943,14 @@ if (path === "/api/admin/command" && method === "POST") {
     if (path === "/api/alignment" && method === "GET") {
       const align = await getPlayerAlignment(db, uid);
       if (!align) return err("No character.", 404);
-      const hasBounty = !!(await dbGet(db, "SELECT id FROM bounties WHERE target_id=? AND status='active'", [uid]));
+      const activeBounty = await dbGet(db, "SELECT reward FROM bounties WHERE target_id=? AND status='active' ORDER BY reward DESC LIMIT 1", [uid]);
       return json({
         archetype: align.archetype ?? "Survivor",
         mercy_score: align.alignment_morality ?? 0,
         order_score: align.alignment_order ?? 0,
         crime_heat: align.crime_heat ?? 0,
-        has_bounty: hasBounty,
+        has_bounty: !!activeBounty,
+        bounty_reward: activeBounty?.reward ?? 0,
       });
     }
 
@@ -975,20 +979,23 @@ if (path === "/api/admin/command" && method === "POST") {
     // ── POST: Post player bounty ──
     if (path === "/api/bounties/post" && method === "POST") {
       const { target_name, reason, reward } = body;
+      const POSTING_FEE = 25;
       if (!target_name || typeof target_name !== "string") return err("target_name required.", 400);
-      if (!Number.isInteger(reward) || reward < 1) return err("reward must be a positive integer.", 400);
+      if (!Number.isInteger(reward) || reward < 50) return err("target_name and reward (min 50) required.", 400);
+      const total = reward + POSTING_FEE;
       const row = await getPlayerSheet(db, uid);
       if (!row) return err("No character.", 404);
-      const targetRow = await dbGet(db, "SELECT user_id FROM characters WHERE LOWER(TRIM(name))=LOWER(?)", [String(target_name).trim()]);
+      let targetRow = await dbGet(db, "SELECT user_id FROM accounts WHERE username=?", [String(target_name).trim().toLowerCase()]);
+      if (!targetRow) targetRow = await dbGet(db, "SELECT user_id FROM characters c JOIN players p ON p.user_id=c.user_id WHERE LOWER(TRIM(c.name))=LOWER(?)", [String(target_name).trim()]);
       if (!targetRow || targetRow.user_id === uid) return err("Target not found or invalid.", 400);
       const targetUid = targetRow.user_id;
       const ash = (row.ash_marks ?? 0);
-      if (ash < reward) return err(`Not enough Ash Marks. You have ${ash}.`, 400);
-      await dbRun(db, "UPDATE characters SET ash_marks = ash_marks - ? WHERE user_id=?", [reward, uid]);
+      if (ash < total) return err(`Insufficient funds. Need ${total} AM (${reward} reward + ${POSTING_FEE} posting fee).`, 400);
+      await dbRun(db, "UPDATE characters SET ash_marks = ash_marks - ? WHERE user_id=?", [total, uid]);
       const now = Date.now();
-      await dbRun(db, "INSERT INTO bounties (type, target_id, poster_id, reason, reward, posted_at, location) VALUES (?,?,?,?,?,?,?)",
-        ["player", targetUid, uid, (reason && String(reason).trim()) || null, reward, now, "market_square"]);
-      return json({ ok: true, message: "Bounty posted." });
+      await dbRun(db, "INSERT INTO bounties (type, target_id, poster_id, reason, reward, posted_at, expires_at, location) VALUES (?,?,?,?,?,?,?,?)",
+        ["player", targetUid, uid, (reason && String(reason).trim()) || null, reward, now, now + 72 * 60 * 60 * 1000, "market_square"]);
+      return json({ ok: true, message: `Bounty posted. ${total} AM deducted.` });
     }
 
     // ── POST: Claim bounty ──
@@ -999,6 +1006,7 @@ if (path === "/api/admin/command" && method === "POST") {
       if (!row) return err("No character.", 404);
       const bounty = await dbGet(db, "SELECT * FROM bounties WHERE id=? AND status='active'", [bountyId]);
       if (!bounty) return err("Bounty not found or already claimed.", 404);
+      if (bounty.target_id === uid) return err("Cannot claim your own bounty.", 400);
       const now = Date.now();
       if (bounty.expires_at != null && bounty.expires_at < now) return err("Bounty has expired.", 400);
       const targetLoc = await dbGet(db, "SELECT location FROM players WHERE user_id=?", [bounty.target_id]);
@@ -1008,7 +1016,13 @@ if (path === "/api/admin/command" && method === "POST") {
       if (!targetDead && !sameLocation) return err("Target must be here or dead to claim.", 400);
       await dbRun(db, "UPDATE bounties SET status='claimed', claimed_by=? WHERE id=?", [uid, bountyId]);
       await dbRun(db, "UPDATE characters SET ash_marks = ash_marks + ? WHERE user_id=?", [bounty.reward, uid]);
-      return json({ ok: true, message: `Bounty claimed. ${bounty.reward} Ash Marks added.` });
+      const targetRow = await dbGet(db, "SELECT crime_heat, alignment_morality, alignment_order FROM characters WHERE user_id=?", [bounty.target_id]);
+      if (targetRow) {
+        const newHeat = Math.max(0, (targetRow.crime_heat || 0) - 2);
+        const archetype = computeArchetype(targetRow.alignment_morality || 0, targetRow.alignment_order || 0, newHeat);
+        await dbRun(db, "UPDATE characters SET crime_heat=?, archetype=? WHERE user_id=?", [newHeat, archetype, bounty.target_id]);
+      }
+      return json({ ok: true, reward: bounty.reward, message: `Bounty claimed. ${bounty.reward} Ash Marks added.` });
     }
 
     // ── POST: Choose instinct ──
@@ -1535,6 +1549,7 @@ if (path === "/api/admin/command" && method === "POST") {
         order_score: row.alignment_order ?? row.order_score ?? 0,
         crime_heat: row.crime_heat ?? 0,
         has_bounty: !!(await dbGet(db, "SELECT id FROM bounties WHERE target_id=? AND status='active'", [uid])),
+        bounty_reward: (await dbGet(db, "SELECT reward FROM bounties WHERE target_id=? AND status='active' ORDER BY reward DESC LIMIT 1", [uid]))?.reward ?? 0,
         in_sentence: false,
         kelvaris_visits: kelvarisVisits,
         has_instinct: !!(row.instinct && row.instinct.trim()),
