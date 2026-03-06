@@ -189,6 +189,19 @@ async function getPlayerHp(db, uid, row) {
   return { current: cur, max: maxHp };
 }
 
+// Presence (chat: "recently active" for whispers)
+async function updateLastSeen(db, uid) {
+  await dbRun(db, `UPDATE players SET last_seen = unixepoch('now') * 1000 WHERE user_id = ?`, [uid]);
+}
+
+// Chat: sanitize message (strip HTML, trim, max length; allow *italics*)
+const CHAT_MESSAGE_MAX_LEN = 280;
+function sanitizeChatMessage(text) {
+  if (text == null || typeof text !== "string") return "";
+  const stripped = text.replace(/<[^>]*>/g, "").trim();
+  return stripped.slice(0, CHAT_MESSAGE_MAX_LEN);
+}
+
 // Alignment tick
 const ALIGN_INSTINCT_BIAS = {
   hearthborn:    [1, 0],
@@ -244,6 +257,50 @@ async function initDb(db) {
       username TEXT PRIMARY KEY,
       password_hash TEXT NOT NULL,
       user_id INTEGER NOT NULL REFERENCES players(user_id))`);
+
+    // Chat system (Phase 1)
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS chat_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      channel TEXT NOT NULL,
+      location TEXT,
+      user_id INTEGER NOT NULL,
+      player_name TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      deleted INTEGER DEFAULT 0)`);
+    await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_chat_channel ON chat_messages(channel, created_at DESC)`);
+    await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_chat_location ON chat_messages(location, created_at DESC)`);
+
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS whispers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      from_user_id INTEGER NOT NULL,
+      from_name TEXT NOT NULL,
+      to_user_id INTEGER NOT NULL,
+      to_name TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      read INTEGER DEFAULT 0)`);
+    await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_whisper_to ON whispers(to_user_id, created_at DESC)`);
+    await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_whisper_from ON whispers(from_user_id, created_at DESC)`);
+
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS noticeboards (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      location TEXT NOT NULL,
+      user_id INTEGER NOT NULL,
+      player_name TEXT NOT NULL,
+      title TEXT,
+      message TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER,
+      pinned INTEGER DEFAULT 0,
+      deleted INTEGER DEFAULT 0)`);
+    await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_noticeboard_location ON noticeboards(location, created_at DESC)`);
+
+    try {
+      await dbRun(db, `ALTER TABLE players ADD COLUMN last_seen INTEGER`);
+    } catch (_) {
+      // Column already exists on re-run
+    }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -443,6 +500,7 @@ if (path === "/api/admin/command" && method === "POST") {
     if (!uid && path !== "/api/data/races" && path !== "/api/data/instincts") {
       if (!path.startsWith("/api/data/")) return err("Unauthorized.", 401);
     }
+    if (uid) await updateLastSeen(db, uid);
 
     // ── GET: Character ──
     if (path === "/api/character" && method === "GET") {
@@ -755,6 +813,47 @@ if (path === "/api/admin/command" && method === "POST") {
       if (!flag || typeof flag !== "string") return err("Missing flag.", 400);
       await setFlag(db, uid, flag, value == null ? 1 : Number(value));
       return json({ ok: true });
+    }
+
+    // ── GET: Chat global (Phase 2: global only) ──
+    if (path === "/api/chat/global" && method === "GET") {
+      const since = parseInt(url.searchParams.get("since") || "0", 10) || 0;
+      const rows = await dbAll(db, `
+        SELECT id, player_name, message, created_at
+        FROM chat_messages
+        WHERE channel = 'global' AND deleted = 0 AND created_at > ?
+        ORDER BY created_at ASC
+        LIMIT 100`, [since]);
+      const messages = rows.map((r) => ({
+        id: r.id,
+        player_name: r.player_name,
+        message: r.message,
+        created_at: r.created_at,
+      }));
+      return json({ messages, server_time: Date.now() });
+    }
+
+    // ── POST: Chat send (Phase 2: global only) ──
+    if (path === "/api/chat/send" && method === "POST") {
+      const { channel, message: rawMessage } = body;
+      if (channel !== "global") return err("Only global chat is supported for now.", 400);
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const playerName = (row.name || "Someone").trim() || "Someone";
+      const message = sanitizeChatMessage(rawMessage);
+      if (!message) return err("Message is required.", 400);
+      const now = Date.now();
+      const lastRow = await dbGet(db,
+        `SELECT created_at FROM chat_messages WHERE user_id = ? AND channel = 'global' ORDER BY created_at DESC LIMIT 1`,
+        [uid]);
+      if (lastRow && now - lastRow.created_at < 2000) {
+        return err("Wait 2 seconds between messages.", 429);
+      }
+      await dbRun(db, `
+        INSERT INTO chat_messages (channel, location, user_id, player_name, message, created_at)
+        VALUES (?, NULL, ?, ?, ?, ?)`, ["global", uid, playerName, message, now]);
+      const insertRow = await dbGet(db, "SELECT id, created_at FROM chat_messages WHERE user_id = ? AND channel = 'global' ORDER BY id DESC LIMIT 1", [uid]);
+      return json({ ok: true, id: insertRow?.id ?? null, created_at: insertRow?.created_at ?? now });
     }
 
     // ── GET: Board ──
