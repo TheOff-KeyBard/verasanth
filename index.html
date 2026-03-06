@@ -208,6 +208,16 @@
     color: var(--gold);
   }
 
+  .btn.exit-btn--danger {
+    border-color: var(--danger);
+    color: #c44;
+  }
+
+  .btn.exit-btn--danger:hover {
+    border-color: #a22;
+    color: #e66;
+  }
+
   .btn.npc-btn {
     border-color: var(--ember-dim);
     color: var(--ember-glow);
@@ -221,6 +231,50 @@
   .btn.danger-btn:hover {
     background: rgba(139,32,32,0.1);
     color: #e66;
+  }
+
+  #node-map {
+    width: 300px;
+    height: auto;
+    min-height: 120px;
+    background: #0d0b08;
+    border: 1px solid var(--border-warm);
+  }
+
+  #node-map svg {
+    display: block;
+  }
+
+  #node-map .node-circle {
+    fill: #3a2a1a;
+    stroke: #c9a84c;
+    stroke-width: 1.5;
+  }
+
+  #node-map .node-circle.danger {
+    stroke: #8b1a1a;
+  }
+
+  #node-map .node-circle.current {
+    fill: #c4622a;
+    stroke: #e8845a;
+    animation: node-pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes node-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  #node-map .node-label {
+    font: 8px var(--font-title), serif;
+    fill: #8a7a6a;
+  }
+
+  #node-map .connection-line {
+    stroke: #3a2a1a;
+    stroke-width: 1;
+    opacity: 0.6;
   }
 
   .section-label {
@@ -1257,6 +1311,11 @@
         <div class="button-row" id="exits-row"></div>
       </div>
 
+      <div id="node-map-wrap" style="margin-top:16px">
+        <div class="section-label">Map</div>
+        <div id="node-map"></div>
+      </div>
+
       <div id="objects-section" style="display:none">
         <div class="section-label">Inspect</div>
         <div class="button-row" id="objects-row"></div>
@@ -1367,6 +1426,43 @@
 // ── Config ───────────────────────────────────────────────────────
 const API = '';  // use relative paths (same origin)
 
+// ── Dangerous locations (exit button warning + map node stroke) ───
+const DANGEROUS_LOCATIONS = new Set([
+  'sewer_entrance','sewer_upper','sewer_den','sewer_channel',
+  'sewer_deep','sewer_gate','sewer_mid_flooded','sewer_mid_barracks',
+  'sewer_mid_cistern','sewer_mid_drain','sewer_deep_threshold',
+  'sewer_deep_vault','sewer_deep_foundation'
+]);
+
+// ── Node map positions (fixed layout) ────────────────────────────
+const NODE_POSITIONS = {
+  market_square:      { x: 150, y: 150 },
+  north_road:         { x: 150, y: 100 },
+  south_road:         { x: 150, y: 200 },
+  east_road:          { x: 220, y: 150 },
+  west_road:          { x: 80,  y: 150 },
+  tavern:             { x: 80,  y: 100 },
+  atelier:            { x: 150, y: 50  },
+  mended_hide:        { x: 80,  y: 200 },
+  still_scale:        { x: 220, y: 200 },
+  hollow_jar:         { x: 220, y: 100 },
+  ashen_sanctuary:    { x: 280, y: 150 },
+  alley:              { x: 220, y: 80  },
+  sewer_entrance:     { x: 150, y: 170 },
+  sewer_upper:        { x: 150, y: 220 },
+  sewer_den:          { x: 100, y: 260 },
+  sewer_channel:      { x: 200, y: 260 },
+  sewer_deep:         { x: 200, y: 310 },
+  sewer_gate:         { x: 200, y: 350 },
+  sewer_mid_flooded:  { x: 150, y: 390 },
+  sewer_mid_barracks: { x: 250, y: 350 },
+  sewer_mid_cistern:  { x: 150, y: 430 },
+  sewer_mid_drain:    { x: 250, y: 430 },
+  sewer_deep_threshold: { x: 150, y: 470 },
+  sewer_deep_vault:   { x: 80,  y: 510 },
+  sewer_deep_foundation: { x: 150, y: 510 },
+};
+
 // ── Location display names (for character sheet "Last seen") ───────
 const LOCATION_NAMES = {
   tavern: "The Shadow Hearth Inn",
@@ -1415,6 +1511,9 @@ let vToken = localStorage.getItem('v_token') || '';
 let currentNPC = '';
 let npcTopics  = {};
 let combatState = null;
+let locationNamesMap = {};
+let connectionsList = [];
+let visitedSet = new Set();
 let playerMaxHp = 1;
 let mainCharacter = null;
 let mainInstinctsData = null;
@@ -1862,12 +1961,24 @@ async function doRegister() {
 
 // ── Load / refresh game state ────────────────────────────────────
 async function loadGame() {
-  const [charData, lookData, walletData, invData] = await Promise.all([
+  const [charData, lookData, walletData, invData, locData, flagsData] = await Promise.all([
     GET('/api/character'),
     GET('/api/look'),
     GET('/api/wallet'),
     GET('/api/inventory'),
+    GET('/api/data/locations').catch(() => ({ locations: {}, connections: [] })),
+    GET('/api/character/flags').catch(() => ({})),
   ]);
+
+  locationNamesMap = locData.locations || {};
+  connectionsList = locData.connections || [];
+  visitedSet = new Set(
+    Object.keys(flagsData || {}).filter(k => k.startsWith('visited_')).map(k => k.slice(9))
+  );
+  if (lookData.location) {
+    visitedSet.add(lookData.location);
+    POST('/api/flag', { flag: 'visited_' + lookData.location, value: 1 }).catch(() => {});
+  }
 
   updateCharPanel(charData);
   updateWallet(walletData);
@@ -1918,6 +2029,82 @@ function updateInventory(items) {
   });
 }
 
+// ── Node map (fog of war: only visited locations, current pulses) ──
+function shortName(locId) {
+  const name = locationNamesMap[locId] || LOCATION_NAMES[locId] || locId;
+  const words = String(name).split(/\s+/);
+  if (words.length >= 2) return words.slice(0, 2).join(' ');
+  return name.length > 14 ? name.slice(0, 12) + '…' : name;
+}
+
+function renderNodeMap(currentLoc) {
+  const wrap = document.getElementById('node-map');
+  wrap.innerHTML = '';
+  const shown = new Set(visitedSet);
+  if (currentLoc) shown.add(currentLoc);
+
+  const positions = [];
+  shown.forEach(id => {
+    if (NODE_POSITIONS[id]) positions.push(id);
+  });
+  if (positions.length === 0) return;
+
+  const padding = 20;
+  let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+  positions.forEach(id => {
+    const p = NODE_POSITIONS[id];
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+  });
+  minX -= padding; minY -= padding; maxX += padding; maxY += padding;
+  const w = Math.max(300, maxX - minX);
+  const h = Math.max(120, maxY - minY);
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', `${minX - 10} ${minY - 10} ${w + 20} ${h + 20}`);
+  svg.setAttribute('width', '300');
+  svg.setAttribute('height', (300 * (h / w)) | 0);
+
+  const drawn = new Set();
+  connectionsList.forEach(([a, b]) => {
+    if (!shown.has(a) || !shown.has(b)) return;
+    const pa = NODE_POSITIONS[a];
+    const pb = NODE_POSITIONS[b];
+    if (!pa || !pb) return;
+    const key = a < b ? a + ',' + b : b + ',' + a;
+    if (drawn.has(key)) return;
+    drawn.add(key);
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', pa.x);
+    line.setAttribute('y1', pa.y);
+    line.setAttribute('x2', pb.x);
+    line.setAttribute('y2', pb.y);
+    line.setAttribute('class', 'connection-line');
+    svg.appendChild(line);
+  });
+
+  positions.forEach(id => {
+    const p = NODE_POSITIONS[id];
+    const isCurrent = id === currentLoc;
+    const danger = DANGEROUS_LOCATIONS.has(id);
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', p.x);
+    circle.setAttribute('cy', p.y);
+    circle.setAttribute('r', isCurrent ? 8 : 6);
+    circle.setAttribute('class', 'node-circle' + (danger ? ' danger' : '') + (isCurrent ? ' current' : ''));
+    svg.appendChild(circle);
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('x', p.x);
+    label.setAttribute('y', p.y + 18);
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('class', 'node-label');
+    label.textContent = shortName(id);
+    svg.appendChild(label);
+  });
+
+  wrap.appendChild(svg);
+}
+
 // ── Room rendering ───────────────────────────────────────────────
 function renderRoom(data) {
   document.getElementById('room-name').textContent = data.name || '—';
@@ -1925,15 +2112,19 @@ function renderRoom(data) {
   document.getElementById('footer-loc').textContent = data.location || '';
   document.getElementById('header-sub').textContent = data.location || '';
 
-  // Exits
+  // Exits (named destinations; dangerous get ⚠ and red border)
   const exitsRow = document.getElementById('exits-row');
   exitsRow.innerHTML = '';
   const exits = data.exits || [];
+  const exitMap = data.exit_map || {};
   if (exits.length) {
     exits.forEach(dir => {
+      const dest = exitMap[dir];
+      const name = (locationNamesMap[dest] || LOCATION_NAMES[dest] || dest || dir).trim();
+      const dangerous = dest && DANGEROUS_LOCATIONS.has(dest);
       const b = document.createElement('button');
-      b.className = 'btn exit-btn';
-      b.textContent = dir;
+      b.className = 'btn exit-btn' + (dangerous ? ' exit-btn--danger' : '');
+      b.textContent = name + (dangerous ? ' ⚠' : '');
       b.onclick = () => doMove(dir);
       exitsRow.appendChild(b);
     });
@@ -1941,6 +2132,8 @@ function renderRoom(data) {
   } else {
     document.getElementById('exits-section').style.display = 'none';
   }
+
+  renderNodeMap(data.location);
 
   // Objects
   const objRow = document.getElementById('objects-row');
@@ -2037,6 +2230,8 @@ function makeActionBtn(label, fn) {
 async function doMove(dir) {
   try {
     const data = await POST('/api/move', { direction: dir });
+    await POST('/api/flag', { flag: 'visited_' + data.location, value: 1 }).catch(() => {});
+    visitedSet.add(data.location);
     renderRoom(data);
     log(`<em>You move ${dir}.</em>`);
     refreshSidebar();

@@ -550,15 +550,22 @@ if (path === "/api/admin/command" && method === "POST") {
       if (dest === "market_square") {
         await setFlag(db, uid, "has_seen_market_square", 1);
       }
+      await setFlag(db, uid, "visited_" + dest, 1);
 
       const destRoom = WORLD[dest];
+      let destExits = Object.keys(destRoom.exits || {});
+      let destExitMap = { ...(destRoom.exits || {}) };
+      if (dest === "market_square") {
+        destExits = [...destExits, "down"];
+        destExitMap.down = "sewer_entrance";
+      }
       const npcsHere = Object.entries(NPC_LOCATIONS)
         .filter(([,l]) => l === dest).map(([id]) => id);
 
       return json({
         location: dest, name: destRoom.name, description: destRoom.description,
-        exits: Object.keys(destRoom.exits || {}),
-        exit_map: destRoom.exits || {},
+        exits: destExits,
+        exit_map: destExitMap,
         objects: Object.keys(destRoom.objects || {}),
         items: [], npcs: npcsHere, ambient,
         fightable: FIGHTABLE_LOCATIONS.has(dest),
@@ -620,6 +627,27 @@ if (path === "/api/admin/command" && method === "POST") {
       const topics = NPC_TOPICS[npcId];
       if (!topics) return err("Unknown NPC.", 404);
       return json({ npc: npcId, topics });
+    }
+
+    // ── GET: Location names + connections (for exit labels and node map) ──
+    if (path === "/api/data/locations" && method === "GET") {
+      const locations = {};
+      const connections = [];
+      for (const [roomId, room] of Object.entries(WORLD)) {
+        locations[roomId] = room.name || roomId;
+        const exits = room.exits || {};
+        if (roomId === "market_square") connections.push(["market_square", "sewer_entrance"]);
+        for (const dest of Object.values(exits)) connections.push([roomId, dest]);
+      }
+      return json({ locations, connections });
+    }
+
+    // ── POST: Set player flag (e.g. visited_<location>) ──
+    if (path === "/api/flag" && method === "POST") {
+      const { flag, value } = body;
+      if (!flag || typeof flag !== "string") return err("Missing flag.", 400);
+      await setFlag(db, uid, flag, value == null ? 1 : Number(value));
+      return json({ ok: true });
     }
 
     // ── GET: Board ──
