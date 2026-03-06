@@ -190,6 +190,7 @@ async function setFlag(db, uid, flag, value = 1) {
 async function getPlayerSheet(db, uid) {
   return await dbGet(db, `
     SELECT p.user_id, p.location,
+           p.mercy_score, p.order_score, p.crime_heat, p.archetype,
            c.name, c.race, c.instinct,
            c.strength, c.dexterity, c.constitution,
            c.intelligence, c.wisdom, c.charisma,
@@ -222,24 +223,130 @@ function sanitizeChatMessage(text) {
   return stripped.slice(0, CHAT_MESSAGE_MAX_LEN);
 }
 
-// Alignment tick
+// Alignment system (Phase 1)
+function computeArchetype(mercy, order, heat) {
+  if (heat >= 16) return "Ash Wraith";
+  if (heat >= 11) return "Dread";
+  if (heat >= 7) return "Butcher";
+  if (heat >= 4) return "Killer";
+  if (heat >= 1) return "Ruffian";
+
+  const mercyHigh = mercy >= 60;
+  const mercyLow = mercy <= -60;
+  const orderHigh = order >= 60;
+  const orderLow = order <= -60;
+
+  if (mercyHigh && orderHigh) return "Protector";
+  if (mercyHigh && orderLow) return "Vigilante";
+  if (mercyHigh) return "Wanderer";
+  if (mercyLow && orderHigh) return "Mercenary";
+  if (mercyLow && orderLow) return "Butcher";
+  if (mercyLow) return "Predator";
+  if (orderHigh) return "Enforcer";
+  if (orderLow) return "Cutpurse";
+  return "Survivor";
+}
+
 const ALIGN_INSTINCT_BIAS = {
-  hearthborn:    [1, 0],
+  hearthborn: [1, 0],
   ember_touched: [0, 0],
-  ironblood:     [0, 0],
-  streetcraft:   [0, -1],
-  shadowbound:   [0, 0],
-  warden:        [0, 0],
+  ironblood: [0, 0],
+  streetcraft: [0, -1],
+  shadowbound: [0, 0],
+  warden: [0, 0],
 };
 
-async function tickAlignment(db, uid, mDelta, oDelta, instinct = "") {
+async function updateAlignment(db, uid, mercyDelta, orderDelta, instinct = "") {
   const [mb, ob] = ALIGN_INSTINCT_BIAS[instinct] || [0, 0];
-  mDelta += mb; oDelta += ob;
-  const row = await dbGet(db, "SELECT alignment_morality, alignment_order FROM characters WHERE user_id=?", [uid]);
+  mercyDelta += mb;
+  orderDelta += ob;
+  const row = await dbGet(db, "SELECT mercy_score, order_score, crime_heat FROM players WHERE user_id=?", [uid]);
   if (!row) return;
-  const newM = Math.max(-100, Math.min(100, (row.alignment_morality || 0) + mDelta));
-  const newO = Math.max(-100, Math.min(100, (row.alignment_order    || 0) + oDelta));
-  await dbRun(db, "UPDATE characters SET alignment_morality=?, alignment_order=? WHERE user_id=?", [newM, newO, uid]);
+  const newMercy = Math.max(-200, Math.min(200, (row.mercy_score || 0) + mercyDelta));
+  const newOrder = Math.max(-200, Math.min(200, (row.order_score || 0) + orderDelta));
+  const archetype = computeArchetype(newMercy, newOrder, row.crime_heat || 0);
+  await dbRun(db, "UPDATE players SET mercy_score=?, order_score=?, archetype=? WHERE user_id=?", [newMercy, newOrder, archetype, uid]);
+}
+
+async function addCrimeHeat(db, uid, heat, crimeType, opts = {}) {
+  const { mercyChange = 0, orderChange = 0, location = null, victimId = null } = opts;
+  await dbRun(db, "UPDATE players SET crime_heat = crime_heat + ? WHERE user_id=?", [heat, uid]);
+  const now = Math.floor(Date.now() / 1000);
+  await dbRun(db, `INSERT INTO crime_log (user_id, crime_type, heat_added, mercy_change, order_change, location, victim_id, created_at)
+    VALUES (?,?,?,?,?,?,?,?)`, [uid, crimeType, heat, mercyChange, orderChange, location, victimId, now]);
+  const row = await dbGet(db, "SELECT mercy_score, order_score, crime_heat FROM players WHERE user_id=?", [uid]);
+  if (row && (mercyChange !== 0 || orderChange !== 0)) {
+    const newMercy = Math.max(-200, Math.min(200, (row.mercy_score || 0) + mercyChange));
+    const newOrder = Math.max(-200, Math.min(200, (row.order_score || 0) + orderChange));
+    const archetype = computeArchetype(newMercy, newOrder, row.crime_heat || 0);
+    await dbRun(db, "UPDATE players SET mercy_score=?, order_score=?, archetype=? WHERE user_id=?", [newMercy, newOrder, archetype, uid]);
+  }
+}
+
+async function decayAlignment(db, uid) {
+  const row = await dbGet(db, "SELECT mercy_score, last_decay FROM players WHERE user_id=?", [uid]);
+  if (!row) return;
+  const now = Date.now();
+  const lastDecay = row.last_decay || now;
+  const hoursPassed = (now - lastDecay) / (1000 * 60 * 60);
+  if (hoursPassed < 0.1) return; // throttle: ~6 min minimum between decays
+
+  const decayAmount = Math.floor(hoursPassed * 5);
+  if (decayAmount === 0) return;
+
+  const mercy = row.mercy_score || 0;
+  const mercyDecay = mercy > 0 ? -Math.min(decayAmount, mercy) : Math.min(decayAmount, Math.abs(mercy));
+  if (mercyDecay !== 0) {
+    const newMercy = Math.max(-200, Math.min(200, mercy + mercyDecay));
+    const alignRow = await dbGet(db, "SELECT order_score, crime_heat FROM players WHERE user_id=?", [uid]);
+    const archetype = computeArchetype(newMercy, alignRow?.order_score || 0, alignRow?.crime_heat || 0);
+    await dbRun(db, "UPDATE players SET mercy_score=?, archetype=?, last_decay=? WHERE user_id=?", [newMercy, archetype, now, uid]);
+  } else {
+    await dbRun(db, "UPDATE players SET last_decay=? WHERE user_id=?", [now, uid]);
+  }
+}
+
+async function getPlayerAlignment(db, uid) {
+  return await dbGet(db, "SELECT mercy_score, order_score, crime_heat, archetype FROM players WHERE user_id=?", [uid]);
+}
+
+const GROMMASH_READS = {
+  Protector: "Someone the city can rely on.",
+  Wanderer: "Restrained but unpredictable.",
+  Vigilante: "Good intentions. Wrong methods.",
+  Enforcer: "Useful. Ruthless. Ordered.",
+  Survivor: "Neither asset nor threat. Yet.",
+  Cutpurse: "Small chaos. Adds up.",
+  Mercenary: "Dangerous but contained.",
+  Predator: "A threat to stability.",
+  Butcher: "The city will correct this.",
+  Ruffian: "Gives warnings.",
+  Killer: "Begins tracking.",
+  Dread: "Hunts actively.",
+  "Ash Wraith": "He doesn't speak. He moves.",
+};
+
+function buildAlignmentUI(mercy, order, heat, archetype) {
+  mercy = mercy ?? 0;
+  order = order ?? 0;
+  heat = heat ?? 0;
+  archetype = archetype ?? "Survivor";
+  const mercyBar = Math.round(5 + (mercy / 200) * 5);
+  const orderBar = Math.round(5 + (order / 200) * 5);
+  const heatBar = heat >= 16 ? 10 : heat >= 11 ? 8 : heat >= 7 ? 6 : heat >= 4 ? 4 : heat >= 1 ? 2 : 0;
+  const mercyLabel = mercy >= 60 ? "Restrained" : mercy <= -60 ? "Predatory" : "Neutral";
+  const orderLabel = order >= 60 ? "Ordered" : order <= -60 ? "Chaotic" : "Neutral";
+  const heatLabel = heat >= 16 ? "Ash Wraith" : heat >= 11 ? "Dread" : heat >= 7 ? "Butcher" : heat >= 4 ? "Killer" : heat >= 1 ? "Ruffian" : "Clean";
+  return {
+    archetype,
+    grommash_read: GROMMASH_READS[archetype] || "Neither asset nor threat. Yet.",
+    mercy_label: mercyLabel,
+    order_label: orderLabel,
+    heat_label: heatLabel,
+    mercy_bar: Math.max(0, Math.min(10, mercyBar)),
+    order_bar: Math.max(0, Math.min(10, orderBar)),
+    heat_bar: heatBar,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -357,6 +464,64 @@ async function initDb(db) {
       updated_at INTEGER
     )`);
     try { await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_party_invites_target ON party_invites(target_id)`); } catch (_) {}
+
+    // Alignment system (Phase 1)
+    try { await dbRun(db, `ALTER TABLE players ADD COLUMN mercy_score INTEGER DEFAULT 0`); } catch (_) {}
+    try { await dbRun(db, `ALTER TABLE players ADD COLUMN order_score INTEGER DEFAULT 0`); } catch (_) {}
+    try { await dbRun(db, `ALTER TABLE players ADD COLUMN crime_heat INTEGER DEFAULT 0`); } catch (_) {}
+    try { await dbRun(db, `ALTER TABLE players ADD COLUMN archetype TEXT DEFAULT 'Survivor'`); } catch (_) {}
+    try { await dbRun(db, `ALTER TABLE players ADD COLUMN last_decay INTEGER`); } catch (_) {}
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS crime_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      crime_type TEXT NOT NULL,
+      heat_added INTEGER NOT NULL,
+      mercy_change INTEGER DEFAULT 0,
+      order_change INTEGER DEFAULT 0,
+      location TEXT,
+      victim_id INTEGER,
+      created_at INTEGER NOT NULL
+    )`);
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS bounties (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      type TEXT NOT NULL,
+      target_id INTEGER NOT NULL,
+      poster_id INTEGER,
+      reason TEXT,
+      reward INTEGER NOT NULL,
+      status TEXT DEFAULT 'active',
+      claimed_by INTEGER,
+      posted_at INTEGER NOT NULL,
+      expires_at INTEGER,
+      location TEXT DEFAULT 'wardens_post'
+    )`);
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS sentences (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      crime_tier TEXT NOT NULL,
+      duration_seconds INTEGER NOT NULL,
+      started_at INTEGER NOT NULL,
+      ends_at INTEGER NOT NULL,
+      escaped INTEGER DEFAULT 0,
+      escape_attempts INTEGER DEFAULT 0,
+      completed INTEGER DEFAULT 0
+    )`);
+
+    // One-time migration: seed mercy_score/order_score from characters
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY)`);
+    const migrated = await dbGet(db, "SELECT 1 FROM _migrations WHERE name=?", ["alignment_v1"]);
+    if (!migrated) {
+      const chars = await dbAll(db, "SELECT user_id, alignment_morality, alignment_order FROM characters");
+      for (const c of chars) {
+        const mercy = Math.max(-200, Math.min(200, (c.alignment_morality || 0) * 2));
+        const order = Math.max(-200, Math.min(200, (c.alignment_order || 0) * 2));
+        const align = await dbGet(db, "SELECT crime_heat FROM players WHERE user_id=?", [c.user_id]);
+        const heat = align?.crime_heat || 0;
+        const archetype = computeArchetype(mercy, order, heat);
+        await dbRun(db, "UPDATE players SET mercy_score=?, order_score=?, archetype=? WHERE user_id=?", [mercy, order, archetype, c.user_id]);
+      }
+      await dbRun(db, "INSERT OR IGNORE INTO _migrations (name) VALUES (?)", ["alignment_v1"]);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -522,7 +687,7 @@ if (path === "/api/character/reset" && method === "POST") {
     if (!uidFromAuth) return err("Unauthorized.", 401);
     targetUid = uidFromAuth;
   }
-  await dbRun(db, "UPDATE players SET location=? WHERE user_id=?", ["tavern", targetUid]);
+  await dbRun(db, "UPDATE players SET location=?, mercy_score=0, order_score=0, crime_heat=0, archetype='Survivor', last_decay=NULL WHERE user_id=?", ["tavern", targetUid]);
   await dbRun(db, `UPDATE characters SET instinct=NULL, strength=5, dexterity=5, constitution=5, intelligence=5, wisdom=5, charisma=5, stats_set=0,
     alignment_morality=0, alignment_order=0, ash_marks=0, ember_shards=0, soul_coins=0, xp=0, class_stage=0, current_hp=0 WHERE user_id=?`, [targetUid]);
   await dbRun(db, "DELETE FROM player_flags WHERE user_id=?", [targetUid]);
@@ -559,6 +724,7 @@ if (path === "/api/admin/command" && method === "POST") {
     }
     if (uid) {
       await updateLastSeen(db, uid);
+      await decayAlignment(db, uid);
       const now = Math.floor(Date.now() / 1000);
       const downed = await dbGet(db, "SELECT downed_until FROM pvp_state WHERE user_id=? AND downed_until>0 AND downed_until<?", [uid, now]);
       if (downed) {
@@ -579,7 +745,14 @@ if (path === "/api/admin/command" && method === "POST") {
       const row = await getPlayerSheet(db, uid);
       if (!row) return err("No character.", 404);
       const hp = await getPlayerHp(db, uid, row);
-      return json({ ...row, max_hp: hp.max });
+      const alignment_ui = buildAlignmentUI(row.mercy_score, row.order_score, row.crime_heat, row.archetype);
+      return json({ ...row, max_hp: hp.max, alignment_ui });
+    }
+
+    if (path === "/api/alignment" && method === "GET") {
+      const align = await getPlayerAlignment(db, uid);
+      if (!align) return err("No character.", 404);
+      return json(buildAlignmentUI(align.mercy_score, align.order_score, align.crime_heat, align.archetype));
     }
 
     // ── POST: Choose instinct ──
@@ -883,7 +1056,7 @@ if (path === "/api/admin/command" && method === "POST") {
       const itemsSold   = await getFlag(db, uid, "curator_items_sold");
       const deaths      = await getFlag(db, uid, "death_count");
       const justRespawned = await getFlag(db, uid, "just_respawned");
-      const morality    = row.alignment_morality || 0;
+      const morality    = row.mercy_score ?? row.alignment_morality ?? 0;
       const depthTier   = await getFlag(db, uid, "found_foundation_stone") ? 2
                         : await getFlag(db, uid, "warned_mid_sewer")        ? 1 : 0;
       const kelvarisVisits = await getFlag(db, uid, "kelvaris_visits");
@@ -963,6 +1136,12 @@ if (path === "/api/admin/command" && method === "POST") {
       const playerContext = {
         items_sold: itemsSold, deaths, morality, depth_tier: depthTier,
         alignment: morality >= 40 ? "light" : morality <= -40 ? "dark" : "neutral",
+        archetype: row.archetype ?? "Survivor",
+        mercy_score: row.mercy_score ?? 0,
+        order_score: row.order_score ?? 0,
+        crime_heat: row.crime_heat ?? 0,
+        has_bounty: false,
+        in_sentence: false,
         kelvaris_visits: kelvarisVisits,
         has_instinct: !!(row.instinct && row.instinct.trim()),
         stats_set: !!(row.stats_set),
@@ -1331,7 +1510,7 @@ if (path === "/api/admin/command" && method === "POST") {
       await setFlag(db, uid, "commune_count", count + 1);
 
       const mComm = instinct === "ember_touched" ? 2 : 1;
-      await tickAlignment(db, uid, mComm, 1, instinct);
+      await updateAlignment(db, uid, mComm, 1, instinct);
 
       const hp = await getPlayerHp(db, uid, row);
       let hpGained = 0;
@@ -1416,7 +1595,7 @@ if (path === "/api/combat/state" && method === "GET") {
 
       if (action === "flee") {
         await dbRun(db, "DELETE FROM combat_state WHERE user_id=?", [uid]);
-        await tickAlignment(db, uid, 0, -1, instinct);
+        await updateAlignment(db, uid, 0, -1, instinct);
         return json({ result: "fled", message: "*You retreat into the dark.*" });
       }
 
@@ -1464,7 +1643,7 @@ if (path === "/api/combat/state" && method === "GET") {
           [uid, dropped.id, dropped.tier, dropped.corrupted ? 1 : 0, dropped.curse || null, dropped.curse_identified || 0, dropped.special_property || null, dropped.display_name || null]);
 
         const mKill = instinct === "ironblood" ? 0 : -1;
-        await tickAlignment(db, uid, mKill, 1, instinct);
+        await updateAlignment(db, uid, mKill, 1, instinct);
 
         const itemLine = dropped.display_name ? ` | **${dropped.display_name}**` : "";
         return json({
@@ -1484,7 +1663,7 @@ if (path === "/api/combat/state" && method === "GET") {
         const dc = await getFlag(db, uid, "death_count");
         await setFlag(db, uid, "death_count", dc + 1);
         await setFlag(db, uid, "just_respawned", 1);
-        await tickAlignment(db, uid, 0, -2, instinct);
+        await updateAlignment(db, uid, 0, -2, instinct);
         return json({
           result: "death",
           message: `*${enemy.name} stands over you.*\n\n*You wake in the Shadow Hearth Inn. Your marks are gone.*`,
@@ -1540,7 +1719,7 @@ if (path === "/api/combat/state" && method === "GET") {
       const reviveHp = Math.max(1, Math.floor(maxHp * 0.3));
       await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [reviveHp, targetUid]);
       await dbRun(db, "INSERT INTO pvp_state (user_id, downed_until, downed_by, created_at, updated_at) VALUES (?, 0, NULL, ?, ?) ON CONFLICT(user_id) DO UPDATE SET downed_until=0, downed_by=NULL, updated_at=excluded.updated_at", [targetUid, Math.floor(Date.now() / 1000), Math.floor(Date.now() / 1000)]);
-      await tickAlignment(db, uid, 15, 0, (row.instinct || "").toLowerCase());
+      await updateAlignment(db, uid, 15, 0, (row.instinct || "").toLowerCase());
       const targetName = (await dbGet(db, "SELECT name FROM characters WHERE user_id=?", [targetUid]))?.name || "Unknown";
       return json({ ok: true, message: `*You revive ${targetName}.*\n\nThey stir. **${reviveHp} HP** restored.` });
     }
@@ -1564,7 +1743,7 @@ if (path === "/api/combat/state" && method === "GET") {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(user_id, item) DO UPDATE SET qty=qty+?`,
         [uid, take.item, qtyToGive, take.tier || 1, take.corrupted || 0, take.curse || null, take.curse_identified || 0, take.special_property || null, take.display_name || null, qtyToGive]);
-      await tickAlignment(db, uid, 0, -20, (row.instinct || "").toLowerCase());
+      await updateAlignment(db, uid, 0, -20, (row.instinct || "").toLowerCase());
       const label = take.display_name || take.item;
       return json({ ok: true, message: `*You take ${label} from them.*`, item: label });
     }
@@ -1587,7 +1766,7 @@ if (path === "/api/combat/state" && method === "GET") {
       await setFlag(db, targetUid, "death_count", dc + 1);
       await setFlag(db, targetUid, "just_respawned", 1);
       await dbRun(db, "INSERT INTO pvp_state (user_id, downed_until, downed_by, created_at, updated_at) VALUES (?, 0, NULL, ?, ?) ON CONFLICT(user_id) DO UPDATE SET downed_until=0, downed_by=NULL, updated_at=excluded.updated_at", [targetUid, Math.floor(Date.now() / 1000), Math.floor(Date.now() / 1000)]);
-      await tickAlignment(db, uid, -30, 0, (row.instinct || "").toLowerCase());
+      await updateAlignment(db, uid, -30, 0, (row.instinct || "").toLowerCase());
       const targetName = (await dbGet(db, "SELECT name FROM characters WHERE user_id=?", [targetUid]))?.name || "Unknown";
       return json({ ok: true, message: `*You finish ${targetName}.*\n\n*They wake in the Shadow Hearth Inn. Their marks are gone.*` });
     }
@@ -1620,7 +1799,7 @@ if (path === "/api/combat/state" && method === "GET") {
       const dmg = Math.max(1, rollDie(6) + strMod);
       const newHp = Math.max(0, (targetRow.current_hp || maxPlayerHp(targetRow.constitution)) - dmg);
       await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [newHp, targetUid]);
-      if (!isParty) await tickAlignment(db, uid, -10, 0, (row.instinct || "").toLowerCase());
+      if (!isParty) await updateAlignment(db, uid, -10, 0, (row.instinct || "").toLowerCase());
       const targetName = targetRow.name || "Unknown";
       if (newHp <= 0) {
         const now = Math.floor(Date.now() / 1000);
@@ -1642,7 +1821,7 @@ if (path === "/api/combat/state" && method === "GET") {
       await dbRun(db, "UPDATE characters SET ash_marks=ash_marks-?,current_hp=? WHERE user_id=?", [BARTENDER_FEE, maxHp, uid]);
       await setFlag(db, uid, "has_room", 1);
       const instinct = (row.instinct || "").toLowerCase();
-      await tickAlignment(db, uid, 1, 2, instinct);
+      await updateAlignment(db, uid, 1, 2, instinct);
       return json({ ok: true, message: `*Kelvaris takes the marks and sets a key on the bar.*\n\n"Room's yours until morning."\n\n**Your HP is fully restored.**`, hp: maxHp });
     }
 

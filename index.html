@@ -1011,6 +1011,10 @@
   .cs-hp-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
   .cs-hp-bar { height: 10px; background: var(--bg3); border: 1px solid var(--border); overflow: hidden; margin-bottom: 14px; }
   .cs-hp-fill { height: 100%; background: var(--ember); transition: width 0.3s; }
+  .cs-standing-archetype { margin-bottom: 8px; }
+  .cs-align-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 0.9rem; }
+  .cs-align-bar { margin-bottom: 10px; }
+  .cs-align-fill { background: var(--ember-dim); }
   .cs-currency { margin-bottom: 12px; color: var(--gold); font-size: 0.9rem; }
   .cs-inv-list { color: var(--text-dim); font-size: 0.9rem; }
   .cs-flags-list { list-style: none; }
@@ -1430,6 +1434,7 @@
       <h1 class="sheet-name"><span class="sheet-sigil">ᚢ</span> <span id="cs-name">—</span></h1>
       <div class="sheet-tabs">
         <button type="button" class="sheet-tab active" data-cs-tab="identity">Identity</button>
+        <button type="button" class="sheet-tab" data-cs-tab="standing">Standing</button>
         <button type="button" class="sheet-tab" data-cs-tab="stats">Stats</button>
         <button type="button" class="sheet-tab" data-cs-tab="inventory">Inventory</button>
         <button type="button" class="sheet-tab" data-cs-tab="progression">Progression</button>
@@ -1439,6 +1444,16 @@
         <div class="cs-badges"><span id="cs-race" class="badge">—</span> <span id="cs-instinct" class="badge">—</span></div>
         <p id="cs-instinct-desc" class="cs-muted"></p>
         <p class="cs-last-seen">Last seen: <span id="cs-location">—</span></p>
+      </div>
+      <div id="cs-tab-standing" class="sheet-tab-panel" style="display:none;">
+        <p class="cs-standing-archetype"><strong>Archetype:</strong> <span id="cs-archetype">—</span></p>
+        <p id="cs-grommash-read" class="cs-muted">—</p>
+        <div class="cs-align-row"><span>Mercy</span><span id="cs-mercy-label">—</span></div>
+        <div class="cs-hp-bar cs-align-bar"><div id="cs-mercy-fill" class="cs-hp-fill cs-align-fill" style="width:50%"></div></div>
+        <div class="cs-align-row"><span>Order</span><span id="cs-order-label">—</span></div>
+        <div class="cs-hp-bar cs-align-bar"><div id="cs-order-fill" class="cs-hp-fill cs-align-fill" style="width:50%"></div></div>
+        <div class="cs-align-row"><span>Heat</span><span id="cs-heat-label">—</span></div>
+        <div class="cs-hp-bar cs-align-bar"><div id="cs-heat-fill" class="cs-hp-fill cs-align-fill" style="width:0%"></div></div>
       </div>
       <div id="cs-tab-stats" class="sheet-tab-panel" style="display:none;">
         <div class="cs-hp-row"><span>HP</span> <span id="cs-hp-text">— / —</span></div>
@@ -1497,11 +1512,13 @@
       <h2 class="sheet-panel-title"><span class="sheet-sigil">ᚢ</span> <span id="panel-cs-name">—</span></h2>
       <div class="sheet-panel-tabs">
         <button type="button" class="sheet-panel-tab-btn active" data-panel-tab="identity">Identity</button>
+        <button type="button" class="sheet-panel-tab-btn" data-panel-tab="standing">Standing</button>
         <button type="button" class="sheet-panel-tab-btn" data-panel-tab="stats">Stats</button>
         <button type="button" class="sheet-panel-tab-btn" data-panel-tab="inventory">Inventory</button>
         <button type="button" class="sheet-panel-tab-btn" data-panel-tab="progression">Progression</button>
       </div>
       <div id="panel-tab-identity" class="sheet-panel-content"></div>
+      <div id="panel-tab-standing" class="sheet-panel-content" style="display:none;"></div>
       <div id="panel-tab-stats" class="sheet-panel-content" style="display:none;"></div>
       <div id="panel-tab-inventory" class="sheet-panel-content" style="display:none;"></div>
       <div id="panel-tab-progression" class="sheet-panel-content" style="display:none;"></div>
@@ -2372,6 +2389,15 @@ async function populateCharacterSheet() {
     li.textContent = (flags[id] && Number(flags[id]) > 0) ? label : '???';
     ul.appendChild(li);
   }
+  const au = char.alignment_ui || {};
+  document.getElementById('cs-archetype').textContent = au.archetype || 'Survivor';
+  document.getElementById('cs-grommash-read').textContent = au.grommash_read || 'Neither asset nor threat. Yet.';
+  document.getElementById('cs-mercy-label').textContent = au.mercy_label || 'Neutral';
+  document.getElementById('cs-order-label').textContent = au.order_label || 'Neutral';
+  document.getElementById('cs-heat-label').textContent = au.heat_label || 'Clean';
+  document.getElementById('cs-mercy-fill').style.width = ((au.mercy_bar ?? 5) / 10 * 100) + '%';
+  document.getElementById('cs-order-fill').style.width = ((au.order_bar ?? 5) / 10 * 100) + '%';
+  document.getElementById('cs-heat-fill').style.width = ((au.heat_bar ?? 0) / 10 * 100) + '%';
 }
 
 function setupCharacterSheetTabs() {
@@ -2491,6 +2517,12 @@ async function refreshSheetPanel() {
   document.getElementById('panel-cs-name').textContent = char.name || '—';
   const locName = getLocationName(char.location);
   document.getElementById('panel-tab-identity').innerHTML = '<p><strong>Race</strong> ' + (char.race || '—') + '</p><p><strong>Instinct</strong> ' + (char.instinct || '—') + '</p><p class="cs-muted">Last seen: ' + locName + '</p>';
+  const au = char.alignment_ui || {};
+  const standingHtml = '<p><strong>Archetype:</strong> ' + (au.archetype || 'Survivor') + '</p><p class="cs-muted">' + (au.grommash_read || 'Neither asset nor threat. Yet.') + '</p>' +
+    '<p><strong>Mercy</strong> ' + (au.mercy_label || 'Neutral') + '</p><div class="cs-hp-bar"><div class="cs-hp-fill cs-align-fill" style="width:' + ((au.mercy_bar ?? 5) / 10 * 100) + '%"></div></div>' +
+    '<p><strong>Order</strong> ' + (au.order_label || 'Neutral') + '</p><div class="cs-hp-bar"><div class="cs-hp-fill cs-align-fill" style="width:' + ((au.order_bar ?? 5) / 10 * 100) + '%"></div></div>' +
+    '<p><strong>Heat</strong> ' + (au.heat_label || 'Clean') + '</p><div class="cs-hp-bar"><div class="cs-hp-fill cs-align-fill" style="width:' + ((au.heat_bar ?? 0) / 10 * 100) + '%"></div></div>';
+  document.getElementById('panel-tab-standing').innerHTML = standingHtml;
   const hp = char.current_hp ?? 0;
   const maxHp = char.max_hp || 10;
   const statKeys = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
