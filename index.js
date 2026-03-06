@@ -957,9 +957,10 @@ if (path === "/api/admin/command" && method === "POST") {
     // ── GET: Bounties (official at wardens_post) ──
     if (path === "/api/bounties/official" && method === "GET") {
       const now = Date.now();
-      const rows = await dbAll(db, `SELECT b.id, b.type, b.target_id, b.reason, b.reward, b.posted_at, b.expires_at, c.name AS target_name
+      const rows = await dbAll(db, `SELECT b.id, b.type, b.target_id, b.reason, b.reward, b.posted_at, b.expires_at, c.name AS target_name, c.archetype, p.location AS last_location
         FROM bounties b
         LEFT JOIN characters c ON c.user_id = b.target_id
+        LEFT JOIN players p ON p.user_id = b.target_id
         WHERE b.type='official' AND b.status='active' AND b.location='wardens_post' AND (b.expires_at IS NULL OR b.expires_at > ?)
         ORDER BY b.reward DESC`, [now]);
       return json({ bounties: rows });
@@ -968,9 +969,10 @@ if (path === "/api/admin/command" && method === "POST") {
     // ── GET: Bounties (player-posted at market noticeboard) ──
     if (path === "/api/bounties/player" && method === "GET") {
       const now = Date.now();
-      const rows = await dbAll(db, `SELECT b.id, b.type, b.target_id, b.poster_id, b.reason, b.reward, b.posted_at, b.expires_at, c.name AS target_name
+      const rows = await dbAll(db, `SELECT b.id, b.type, b.target_id, b.poster_id, b.reason, b.reward, b.posted_at, b.expires_at, c.name AS target_name, pc.name AS poster_name
         FROM bounties b
         LEFT JOIN characters c ON c.user_id = b.target_id
+        LEFT JOIN characters pc ON pc.user_id = b.poster_id
         WHERE b.type='player' AND b.status='active' AND b.location='market_square' AND (b.expires_at IS NULL OR b.expires_at > ?)
         ORDER BY b.reward DESC`, [now]);
       return json({ bounties: rows });

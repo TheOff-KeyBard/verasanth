@@ -28,6 +28,11 @@
     --gold:        #c9a84c;
     --gold-dim:    #7a6328;
     --danger:      #8b2020;
+    --ok:          #57d48f;
+    --accent:      #e8845a;
+    --muted:       #7a6d5e;
+    --panel:       #131009;
+    --panel2:      #1a1510;
     --shadow:      rgba(0,0,0,0.7);
     --font-title:  'Cinzel', serif;
     --font-body:   'Crimson Text', serif;
@@ -359,6 +364,315 @@
 
   .currency-row { display: flex; justify-content: space-between; }
   .currency-val { color: var(--gold); }
+
+  /* standing panel */
+  #standing-panel {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  #standing-title {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  #standing-archetype-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 3px;
+  }
+
+  #standing-archetype-flavor {
+    font-size: 11px;
+    color: var(--muted);
+    font-style: italic;
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+
+  .standing-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .standing-stat-name {
+    font-size: 11px;
+    color: var(--muted);
+    width: 36px;
+    flex-shrink: 0;
+  }
+
+  .standing-bar-bg {
+    flex: 1;
+    height: 6px;
+    background: rgba(255,255,255,.06);
+    border-radius: 999px;
+    position: relative;
+    overflow: visible;
+  }
+
+  .standing-bar-center {
+    position: absolute;
+    left: 50%;
+    top: -2px;
+    width: 1px;
+    height: 10px;
+    background: rgba(255,255,255,.2);
+    transform: translateX(-50%);
+  }
+
+  .mercy-bar {
+    position: absolute;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--ok);
+    transition: all .4s ease;
+  }
+
+  .order-bar {
+    position: absolute;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--accent);
+    transition: all .4s ease;
+  }
+
+  .heat-bar-bg {
+    overflow: hidden;
+  }
+
+  .heat-bar {
+    height: 100%;
+    border-radius: 999px;
+    background: rgba(167,173,189,.4);
+    transition: all .4s ease;
+  }
+
+  #bounty-indicator {
+    margin-top: 8px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,92,122,.35);
+    background: rgba(255,92,122,.08);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+  }
+
+  #bounty-indicator-icon {
+    color: var(--danger);
+    font-size: 12px;
+  }
+
+  #bounty-indicator-text {
+    color: var(--danger);
+  }
+
+  #bounty-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.6);
+    backdrop-filter: blur(4px);
+    z-index: 300;
+    place-items: center;
+  }
+
+  #bounty-overlay.open {
+    display: grid;
+  }
+
+  #bounty-box {
+    width: min(680px, 96vw);
+    max-height: 80vh;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #bounty-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  #bounty-header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  #bounty-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  #bounty-subtitle {
+    font-size: 11px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  #bounty-close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 16px;
+    padding: 2px 6px;
+    cursor: pointer;
+  }
+
+  #bounty-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 10px 16px 0;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .bounty-tab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    font-size: 13px;
+    padding: 6px 12px 8px;
+    cursor: pointer;
+    border-radius: 0;
+  }
+
+  .bounty-tab.active {
+    color: var(--text);
+    border-bottom-color: var(--accent);
+  }
+
+  .bounty-pane {
+    padding: 16px 20px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .bounty-card {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .bounty-card-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+  }
+
+  .bounty-card-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .bounty-card-meta {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .bounty-card-reason {
+    font-size: 12px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .bounty-card-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .bounty-reward {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ok);
+  }
+
+  .bounty-reward-label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+
+  .bounty-claim-btn {
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(87,212,143,.3);
+    background: rgba(87,212,143,.08);
+    color: var(--ok);
+    cursor: pointer;
+  }
+
+  .bounty-empty {
+    color: var(--muted);
+    font-style: italic;
+    font-size: 13px;
+    text-align: center;
+    padding: 24px 0;
+  }
+
+  .post-field {
+    margin-bottom: 14px;
+  }
+
+  .post-label {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-bottom: 5px;
+  }
+
+  .post-optional {
+    font-style: italic;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  #post-fee-note {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  #post-result {
+    margin-top: 10px;
+    font-size: 13px;
+    min-height: 20px;
+  }
 
   /* inventory */
   #inv-panel {
@@ -1684,6 +1998,41 @@
       <div class="currency-row"><span>Soul Coins</span><span class="currency-val" id="w-soul">0</span></div>
     </div>
 
+    <!-- ── Standing Panel ─────────────────────────────────────────── -->
+    <div id="standing-panel">
+      <div id="standing-title">Standing</div>
+      <div id="standing-archetype-label"></div>
+      <div id="standing-archetype-flavor"></div>
+
+      <div class="standing-row">
+        <span class="standing-stat-name">Mercy</span>
+        <div class="standing-bar-bg">
+          <div class="standing-bar-fill mercy-bar" id="bar-mercy"></div>
+          <div class="standing-bar-center"></div>
+        </div>
+      </div>
+
+      <div class="standing-row">
+        <span class="standing-stat-name">Order</span>
+        <div class="standing-bar-bg">
+          <div class="standing-bar-fill order-bar" id="bar-order"></div>
+          <div class="standing-bar-center"></div>
+        </div>
+      </div>
+
+      <div class="standing-row">
+        <span class="standing-stat-name">Heat</span>
+        <div class="standing-bar-bg heat-bar-bg">
+          <div class="standing-bar-fill heat-bar" id="bar-heat"></div>
+        </div>
+      </div>
+
+      <div id="bounty-indicator" style="display:none">
+        <span id="bounty-indicator-icon">⚠</span>
+        <span id="bounty-indicator-text">Bounty Active</span>
+      </div>
+    </div>
+
     <div id="inv-panel">
       <div id="inv-title">Carried</div>
       <div id="inv-loadout" class="inv-loadout"></div>
@@ -1784,6 +2133,58 @@
   <div id="board-box">
     <div id="board-content"></div>
     <button id="board-close" onclick="closeBoard()">Leave the board</button>
+  </div>
+</div>
+
+<!-- ── Bounty Board Overlay ──────────────────────────────────────── -->
+<div id="bounty-overlay">
+  <div id="bounty-box">
+
+    <div id="bounty-header">
+      <div id="bounty-header-left">
+        <span id="bounty-title">The Warden's Post</span>
+        <span id="bounty-subtitle">Official bounties, witnessed and sealed.</span>
+      </div>
+      <button id="bounty-close" onclick="closeBountyBoard()">✕</button>
+    </div>
+
+    <div id="bounty-tabs">
+      <button class="bounty-tab active" id="tab-official"
+              onclick="switchBountyTab('official')">Official</button>
+      <button class="bounty-tab" id="tab-player"
+              onclick="switchBountyTab('player')">Player</button>
+      <button class="bounty-tab" id="tab-post"
+              onclick="switchBountyTab('post')">Post a Bounty</button>
+    </div>
+
+    <div id="bounty-pane-official" class="bounty-pane">
+      <div id="official-list"></div>
+    </div>
+
+    <div id="bounty-pane-player" class="bounty-pane" style="display:none">
+      <div id="player-list"></div>
+    </div>
+
+    <div id="bounty-pane-post" class="bounty-pane" style="display:none">
+      <div id="post-form">
+        <div class="post-field">
+          <label class="post-label">Target name</label>
+          <input id="post-target" type="text" placeholder="Player name" autocomplete="off"/>
+        </div>
+        <div class="post-field">
+          <label class="post-label">Reason <span class="post-optional">(optional)</span></label>
+          <input id="post-reason" type="text" placeholder="Why the city should care" autocomplete="off"/>
+        </div>
+        <div class="post-field">
+          <label class="post-label">Reward (AM)</label>
+          <input id="post-reward" type="number" min="50" placeholder="Minimum 50"/>
+        </div>
+        <div id="post-fee-note">Posting fee: 25 AM. Total deducted on submit.</div>
+        <button class="btn primary" onclick="submitBounty()">Post Bounty</button>
+        <div id="post-result"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -3093,6 +3494,89 @@ function updateWallet(w) {
   document.getElementById('w-soul').textContent  = w.soul_coins  || 0;
 }
 
+const ARCHETYPE_FLAVOR = {
+  'Protector':  'The city notes you with something close to approval.',
+  'Vigilante':  'You make your own law. The city watches, undecided.',
+  'Wanderer':   'No particular stain. No particular record.',
+  'Enforcer':   'Reliable. Cold. The ledger approves.',
+  'Mercenary':  'A weapon that can be pointed. Someone is always looking.',
+  'Predator':   'The city has noted the pattern.',
+  'Survivor':   'Neutral. For now.',
+  'Cutpurse':   "The city does not forget what you've taken from it.",
+  'Ruffian':    'Grommash is watching.',
+  'Killer':     'There is a notice with your name on it.',
+  'Butcher':    'The wardens move differently when you enter a room.',
+  'Dread':      'The city holds its breath when you pass.',
+  'Ash Wraith': 'You are the thing people warn others about.',
+};
+
+function updateStanding(data) {
+  const { archetype, mercy_score, order_score, crime_heat,
+          has_bounty, bounty_reward } = data || {};
+
+  const archetypeLabel = document.getElementById('standing-archetype-label');
+  const archetypeFlavor = document.getElementById('standing-archetype-flavor');
+  if (archetypeLabel) archetypeLabel.textContent = archetype || 'Survivor';
+  if (archetypeFlavor) archetypeFlavor.textContent =
+    ARCHETYPE_FLAVOR[archetype] || ARCHETYPE_FLAVOR['Survivor'];
+
+  const mercyPct = ((mercy_score || 0) + 200) / 400;
+  const mercyEl  = document.getElementById('bar-mercy');
+  if (mercyEl) {
+    if ((mercy_score || 0) >= 0) {
+      mercyEl.style.left   = '50%';
+      mercyEl.style.right  = '';
+      mercyEl.style.width  = (mercyPct - 0.5) * 100 + '%';
+      mercyEl.style.background = 'var(--ok)';
+    } else {
+      mercyEl.style.left   = '';
+      mercyEl.style.right  = '50%';
+      mercyEl.style.width  = (0.5 - mercyPct) * 100 + '%';
+      mercyEl.style.background = 'var(--danger)';
+    }
+  }
+
+  const orderPct = ((order_score || 0) + 200) / 400;
+  const orderEl  = document.getElementById('bar-order');
+  if (orderEl) {
+    if ((order_score || 0) >= 0) {
+      orderEl.style.left   = '50%';
+      orderEl.style.right  = '';
+      orderEl.style.width  = (orderPct - 0.5) * 100 + '%';
+      orderEl.style.background = 'var(--accent)';
+    } else {
+      orderEl.style.left   = '';
+      orderEl.style.right  = '50%';
+      orderEl.style.width  = (0.5 - orderPct) * 100 + '%';
+      orderEl.style.background = 'rgba(255,180,80,.7)';
+    }
+  }
+
+  const heatPct = Math.min(1, (crime_heat || 0) / 20) * 100;
+  const heatEl  = document.getElementById('bar-heat');
+  if (heatEl) {
+    heatEl.style.width = heatPct + '%';
+    if ((crime_heat || 0) >= 11) {
+      heatEl.style.background = 'var(--danger)';
+    } else if ((crime_heat || 0) >= 4) {
+      heatEl.style.background = 'rgba(255,180,80,.8)';
+    } else {
+      heatEl.style.background = 'rgba(167,173,189,.4)';
+    }
+  }
+
+  const indicator = document.getElementById('bounty-indicator');
+  const indicatorText = document.getElementById('bounty-indicator-text');
+  if (indicator && indicatorText) {
+    if (has_bounty) {
+      indicator.style.display = 'flex';
+      indicatorText.textContent = `Bounty Active — ${bounty_reward || 0} AM`;
+    } else {
+      indicator.style.display = 'none';
+    }
+  }
+}
+
 function updateInventory(invData) {
   const loadoutEl = document.getElementById('inv-loadout');
   const el = document.getElementById('inv-list');
@@ -3801,9 +4285,7 @@ async function doCommune() {
 // ── Board ────────────────────────────────────────────────────────
 async function doBoard() {
   try {
-    const data = await GET('/api/board');
-    document.getElementById('board-content').innerHTML = render(data.board);
-    document.getElementById('board-overlay').classList.add('open');
+    await openBountyBoard();
   } catch(e) {
     log(`<em>${e.message}</em>`);
   }
@@ -3813,17 +4295,166 @@ function closeBoard() {
   document.getElementById('board-overlay').classList.remove('open');
 }
 
+// ── Bounty Board ─────────────────────────────────────────────────
+
+let currentBountyTab = 'official';
+
+async function openBountyBoard() {
+  currentBountyTab = 'official';
+  document.getElementById('bounty-overlay').classList.add('open');
+  await loadBountyTab('official');
+}
+
+function closeBountyBoard() {
+  document.getElementById('bounty-overlay').classList.remove('open');
+}
+
+function switchBountyTab(tab) {
+  currentBountyTab = tab;
+
+  document.querySelectorAll('.bounty-tab').forEach(b => b.classList.remove('active'));
+  const tabEl = document.getElementById('tab-' + tab);
+  if (tabEl) tabEl.classList.add('active');
+
+  document.querySelectorAll('.bounty-pane').forEach(p => p.style.display = 'none');
+  const paneEl = document.getElementById('bounty-pane-' + tab);
+  if (paneEl) paneEl.style.display = 'block';
+
+  const subtitles = {
+    official: 'Official bounties, witnessed and sealed.',
+    player:   'Bounties posted at the market noticeboard.',
+    post:     'Post a bounty. 25 AM fee + reward held in escrow.',
+  };
+  const subEl = document.getElementById('bounty-subtitle');
+  if (subEl) subEl.textContent = subtitles[tab] || '';
+
+  if (tab === 'official' || tab === 'player') loadBountyTab(tab);
+}
+
+async function loadBountyTab(tab) {
+  const listEl = document.getElementById(tab === 'official' ? 'official-list' : 'player-list');
+  if (!listEl) return;
+  listEl.innerHTML = '<div class="bounty-empty">Loading...</div>';
+
+  try {
+    const data = await GET('/api/bounties/' + tab);
+    const bounties = data.bounties || [];
+
+    if (!bounties.length) {
+      listEl.innerHTML = '<div class="bounty-empty">' +
+        (tab === 'official'
+          ? 'No official bounties active. The ledger is clean.'
+          : 'No player bounties posted.') +
+        '</div>';
+      return;
+    }
+
+    listEl.innerHTML = '';
+    bounties.forEach(b => {
+      const expires = b.expires_at
+        ? formatTimeRemaining(b.expires_at)
+        : 'No expiry';
+
+      const card = document.createElement('div');
+      card.className = 'bounty-card';
+      card.innerHTML =
+        '<div class="bounty-card-left">' +
+        '<div class="bounty-card-name">' + escapeHtml(b.target_name || '—') + '</div>' +
+        '<div class="bounty-card-meta">' +
+        (tab === 'official'
+          ? 'Archetype: ' + escapeHtml(b.archetype || '—') + ' &nbsp;·&nbsp; Last seen: ' + escapeHtml(b.last_location || '—')
+          : 'Posted by: ' + escapeHtml(b.poster_name || 'Anonymous')) +
+        ' &nbsp;·&nbsp; Expires: ' + expires +
+        '</div>' +
+        (b.reason ? '<div class="bounty-card-reason">"' + escapeHtml(b.reason) + '"</div>' : '') +
+        '</div>' +
+        '<div class="bounty-card-right">' +
+        '<div><div class="bounty-reward">' + (b.reward || 0) + ' AM</div><div class="bounty-reward-label">Reward</div></div>' +
+        '<button class="bounty-claim-btn" onclick="claimBounty(' + b.id + ', this)">Claim</button>' +
+        '</div>';
+      listEl.appendChild(card);
+    });
+  } catch(e) {
+    listEl.innerHTML = '<div class="bounty-empty">' + escapeHtml(e.message || 'Failed to load') + '</div>';
+  }
+}
+
+async function claimBounty(bountyId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  try {
+    const result = await POST('/api/bounties/claim/' + bountyId);
+    if (btn) {
+      btn.textContent = 'Claimed';
+      btn.style.borderColor = 'rgba(87,212,143,.6)';
+    }
+    await refreshSidebar();
+    log('<em>' + (result.message || 'Bounty claimed. ' + (result.reward || 0) + ' AM added.') + '</em>');
+  } catch(e) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Claim';
+    }
+    log('<em>' + escapeHtml(e.message || 'Claim failed') + '</em>');
+  }
+}
+
+async function submitBounty() {
+  const target = document.getElementById('post-target').value.trim();
+  const reason = document.getElementById('post-reason').value.trim();
+  const reward = parseInt(document.getElementById('post-reward').value, 10);
+  const resultEl = document.getElementById('post-result');
+
+  if (!target) {
+    resultEl.style.color = 'var(--danger)';
+    resultEl.textContent = 'Target name required.';
+    return;
+  }
+  if (!reward || reward < 50) {
+    resultEl.style.color = 'var(--danger)';
+    resultEl.textContent = 'Minimum reward is 50 AM.';
+    return;
+  }
+
+  resultEl.style.color = 'var(--muted)';
+  resultEl.textContent = 'Posting...';
+
+  try {
+    const result = await POST('/api/bounties/post', { target_name: target, reason, reward });
+    resultEl.style.color = 'var(--ok)';
+    resultEl.textContent = result.message || 'Bounty posted.';
+    document.getElementById('post-target').value = '';
+    document.getElementById('post-reason').value = '';
+    document.getElementById('post-reward').value = '';
+    await refreshSidebar();
+  } catch(e) {
+    resultEl.style.color = 'var(--danger)';
+    resultEl.textContent = e.message || 'Post failed';
+  }
+}
+
+function formatTimeRemaining(expiresAtMs) {
+  const remaining = expiresAtMs - Date.now();
+  if (remaining <= 0) return 'Expired';
+  const hours = Math.floor(remaining / 3600000);
+  const mins  = Math.floor((remaining % 3600000) / 60000);
+  if (hours >= 24) return Math.floor(hours / 24) + 'd ' + (hours % 24) + 'h';
+  if (hours > 0)   return hours + 'h ' + mins + 'm';
+  return mins + 'm';
+}
+
 // ── Sidebar refresh ──────────────────────────────────────────────
 async function refreshSidebar() {
   try {
-    const [charData, walletData, invData] = await Promise.all([
+    const [charData, walletData, invData, alignData] = await Promise.all([
       GET('/api/character'),
       GET('/api/wallet'),
       GET('/api/inventory'),
+      GET('/api/alignment'),
     ]);
     updateCharPanel(charData);
     updateWallet(walletData);
     updateInventory(invData);
+    updateStanding(alignData);
   } catch(e) {}
 }
 
@@ -3832,6 +4463,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     closeDialogue();
     closeBoard();
+    closeBountyBoard();
     closeNoticeboard();
     document.getElementById('combat-overlay').classList.remove('open');
   }
