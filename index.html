@@ -56,7 +56,10 @@
     height: 100vh;
     max-width: 1200px;
     margin: 0 auto;
+    opacity: 0;
+    transition: opacity 1.5s ease;
   }
+  #app.visible { opacity: 1; }
 
   #header {
     grid-column: 1 / -1;
@@ -1088,8 +1091,6 @@
     gap: 0;
   }
 
-  #auth-screen.hidden { display: none; }
-
   #auth-logo {
     font-family: var(--font-title);
     font-size: 2.8rem;
@@ -1098,13 +1099,78 @@
     color: var(--ember-glow);
     text-shadow: 0 0 40px rgba(196,98,42,0.5), 0 0 80px rgba(196,98,42,0.2);
     margin-bottom: 8px;
-    animation: emberPulse 4s ease-in-out infinite;
+    animation: emberPulse 4s ease-in-out infinite, jitter 0.08s steps(1) 6;
+    animation-delay: 0s, 3s;
   }
 
   @keyframes emberPulse {
     0%, 100% { text-shadow: 0 0 40px rgba(196,98,42,0.5), 0 0 80px rgba(196,98,42,0.2); }
     50%       { text-shadow: 0 0 60px rgba(196,98,42,0.7), 0 0 120px rgba(196,98,42,0.3); }
   }
+
+  /* ── Atmospheric animations ────────────────────────────────────── */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeInSlow {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes breathe {
+    0%, 100% { opacity: 0.85; }
+    50%       { opacity: 1; }
+  }
+  @keyframes jitter {
+    0%   { transform: translate(0, 0); }
+    20%  { transform: translate(-1px, 0); }
+    40%  { transform: translate(1px, 0); }
+    60%  { transform: translate(0, -1px); }
+    80%  { transform: translate(1px, 1px); }
+    100% { transform: translate(0, 0); }
+  }
+  @keyframes emberSnap {
+    0%   { box-shadow: none; }
+    50%   { box-shadow: 0 0 12px rgba(196,98,42,0.6), inset 0 0 8px rgba(196,98,42,0.1); }
+    100%  { box-shadow: 0 0 6px rgba(196,98,42,0.3); }
+  }
+  @keyframes textPulse {
+    0%   { opacity: 0.2; text-shadow: none; }
+    60%  { opacity: 1; text-shadow: 0 0 20px rgba(196,98,42,0.4); }
+    100% { opacity: 1; text-shadow: 0 0 8px rgba(196,98,42,0.2); }
+  }
+  @keyframes revealUneven {
+    0%   { opacity: 0; letter-spacing: 0.4em; }
+    40%  { opacity: 0.7; letter-spacing: 0.25em; }
+    70%  { opacity: 0.9; letter-spacing: 0.2em; }
+    100% { opacity: 1; letter-spacing: inherit; }
+  }
+  @keyframes wakeSnap {
+    0%   { opacity: 0; transform: scale(0.97); }
+    80%  { opacity: 0; transform: scale(0.97); }
+    81%  { opacity: 1; transform: scale(1.01); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  .stagger-reveal > * {
+    opacity: 0;
+    animation: fadeInUp 0.5s ease forwards;
+  }
+  .stagger-reveal > *:nth-child(1) { animation-delay: 0.05s; }
+  .stagger-reveal > *:nth-child(2) { animation-delay: 0.15s; }
+  .stagger-reveal > *:nth-child(3) { animation-delay: 0.25s; }
+  .stagger-reveal > *:nth-child(4) { animation-delay: 0.35s; }
+  .stagger-reveal > *:nth-child(5) { animation-delay: 0.45s; }
+  .stagger-reveal > *:nth-child(6) { animation-delay: 0.55s; }
+  .stagger-reveal > *:nth-child(7) { animation-delay: 0.65s; }
+  .stagger-reveal > *:nth-child(8) { animation-delay: 0.75s; }
+  #auth-screen {
+    transition: opacity 1.2s ease;
+  }
+  #auth-screen.fading-out {
+    opacity: 0;
+    pointer-events: none;
+  }
+  #auth-screen.hidden { display: none; }
 
   #auth-tagline {
     font-size: 0.85rem;
@@ -1177,10 +1243,13 @@
     transition: border-color 0.2s;
   }
 
+  .form-input:hover {
+    filter: drop-shadow(-0.5px 0 0 rgba(196,98,42,0.4)) drop-shadow(0.5px 0 0 rgba(100,150,200,0.2));
+  }
   .form-input:focus {
     border-color: var(--ember);
     outline: none;
-    box-shadow: 0 0 8px rgba(196,98,42,0.3);
+    box-shadow: 0 0 12px rgba(196,98,42,0.5), 0 0 24px rgba(196,98,42,0.2);
   }
 
   .form-select {
@@ -1372,8 +1441,16 @@
     cursor: pointer;
     transition: all 0.15s;
   }
-  .tw-race-card:hover, .tw-instinct-card:hover { border-color: var(--gold-dim); color: var(--text); }
-  .tw-race-card.selected, .tw-instinct-card.selected { border-color: var(--ember); color: var(--ember-glow); }
+  .tw-race-card:hover, .tw-instinct-card:hover {
+    border-color: var(--gold-dim);
+    color: var(--text);
+    filter: drop-shadow(-0.5px 0 0 rgba(196,98,42,0.4)) drop-shadow(0.5px 0 0 rgba(100,150,200,0.2));
+  }
+  .tw-race-card.selected, .tw-instinct-card.selected {
+    border-color: var(--ember);
+    color: var(--ember-glow);
+    animation: emberSnap 0.4s ease forwards;
+  }
   .tw-instinct-card.affinity { border-color: var(--gold-dim); }
   .tw-instinct-card.affinity .tw-affinity-badge { display: inline; font-size: 0.75rem; color: var(--gold); margin-bottom: 4px; }
   .tw-instinct-card .tw-affinity-badge { display: none; }
@@ -1401,6 +1478,8 @@
   .tw-sheet-section { margin-bottom: 24px; }
   .tw-sheet-section-title { font-family: var(--font-title); font-size: 1rem; color: var(--ember-glow); margin-bottom: 4px; }
   .tw-sheet-section-sub { font-style: italic; color: var(--text-dim); font-size: 0.9rem; margin-bottom: 12px; }
+  .stat-title { animation: revealUneven 0.8s ease forwards; }
+  .stat-subtitle { animation: fadeInSlow 1s ease 0.2s forwards; opacity: 0; }
   .tw-create-name-input {
     width: 100%; max-width: 320px; margin: 0 auto; display: block;
     font-family: var(--font-title), serif; font-size: 1.2rem;
@@ -1409,6 +1488,11 @@
     transition: border-color 0.2s, box-shadow 0.2s;
   }
   .tw-create-name-input:focus { outline: none; border-color: var(--ember); box-shadow: 0 0 0 2px rgba(196,98,42,0.25); }
+  .tw-create-name-input.name-confirmed {
+    border-color: var(--ember);
+    box-shadow: 0 0 12px rgba(196,98,42,0.4), 0 0 24px rgba(196,98,42,0.15);
+    color: var(--ember-glow);
+  }
   .tw-create-name-input::placeholder { color: var(--text-dim); }
   .tw-sheet-pool { margin-bottom: 12px; font-size: 0.9rem; }
   .tw-sheet-pool .tw-pool-num { color: var(--ember); }
@@ -1418,6 +1502,7 @@
   .tw-sheet-stat-row .stat-name { min-width: 48px; font-weight: 600; }
   .tw-sheet-stat-row button { width: 32px; height: 28px; padding: 0; font-size: 1.1rem; line-height: 1; background: var(--bg3); border: 1px solid var(--border); color: var(--ash-light); cursor: pointer; }
   .tw-sheet-stat-row button:hover { border-color: var(--ember); color: var(--ember-glow); }
+  .tw-sheet-stat-row button.tw-stepper-pulse { animation: emberSnap 0.4s ease forwards; }
   .tw-sheet-stat-row .base-val { min-width: 32px; text-align: center; }
   .tw-sheet-stat-row .final-val { min-width: 40px; text-align: right; color: var(--gold-dim); }
   .tw-sheet-summary-content { font-size: 0.9rem; color: var(--ash-light); }
@@ -1768,29 +1853,38 @@
   #awakening-screen {
     position: fixed; inset: 0; background: #000; z-index: 200;
     display: flex; align-items: center; justify-content: center;
+    transition: opacity 1.5s ease;
   }
+  #awakening-screen.awakening-fade-out { opacity: 0; pointer-events: none; }
   .awakening-blackout { position: absolute; inset: 0; background: #000; }
   .awakening-ash-container { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
   .awakening-inner {
-    position: relative; z-index: 2; text-align: center; max-width: 90%; transition: opacity 0.5s;
+    position: relative; z-index: 2; text-align: center; max-width: 90%;
   }
-  #awakening-lines { font-family: var(--font-body); font-size: 1rem; color: var(--ash-light); line-height: 1.8; }
-  #awakening-lines .awake-line { opacity: 0; animation: awakeningFadeIn 0.8s ease-out forwards; }
-  @keyframes awakeningFadeIn { to { opacity: 1; } }
-  #awakening-name-wrap {
+  .awakening-text-block {
+    font-family: var(--font-body); font-size: 1rem; color: var(--ash-light); line-height: 1.8;
+    opacity: 0; animation: fadeInSlow 1.2s ease 0.5s forwards;
+  }
+  .awakening-name-block {
     font-family: var(--font-title), serif; font-size: clamp(1.5rem, 5vw, 2.5rem);
     color: var(--ember-glow); margin: 1rem 0; min-height: 1.2em;
+    opacity: 0; animation: wakeSnap 0.8s ease 3.5s forwards;
   }
-  #awakening-name-wrap .awake-letter { display: inline-block; opacity: 0; animation: awakeningLetterIn 0.4s ease-out forwards; }
-  @keyframes awakeningLetterIn { to { opacity: 1; text-shadow: 0 0 12px var(--ember); } }
-  .awakening-hold { font-style: italic; color: var(--text-dim); font-size: 0.95rem; margin: 1rem 0; }
-  .awakening-prompt { font-family: var(--font-title); color: var(--ash-light); font-size: 0.9rem; margin: 0.5rem 0; letter-spacing: 0.15em; }
-  .awakening-wake-btn {
+  .awakening-tagline {
+    font-style: italic; color: var(--text-dim); font-size: 0.95rem; margin: 1rem 0;
+    opacity: 0; animation: fadeInSlow 0.6s ease 5.5s forwards;
+  }
+  .awakening-cta {
+    font-family: var(--font-title); color: var(--ash-light); font-size: 0.9rem; margin: 0.5rem 0; letter-spacing: 0.15em;
+    opacity: 0; animation: fadeInSlow 0.6s ease 5.9s forwards;
+  }
+  #awakening-btn {
     margin-top: 1.5rem; padding: 12px 28px; font-family: var(--font-title);
     background: transparent; border: 1px solid var(--ember); color: var(--ember-glow);
     cursor: pointer; transition: all 0.2s;
+    opacity: 0; animation: fadeInSlow 0.6s ease 6.2s forwards;
   }
-  .awakening-wake-btn:hover { background: rgba(196,98,42,0.15); }
+  #awakening-btn:hover { background: rgba(196,98,42,0.15); }
   .awakening-ash { position: absolute; width: 4px; height: 4px; background: #c4622a; border-radius: 50%; opacity: 0.9; pointer-events: none; animation: entryAshFall linear forwards; z-index: 210; }
 
   /* ── Chat panel (Phase 3: global only) ───────────────────────────── */
@@ -1859,18 +1953,18 @@
 
   <!-- Tab switcher -->
   <div id="auth-tabs">
-    <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Sign In</button>
-    <button class="auth-tab" id="tab-register" onclick="switchTab('register')">New Account</button>
+    <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Return</button>
+    <button class="auth-tab" id="tab-register" onclick="switchTab('register')">Enter for the First Time</button>
   </div>
 
   <!-- Sign In -->
   <div id="auth-form" data-panel="login">
     <div class="form-field">
-      <label class="form-label" for="login-username">Username</label>
+      <label class="form-label" for="login-username">Who walks the ash?</label>
       <input class="form-input" id="login-username" type="text" placeholder="Your username" maxlength="32" autocomplete="off">
     </div>
     <div class="form-field">
-      <label class="form-label" for="login-password">Password</label>
+      <label class="form-label" for="login-password">What shape does your memory take?</label>
       <input class="form-input" id="login-password" type="password" placeholder="Your password" autocomplete="current-password">
     </div>
     <div id="auth-error"></div>
@@ -1880,11 +1974,11 @@
   <!-- New Account -->
   <div id="auth-form-register" data-panel="register" style="display:none">
     <div class="form-field">
-      <label class="form-label" for="reg-username">Username</label>
+      <label class="form-label" for="reg-username">What name will the city record?</label>
       <input class="form-input" id="reg-username" type="text" placeholder="Choose a username" maxlength="32" autocomplete="off">
     </div>
     <div class="form-field">
-      <label class="form-label" for="reg-password">Password</label>
+      <label class="form-label" for="reg-password">What shape does your memory take?</label>
       <input class="form-input" id="reg-password" type="password" placeholder="Choose a password" autocomplete="new-password">
     </div>
     <div id="auth-error-reg"></div>
@@ -1913,8 +2007,8 @@
           <input type="text" id="tw-create-name" class="tw-create-name-input" placeholder="Your name..." maxlength="32" autocomplete="off">
         </section>
         <section class="tw-sheet-section tw-sheet-stats">
-          <h3 class="tw-sheet-section-title">Distribute Your Echoes</h3>
-          <p class="tw-sheet-section-sub">Your body remembers more than your mind does.</p>
+          <h3 class="tw-sheet-section-title stat-title">Distribute Your Echoes</h3>
+          <p class="tw-sheet-section-sub stat-subtitle">Your body remembers more than your mind does.</p>
           <div class="tw-sheet-pool"><span>Points remaining:</span> <strong id="tw-sheet-pool-remain" class="tw-pool-num">30</strong></div>
           <div id="tw-sheet-stats-rows" class="tw-sheet-stats-rows"></div>
         </section>
@@ -1988,12 +2082,12 @@
 <div id="awakening-screen" class="screen-overlay" style="display:none;" aria-hidden="true">
   <div id="awakening-blackout" class="awakening-blackout"></div>
   <div id="awakening-ash-container" class="awakening-ash-container"></div>
-  <div id="awakening-inner" class="awakening-inner" style="opacity:0;">
-    <div id="awakening-lines"></div>
-    <div id="awakening-name-wrap" style="display:none;"><span id="awakening-name"></span></div>
-    <p id="awakening-hold" class="awakening-hold" style="opacity:0;">Hold onto it. This city takes everything else.</p>
-    <p id="awakening-prompt" class="awakening-prompt" style="opacity:0;">— open your eyes —</p>
-    <button type="button" id="awakening-wake-btn" class="awakening-wake-btn" style="opacity:0;">WAKE UP</button>
+  <div id="awakening-overlay" class="awakening-inner" style="display:none;">
+    <div id="awakening-text" class="awakening-text-block"></div>
+    <div id="awakening-name" class="awakening-name-block"></div>
+    <div id="awakening-tagline" class="awakening-tagline">Hold onto it. This city takes everything else.</div>
+    <div id="awakening-cta" class="awakening-cta">— Open your eyes —</div>
+    <button type="button" id="awakening-btn" class="awakening-wake-btn" onclick="completeAwakening()">Wake Up</button>
   </div>
 </div>
 
@@ -2651,6 +2745,15 @@ function log(html, fresh = true) {
 }
 
 // ── Auth ─────────────────────────────────────────────────────────
+function fadeOutAuthScreen() {
+  const screen = document.getElementById('auth-screen');
+  screen.classList.add('fading-out');
+  setTimeout(() => {
+    screen.classList.add('hidden');
+    screen.classList.remove('fading-out');
+  }, 1200);
+}
+
 function switchTab(tab) {
   const isLogin = tab === 'login';
   document.getElementById('tab-login').classList.toggle('active', isLogin);
@@ -2669,6 +2772,7 @@ function showScreen(screenId) {
   auth.style.display = screenId === 'auth' ? 'flex' : 'none';
   sheet.style.display = screenId === 'sheet' ? 'block' : 'none';
   app.style.display = screenId === 'game' ? 'grid' : 'none';
+  if (screenId !== 'game') app.classList.remove('visible');
   tw.style.display = screenId === 'tw' ? 'flex' : 'none';
 }
 
@@ -2676,30 +2780,22 @@ function needsOnboard(c) {
   return c == null || c.instinct == null || c.instinct === '' || c.stats_set == null || Number(c.stats_set) === 0;
 }
 
+let awakeningLoadPromise = null;
+
 function showAwakeningCinematic(characterName) {
   const screen = document.getElementById('awakening-screen');
-  const inner = document.getElementById('awakening-inner');
-  const linesEl = document.getElementById('awakening-lines');
-  const nameWrap = document.getElementById('awakening-name-wrap');
+  const overlay = document.getElementById('awakening-overlay');
+  const textEl = document.getElementById('awakening-text');
   const nameEl = document.getElementById('awakening-name');
-  const holdEl = document.getElementById('awakening-hold');
-  const promptEl = document.getElementById('awakening-prompt');
-  const wakeBtn = document.getElementById('awakening-wake-btn');
 
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('true-welcome-screen').style.display = 'none';
   document.getElementById('character-sheet-screen').style.display = 'none';
-  document.getElementById('app').style.display = 'none';
+  document.getElementById('app').style.display = 'grid';
+  document.getElementById('app').classList.remove('visible');
   screen.style.display = 'flex';
+  screen.classList.remove('awakening-fade-out');
   screen.setAttribute('aria-hidden', 'false');
-
-  inner.style.opacity = '0';
-  linesEl.innerHTML = '';
-  nameWrap.style.display = 'none';
-  nameEl.innerHTML = '';
-  holdEl.style.opacity = '0';
-  promptEl.style.opacity = '0';
-  wakeBtn.style.opacity = '0';
 
   const LINES = [
     "You are on the floor.",
@@ -2710,74 +2806,37 @@ function showAwakeningCinematic(characterName) {
     "Wait.",
     "You know one thing.",
   ];
+  textEl.innerHTML = LINES.map(l => '<p style="margin:0.4em 0">' + l + '</p>').join('');
+  nameEl.textContent = String(characterName || '').trim() || 'You';
 
-  function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+  overlay.style.display = 'block';
 
-  (async () => {
-    await delay(500);
-    inner.style.opacity = '1';
-    // MUSIC HOOK: first awakening
-    for (let i = 0; i < 5; i++) {
-      const line = document.createElement('p');
-      line.className = 'awake-line';
-      line.textContent = LINES[i];
-      linesEl.appendChild(line);
-      await delay(800);
-    }
-    await delay(1500);
-    const line6 = document.createElement('p');
-    line6.className = 'awake-line';
-    line6.textContent = 'Wait.';
-    linesEl.appendChild(line6);
-    await delay(1000);
-    const line7 = document.createElement('p');
-    line7.className = 'awake-line';
-    line7.textContent = "You know one thing.";
-    linesEl.appendChild(line7);
-    await delay(800);
-    // MUSIC HOOK: name reveal
-    nameWrap.style.display = 'block';
-    const name = String(characterName || '').trim() || 'You';
-    for (let i = 0; i < name.length; i++) {
-      const span = document.createElement('span');
-      span.className = 'awake-letter';
-      span.textContent = name[i];
-      span.style.animationDelay = (i * 80) + 'ms';
-      nameEl.appendChild(span);
-    }
-    await delay(2000);
-    holdEl.style.opacity = '1';
-    holdEl.style.transition = 'opacity 0.6s';
-    await delay(400);
-    promptEl.style.opacity = '1';
-    promptEl.style.transition = 'opacity 0.6s';
-    await delay(300);
-    wakeBtn.style.opacity = '1';
-    wakeBtn.style.transition = 'opacity 0.6s';
-  })();
+  awakeningLoadPromise = loadGame();
+}
 
-  wakeBtn.onclick = async () => {
-    wakeBtn.onclick = null;
-    // MUSIC HOOK: wake up
-    const container = document.getElementById('awakening-ash-container');
-    const rect = screen.getBoundingClientRect();
-    for (let i = 0; i < 40; i++) {
-      const dot = document.createElement('span');
-      dot.className = 'awakening-ash';
-      dot.style.left = (rect.left + Math.random() * rect.width) + 'px';
-      dot.style.top = (rect.top + rect.height - 10 + Math.random() * 20) + 'px';
-      dot.style.setProperty('--fall-y', (80 + Math.random() * 120) + 'px');
-      dot.style.setProperty('--fall-x', (Math.random() * 30 - 15) + 'px');
-      dot.style.animationDuration = (0.8 + Math.random() * 0.8) + 's';
-      dot.style.animationDelay = (Math.random() * 0.4) + 's';
-      container.appendChild(dot);
-    }
-    await delay(3000);
-    screen.style.display = 'none';
-    screen.setAttribute('aria-hidden', 'true');
-    showScreen('game');
-    await loadGame();
-  };
+async function completeAwakening() {
+  const screen = document.getElementById('awakening-screen');
+  const container = document.getElementById('awakening-ash-container');
+  const rect = screen.getBoundingClientRect();
+  for (let i = 0; i < 40; i++) {
+    const dot = document.createElement('span');
+    dot.className = 'awakening-ash';
+    dot.style.left = (rect.left + Math.random() * rect.width) + 'px';
+    dot.style.top = (rect.top + rect.height - 10 + Math.random() * 20) + 'px';
+    dot.style.setProperty('--fall-y', (80 + Math.random() * 120) + 'px');
+    dot.style.setProperty('--fall-x', (Math.random() * 30 - 15) + 'px');
+    dot.style.animationDuration = (0.8 + Math.random() * 0.8) + 's';
+    dot.style.animationDelay = (Math.random() * 0.4) + 's';
+    container.appendChild(dot);
+  }
+  screen.classList.add('awakening-fade-out');
+  await new Promise(r => setTimeout(r, 1500));
+  screen.style.display = 'none';
+  screen.setAttribute('aria-hidden', 'true');
+  showScreen('game');
+  if (awakeningLoadPromise) await awakeningLoadPromise;
+  awakeningLoadPromise = null;
+  requestAnimationFrame(() => document.getElementById('app').classList.add('visible'));
 }
 
 function formatStatMods(mods) {
@@ -2835,6 +2894,8 @@ async function showTrueWelcome() {
     };
     raceGrid.appendChild(btn);
   }
+  raceGrid.classList.add('stagger-reveal');
+  raceGrid.offsetHeight;
 
   document.getElementById('tw-step-race').style.display = 'block';
   document.getElementById('tw-step-instinct').style.display = 'none';
@@ -2878,6 +2939,8 @@ function renderTwInstinctStep() {
     };
     grid.appendChild(card);
   }
+  grid.classList.add('stagger-reveal');
+  grid.offsetHeight;
   const bonusEl = document.getElementById('tw-affinity-bonus');
   if (twSelectedInstinct && affinityList.includes(twSelectedInstinct)) {
     const inst = mainInstinctsData?.instincts?.[twSelectedInstinct];
@@ -2958,16 +3021,27 @@ function renderTwSheetStep() {
       finalSpan.textContent = fin ? fin[stat] : base;
       updateTwSheetSummary();
     }
+    function pulseStepper(btn) {
+      btn.classList.add('tw-stepper-pulse');
+      setTimeout(() => btn.classList.remove('tw-stepper-pulse'), 400);
+    }
     minusBtn.onclick = () => {
-      if (twSheetBaseStats[stat] > TW_SHEET_BASE) { twSheetBaseStats[stat]--; refresh(); }
+      if (twSheetBaseStats[stat] > TW_SHEET_BASE) { twSheetBaseStats[stat]--; refresh(); pulseStepper(minusBtn); }
     };
     plusBtn.onclick = () => {
-      if (twSheetPoolRemain() > 0 && twSheetBaseStats[stat] < TW_SHEET_STAT_MAX) { twSheetBaseStats[stat]++; refresh(); }
+      if (twSheetPoolRemain() > 0 && twSheetBaseStats[stat] < TW_SHEET_STAT_MAX) { twSheetBaseStats[stat]++; refresh(); pulseStepper(plusBtn); }
     };
     container.appendChild(row);
   });
   document.getElementById('tw-sheet-summary').style.display = 'none';
-  if (nameInput) nameInput.addEventListener('input', updateTwSheetSummary);
+  if (nameInput) {
+    nameInput.addEventListener('input', updateTwSheetSummary);
+    nameInput.addEventListener('input', () => nameInput.classList.remove('name-confirmed'));
+    nameInput.addEventListener('blur', () => {
+      if (nameInput.value.trim()) nameInput.classList.add('name-confirmed');
+      else nameInput.classList.remove('name-confirmed');
+    });
+  }
   updateTwSheetSummary();
 }
 
@@ -3170,6 +3244,7 @@ async function init() {
       document.querySelectorAll('.entry-ash').forEach(el => el.remove());
       showScreen('game');
       await loadGame();
+      requestAnimationFrame(() => document.getElementById('app').classList.add('visible'));
       const el = document.getElementById('entry-screen');
       if (el) el.remove();
     }, 3000);
@@ -3259,7 +3334,7 @@ async function doLogin() {
     const char = await GET('/api/character');
     mainCharacter = char;
     document.getElementById('auth-btn').textContent = 'Enter Verasanth';
-    document.getElementById('auth-screen').classList.add('hidden');
+    fadeOutAuthScreen();
     if (needsOnboard(char)) {
       showTrueWelcome();
     } else {
@@ -3290,7 +3365,7 @@ async function doRegister() {
     const char = await GET('/api/character');
     mainCharacter = char;
     document.getElementById('auth-btn-reg').textContent = 'Create Account';
-    document.getElementById('auth-screen').classList.add('hidden');
+    fadeOutAuthScreen();
     showTrueWelcome();
   } catch(e) {
     errEl.textContent = e.message;
