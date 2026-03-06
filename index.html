@@ -499,6 +499,85 @@
     color: var(--text-dim);
   }
 
+  /* ── Trade overlay ─────────────────────────────────────────────── */
+  #trade-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(5,2,2,0.88);
+    z-index: 110;
+    justify-content: center;
+    align-items: center;
+  }
+
+  #trade-overlay.open { display: flex; }
+
+  #trade-box {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    width: min(420px, 90vw);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 0 30px rgba(0,0,0,0.8);
+  }
+
+  #trade-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  #trade-title {
+    font-family: var(--font-title);
+    font-size: 1rem;
+    color: var(--ember-glow);
+  }
+
+  #trade-close {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 1.2rem;
+    cursor: pointer;
+  }
+
+  #trade-list {
+    padding: 16px 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .trade-item {
+    background: transparent;
+    border: 1px solid var(--border-warm);
+    color: var(--ash-light);
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.15s;
+    text-align: left;
+  }
+
+  .trade-item:hover {
+    border-color: var(--ember);
+    color: var(--ember-glow);
+    background: rgba(196,98,42,0.06);
+  }
+
+  .trade-item .price { color: var(--text-dim); font-size: 0.85em; margin-left: 6px; }
+
+  #trade-confirm {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  .trade-confirm-actions { display: flex; gap: 10px; margin-top: 12px; }
+
   /* ── Combat overlay ────────────────────────────────────────────── */
   #combat-overlay {
     display: none;
@@ -1643,6 +1722,24 @@
   </div>
 </div>
 
+<!-- ── Trade Overlay ─────────────────────────────────────────────── -->
+<div id="trade-overlay">
+  <div id="trade-box">
+    <div id="trade-header">
+      <span id="trade-title"></span>
+      <button id="trade-close" onclick="closeTrade()">✕</button>
+    </div>
+    <div id="trade-list"></div>
+    <div id="trade-confirm" style="display:none;">
+      <p id="trade-confirm-msg"></p>
+      <div class="trade-confirm-actions">
+        <button class="btn" id="trade-confirm-btn">Confirm</button>
+        <button class="btn" onclick="cancelTradeConfirm()">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── Combat Overlay ──────────────────────────────────────────── -->
 <div id="combat-overlay">
   <div id="combat-box">
@@ -1935,6 +2032,13 @@ const TOPIC_GATES = {
 const TOPIC_TO_NPC = {
   grommash: 'warden', kelvaris: 'bartender', caelir: 'weaponsmith',
   veyra: 'armorsmith', thalara: 'alchemist', seris: 'curator', othorion: 'othorion',
+};
+
+const VENDOR_NPCS = {
+  weaponsmith: { buy: true, sell: true },
+  armorsmith: { buy: true, sell: true },
+  alchemist: { buy: true, sell: true },
+  curator: { buy: false, sell: true },
 };
 
 // ── API helpers ──────────────────────────────────────────────────
@@ -3309,20 +3413,54 @@ function showDialogueResponse(text) {
   document.getElementById('dialogue-response').innerHTML = render(text || '');
 }
 
+function normalizeTopicKey(t) {
+  let s = String(t).toLowerCase().trim();
+  if (s.startsWith('the ')) s = s.slice(4).trim();
+  return s.replace(/\s+/g, '_').replace(/^_+|_+$/g, '');
+}
+
 function renderTopics(npcId, flags = {}) {
   const wrap = document.getElementById('dialogue-topics');
   wrap.innerHTML = '';
+  const vendor = VENDOR_NPCS[npcId];
+
+  if (vendor) {
+    if (vendor.buy) {
+      const buyBtn = document.createElement('button');
+      buyBtn.className = 'topic-btn';
+      buyBtn.textContent = 'Buy';
+      buyBtn.onclick = () => openTradeBuy(npcId);
+      wrap.appendChild(buyBtn);
+    }
+    if (vendor.sell) {
+      const sellBtn = document.createElement('button');
+      sellBtn.className = 'topic-btn';
+      sellBtn.textContent = 'Sell';
+      sellBtn.onclick = () => openTradeSell(npcId);
+      wrap.appendChild(sellBtn);
+    }
+  }
+
   const gates = TOPIC_GATES[npcId];
-  const topics = (npcTopics[npcId] || []).filter(t => {
+  const rawTopics = (npcTopics[npcId] || []).filter(t => {
     if (t === npcId || TOPIC_TO_NPC[t] === npcId) return false;
     const gate = gates && gates[t];
     return gate == null || (flags[gate] && Number(flags[gate]) > 0);
   });
-  topics.forEach(t => {
+  const seen = new Map();
+  const topics = [];
+  for (const t of rawTopics) {
+    const norm = normalizeTopicKey(t);
+    if (!seen.has(norm)) {
+      seen.set(norm, { originalKey: t, label: TOPIC_LABELS[t] || t });
+      topics.push(seen.get(norm));
+    }
+  }
+  topics.forEach(({ originalKey, label }) => {
     const b = document.createElement('button');
     b.className = 'topic-btn';
-    b.textContent = TOPIC_LABELS[t] || t;
-    b.onclick = () => askTopic(t);
+    b.textContent = label;
+    b.onclick = () => askTopic(originalKey);
     wrap.appendChild(b);
   });
   const leave = document.createElement('button');
@@ -3335,6 +3473,113 @@ function renderTopics(npcId, flags = {}) {
 function closeDialogue() {
   document.getElementById('dialogue-overlay').classList.remove('open');
   currentNPC = '';
+}
+
+// ── Trade ─────────────────────────────────────────────────────────
+let tradeState = { mode: null, npc: null, pendingItem: null, pendingPrice: null };
+
+async function openTradeBuy(npcId) {
+  tradeState = { mode: 'buy', npc: npcId };
+  document.getElementById('trade-title').textContent = 'Buy';
+  document.getElementById('trade-list').innerHTML = '';
+  document.getElementById('trade-confirm').style.display = 'none';
+  document.getElementById('trade-overlay').classList.add('open');
+  try {
+    const data = await GET(`/api/vendor/${npcId}/stock`);
+    const list = document.getElementById('trade-list');
+    (data.stock || []).forEach(entry => {
+      const b = document.createElement('button');
+      b.className = 'trade-item';
+      b.innerHTML = escapeHtml(entry.display_name) + ' <span class="price">' + entry.price + ' AM</span>';
+      b.onclick = () => confirmTradeBuy(entry);
+      list.appendChild(b);
+    });
+  } catch (e) {
+    document.getElementById('trade-list').innerHTML = '<p class="err">' + escapeHtml(e.message) + '</p>';
+  }
+}
+
+async function openTradeSell(npcId) {
+  tradeState = { mode: 'sell', npc: npcId };
+  document.getElementById('trade-title').textContent = 'Sell';
+  document.getElementById('trade-list').innerHTML = '';
+  document.getElementById('trade-confirm').style.display = 'none';
+  document.getElementById('trade-overlay').classList.add('open');
+  try {
+    const [invData, offersData] = await Promise.all([
+      GET('/api/inventory'),
+      GET(`/api/vendor/${npcId}/sell-offers`).catch(() => ({ offers: {} })),
+    ]);
+    const details = invData.itemDetails || [];
+    const offers = offersData.offers || {};
+    const list = document.getElementById('trade-list');
+    details.forEach(it => {
+      const price = offers[it.id];
+      if (price == null) return;
+      const b = document.createElement('button');
+      b.className = 'trade-item';
+      b.innerHTML = escapeHtml(it.display_name) + (it.qty > 1 ? ' x' + it.qty : '') + ' <span class="price">' + price + ' AM</span>';
+      b.onclick = () => confirmTradeSell(it, price);
+      list.appendChild(b);
+    });
+    if (details.length === 0) list.innerHTML = '<p class="text-dim">Nothing to sell.</p>';
+  } catch (e) {
+    document.getElementById('trade-list').innerHTML = '<p class="err">' + escapeHtml(e.message) + '</p>';
+  }
+}
+
+function confirmTradeBuy(entry) {
+  tradeState.pendingItem = entry;
+  document.getElementById('trade-confirm-msg').textContent = 'Buy ' + entry.display_name + ' for ' + entry.price + ' Ash Marks?';
+  document.getElementById('trade-confirm').style.display = 'block';
+  document.getElementById('trade-confirm-btn').onclick = () => doTradeBuy();
+}
+
+function confirmTradeSell(it, price) {
+  tradeState.pendingItem = it;
+  tradeState.pendingPrice = price;
+  document.getElementById('trade-confirm-msg').textContent = 'Sell ' + it.display_name + ' for ' + price + ' Ash Marks?';
+  document.getElementById('trade-confirm').style.display = 'block';
+  document.getElementById('trade-confirm-btn').onclick = () => doTradeSell();
+}
+
+async function doTradeBuy() {
+  const { npc, pendingItem } = tradeState;
+  if (!npc || !pendingItem) return;
+  try {
+    const data = await POST('/api/vendor/buy', { npc, item_id: pendingItem.id });
+    log(render(data.message || ''));
+    refreshSidebar();
+    cancelTradeConfirm();
+    closeTrade();
+  } catch (e) {
+    document.getElementById('trade-confirm-msg').innerHTML = '<span class="err">' + escapeHtml(e.message) + '</span>';
+  }
+}
+
+async function doTradeSell() {
+  const { npc, pendingItem } = tradeState;
+  if (!npc || !pendingItem) return;
+  try {
+    const data = await POST('/api/sell', { npc, item: pendingItem.id });
+    log(render(data.message || ''));
+    refreshSidebar();
+    cancelTradeConfirm();
+    closeTrade();
+  } catch (e) {
+    document.getElementById('trade-confirm-msg').innerHTML = '<span class="err">' + escapeHtml(e.message) + '</span>';
+  }
+}
+
+function cancelTradeConfirm() {
+  document.getElementById('trade-confirm').style.display = 'none';
+  tradeState.pendingItem = null;
+  tradeState.pendingPrice = null;
+}
+
+function closeTrade() {
+  document.getElementById('trade-overlay').classList.remove('open');
+  tradeState = { mode: null, npc: null, pendingItem: null, pendingPrice: null };
 }
 
 // ── Combat ───────────────────────────────────────────────────────

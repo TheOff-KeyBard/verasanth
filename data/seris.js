@@ -25,7 +25,7 @@ export const SELL_VALUES = {
   "Cathedral Rune Shard": 300,
 };
 
-const TIER_BASE_VALUES = [0, 10, 25, 60, 130, 280, 400];
+export const TIER_BASE_VALUES = [0, 10, 25, 60, 130, 280, 400];
 
 /** Get sell value for an item. Returns 0 if not sellable. */
 export function getSellValue(displayName, tier, category) {

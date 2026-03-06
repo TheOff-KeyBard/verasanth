@@ -12,7 +12,8 @@ import { RACES } from "./data/races.js";
 import { INSTINCTS } from "./data/instincts.js";
 import { NPC_LOCATIONS, NPC_NAMES, NPC_TOPICS, BARTENDER_FEE } from "./data/npcs.js";
 import { SERIS_NOTICES, FLAVOR_NOTICES, ANONYMOUS_NOTICES, IMPOSSIBLE_TEMPLATES, BOARD_NPC_REACTIONS } from "./data/board.js";
-import { SERIS_INTEREST_ITEMS, getSellValue, displayNameToKey } from "./data/seris.js";
+import { SERIS_INTEREST_ITEMS, getSellValue, displayNameToKey, TIER_BASE_VALUES } from "./data/seris.js";
+import { VENDOR_STOCK, VENDOR_NPCS } from "./data/vendor_stock.js";
 import { getNPCResponse, boardNPCReaction } from "./services/npc_dialogue.js";
 import { statMod, rollDie, maxPlayerHp, randomEnemy, playerAttack, enemyAttack } from "./services/combat.js";
 import { generateItem } from "./services/item_generator.js";
@@ -1843,14 +1844,94 @@ if (path === "/api/combat/state" && method === "GET") {
       return json({ ok: true, message: `*Kelvaris takes the marks and sets a key on the bar.*\n\n"Room's yours until morning."\n\n**Your HP is fully restored.**`, hp: maxHp });
     }
 
+    // ── GET: Vendor stock ──
+    if (path.startsWith("/api/vendor/") && path.endsWith("/stock") && method === "GET") {
+      const npcId = path.slice("/api/vendor/".length, -"/stock".length);
+      const stock = VENDOR_STOCK[npcId];
+      if (!stock) return err("Unknown vendor.", 404);
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const npcLoc = NPC_LOCATIONS[npcId];
+      if (!npcLoc || npcLoc !== row.location) return err("Vendor is not here.", 400);
+      return json({ stock });
+    }
+
+    // ── GET: Vendor sell offers (prices for player's inventory) ──
+    if (path.startsWith("/api/vendor/") && path.endsWith("/sell-offers") && method === "GET") {
+      const npcId = path.slice("/api/vendor/".length, -"/sell-offers".length);
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const npcLoc = NPC_LOCATIONS[npcId];
+      if (!npcLoc || npcLoc !== row.location) return err("Vendor is not here.", 400);
+      if (!VENDOR_NPCS[npcId]?.sell) return err("That vendor doesn't buy.", 400);
+
+      const rows = await dbAll(db, "SELECT item,display_name,tier FROM inventory WHERE user_id=?", [uid]);
+      const offers = {};
+      for (const r of rows) {
+        const tier = r.tier ?? 1;
+        if (npcId === "curator") {
+          const v = getSellValue(r.display_name || r.item, tier, "loot");
+          if (v > 0) offers[r.item] = Math.floor(v * 1.5);
+        } else {
+          const base = TIER_BASE_VALUES[Math.min(tier, 6)] ?? 10;
+          offers[r.item] = Math.floor(base * 0.5);
+        }
+      }
+      return json({ offers });
+    }
+
+    // ── POST: Vendor buy ──
+    if (path === "/api/vendor/buy" && method === "POST") {
+      const { npc, item_id } = body;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (!npc || !item_id) return err("Missing npc or item_id.", 400);
+
+      const npcLoc = NPC_LOCATIONS[npc];
+      if (!npcLoc || npcLoc !== row.location) return err("Vendor is not here.", 400);
+
+      const stock = VENDOR_STOCK[npc];
+      if (!stock || !VENDOR_NPCS[npc]?.buy) return err("That vendor doesn't sell.", 400);
+
+      const entry = stock.find(s => s.id === item_id);
+      if (!entry) return err("Item not in stock.", 404);
+
+      const ash = Number(row.ash_marks ?? 0);
+      if (ash < entry.price) return err(`You need ${entry.price} Ash Marks. You have ${ash}.`, 400);
+
+      await dbRun(db, "UPDATE characters SET ash_marks=ash_marks-? WHERE user_id=?", [entry.price, uid]);
+      const invRow = await dbGet(db, "SELECT item,qty FROM inventory WHERE user_id=? AND item=?", [uid, item_id]);
+      const specProp = entry.stats ? JSON.stringify(entry.stats) : null;
+      if (invRow) {
+        await dbRun(db, "UPDATE inventory SET qty=qty+1, tier=?, display_name=?, special_property=? WHERE user_id=? AND item=?",
+          [entry.tier || 1, entry.display_name, specProp, uid, item_id]);
+      } else {
+        await dbRun(db, `INSERT INTO inventory (user_id, item, qty, tier, corrupted, curse, curse_identified, special_property, display_name)
+          VALUES (?, ?, 1, ?, 0, NULL, 0, ?, ?)`,
+          [uid, item_id, entry.tier || 1, specProp, entry.display_name]);
+      }
+
+      return json({
+        ok: true,
+        message: `*You purchase ${entry.display_name} for ${entry.price} Ash Marks.*`,
+        ash_marks: ash - entry.price,
+      });
+    }
+
     // ── GET: Inventory ──
     if (path === "/api/inventory" && method === "GET") {
-      const rows = await dbAll(db, "SELECT item,qty,display_name FROM inventory WHERE user_id=? ORDER BY item", [uid]);
+      const rows = await dbAll(db, "SELECT item,qty,display_name,tier FROM inventory WHERE user_id=? ORDER BY item", [uid]);
       const items = rows.map(r => {
         const label = r.display_name || r.item;
         return r.qty === 1 ? label : `${label} x${r.qty}`;
       });
-      return json({ items });
+      const itemDetails = rows.map(r => ({
+        id: r.item,
+        display_name: r.display_name || r.item,
+        qty: r.qty,
+        tier: r.tier ?? 1,
+      }));
+      return json({ items, itemDetails });
     }
 
     // ── POST: Sell (to NPC) ──
@@ -1872,6 +1953,7 @@ if (path === "/api/combat/state" && method === "GET") {
       if (npc === "curator") {
         const value = getSellValue(displayName, tier, "loot");
         if (value <= 0) return err("Seris won't buy that.", 400);
+        const serisValue = Math.floor(value * 1.5);
 
         const key = displayNameToKey(displayName);
         const interest = key ? SERIS_INTEREST_ITEMS[key] : null;
@@ -1880,7 +1962,7 @@ if (path === "/api/combat/state" && method === "GET") {
           ? "DELETE FROM inventory WHERE user_id=? AND item=?"
           : "UPDATE inventory SET qty=qty-1 WHERE user_id=? AND item=?",
           invRow.qty <= 1 ? [uid, itemId] : [uid, itemId]);
-        await dbRun(db, "UPDATE characters SET ash_marks=ash_marks+? WHERE user_id=?", [value, uid]);
+        await dbRun(db, "UPDATE characters SET ash_marks=ash_marks+? WHERE user_id=?", [serisValue, uid]);
 
         const sold = await getFlag(db, uid, "curator_items_sold");
         await setFlag(db, uid, "curator_items_sold", (sold || 0) + 1);
@@ -1898,15 +1980,34 @@ if (path === "/api/combat/state" && method === "GET") {
 
           return json({
             ok: true,
-            message: `${dialogue}\n\n**+${value} Ash Marks**`,
-            ash_marks: (row.ash_marks || 0) + value,
+            message: `${dialogue}\n\n**+${serisValue} Ash Marks**`,
+            ash_marks: (row.ash_marks || 0) + serisValue,
             seris_reaction: true,
           });
         }
 
         return json({
           ok: true,
-          message: `*Seris takes it.*\n\n"${value} marks."\n\n**+${value} Ash Marks**`,
+          message: `*Seris takes it.*\n\n"${serisValue} marks."\n\n**+${serisValue} Ash Marks**`,
+          ash_marks: (row.ash_marks || 0) + serisValue,
+        });
+      }
+
+      if (npc === "weaponsmith" || npc === "armorsmith" || npc === "alchemist") {
+        if (!VENDOR_NPCS[npc]?.sell) return err("You can't sell to that NPC.", 400);
+        const base = TIER_BASE_VALUES[Math.min(tier || 1, 6)] ?? 10;
+        const value = Math.floor(base * 0.5);
+
+        await dbRun(db, invRow.qty <= 1
+          ? "DELETE FROM inventory WHERE user_id=? AND item=?"
+          : "UPDATE inventory SET qty=qty-1 WHERE user_id=? AND item=?",
+          invRow.qty <= 1 ? [uid, itemId] : [uid, itemId]);
+        await dbRun(db, "UPDATE characters SET ash_marks=ash_marks+? WHERE user_id=?", [value, uid]);
+
+        const npcName = NPC_NAMES[npc] || npc;
+        return json({
+          ok: true,
+          message: `*${npcName} takes it.*\n\n"${value} marks."\n\n**+${value} Ash Marks**`,
           ash_marks: (row.ash_marks || 0) + value,
         });
       }

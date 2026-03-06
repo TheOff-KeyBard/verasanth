@@ -3,7 +3,7 @@ export const NPC_LOCATIONS = {
   weaponsmith: "atelier",
   armorsmith:  "mended_hide",
   alchemist:   "hollow_jar",
-  curator:     "market_square",
+  curator:     "still_scale",
   othorion:    "naxirs_crucible",
   warden:      "wardens_post",
 };
