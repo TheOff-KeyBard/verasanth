@@ -1867,33 +1867,118 @@
   #awakening-screen.awakening-fade-out { opacity: 0; pointer-events: none; }
   .awakening-blackout { position: absolute; inset: 0; background: #000; }
   .awakening-ash-container { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
-  .awakening-inner {
-    position: relative; z-index: 2; text-align: center; max-width: 90%;
+  #awakening-overlay {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 300;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 40px;
   }
-  .awakening-text-block {
-    font-family: var(--font-body); font-size: 1rem; color: var(--ash-light); line-height: 1.8;
-    opacity: 0; animation: fadeInSlow 1.2s ease 0.5s forwards;
+  #awakening-lines {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 40px;
   }
-  .awakening-name-block {
-    font-family: var(--font-title), serif; font-size: clamp(1.5rem, 5vw, 2.5rem);
-    color: var(--ember-glow); margin: 1rem 0; min-height: 1.2em;
-    opacity: 0; animation: wakeSnap 0.8s ease 3.5s forwards;
+  .aw-line {
+    font-family: var(--font-body);
+    font-size: 0.92rem;
+    line-height: 2.0;
+    text-align: center;
+    color: var(--text);
+    margin: 0;
+    padding: 0;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.9s ease, transform 0.9s ease;
   }
-  .awakening-tagline {
-    font-style: italic; color: var(--text-dim); font-size: 0.95rem; margin: 1rem 0;
-    opacity: 0; animation: fadeInSlow 0.6s ease 5.5s forwards;
+  .aw-line.visible {
+    opacity: 1;
+    transform: translateY(0);
   }
-  .awakening-cta {
-    font-family: var(--font-title); color: var(--ash-light); font-size: 0.9rem; margin: 0.5rem 0; letter-spacing: 0.15em;
-    opacity: 0; animation: fadeInSlow 0.6s ease 5.9s forwards;
+  #awakening-name {
+    font-family: var(--font-title);
+    font-size: 3.2rem;
+    letter-spacing: 0.15em;
+    color: var(--ember-glow);
+    text-align: center;
+    margin: 0 0 28px;
+    opacity: 0;
+    transform: scale(1.18);
+    text-shadow: none;
+    transition: none;
+  }
+  #awakening-name.name-snap {
+    opacity: 1;
+    transform: scale(1.18);
+    text-shadow:
+      0 0 60px rgba(196,98,42,0.95),
+      0 0 120px rgba(196,98,42,0.5),
+      0 0 8px rgba(255,200,140,0.9);
+    transition: none;
+  }
+  #awakening-name.name-settle {
+    opacity: 1;
+    transform: scale(1.0);
+    text-shadow:
+      0 0 30px rgba(196,98,42,0.5),
+      0 0 60px rgba(196,98,42,0.2);
+    transition: transform 0.7s ease, text-shadow 1.2s ease;
+  }
+  #awakening-below {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 1.4s ease, transform 1.4s ease;
+  }
+  #awakening-below.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  #awakening-tagline {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    font-style: italic;
+    letter-spacing: 0.06em;
+    text-align: center;
+  }
+  #awakening-cta {
+    font-family: var(--font-title);
+    font-size: 0.72rem;
+    letter-spacing: 0.25em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    animation: breatheSubtle 2.5s ease-in-out infinite;
+  }
+  @keyframes breatheSubtle {
+    0%, 100% { opacity: 0.5; }
+    50%       { opacity: 1; }
   }
   #awakening-btn {
-    margin-top: 1.5rem; padding: 12px 28px; font-family: var(--font-title);
-    background: transparent; border: 1px solid var(--ember); color: var(--ember-glow);
-    cursor: pointer; transition: all 0.2s;
-    opacity: 0; animation: fadeInSlow 0.6s ease 6.2s forwards;
+    background: transparent;
+    border: 1px solid var(--ember);
+    color: var(--ember-glow);
+    font-family: var(--font-title);
+    font-size: 0.85rem;
+    letter-spacing: 0.15em;
+    padding: 12px 32px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s;
   }
-  #awakening-btn:hover { background: rgba(196,98,42,0.15); }
+  #awakening-btn:hover {
+    background: rgba(196,98,42,0.1);
+    box-shadow: 0 0 20px rgba(196,98,42,0.3);
+  }
   .awakening-ash { position: absolute; width: 4px; height: 4px; background: #c4622a; border-radius: 50%; opacity: 0.9; pointer-events: none; animation: entryAshFall linear forwards; z-index: 210; }
 
   /* ── Chat panel (Phase 3: global only) ───────────────────────────── */
@@ -2091,12 +2176,22 @@
 <div id="awakening-screen" class="screen-overlay" style="display:none;" aria-hidden="true">
   <div id="awakening-blackout" class="awakening-blackout"></div>
   <div id="awakening-ash-container" class="awakening-ash-container"></div>
-  <div id="awakening-overlay" class="awakening-inner" style="display:none;">
-    <div id="awakening-text" class="awakening-text-block"></div>
-    <div id="awakening-name" class="awakening-name-block"></div>
-    <div id="awakening-tagline" class="awakening-tagline">Hold onto it. This city takes everything else.</div>
-    <div id="awakening-cta" class="awakening-cta">— Open your eyes —</div>
-    <button type="button" id="awakening-btn" class="awakening-wake-btn" onclick="completeAwakening()">Wake Up</button>
+  <div id="awakening-overlay" style="display:none;">
+    <div id="awakening-lines">
+      <p class="aw-line" data-delay="0.3">You are on the floor.</p>
+      <p class="aw-line" data-delay="1.1">The stone is cold. The air smells of ash and old fire.</p>
+      <p class="aw-line" data-delay="2.1">You do not know how you got here.</p>
+      <p class="aw-line" data-delay="3.0">You do not know where here is.</p>
+      <p class="aw-line" data-delay="3.9">You do not know your name.</p>
+      <p class="aw-line" data-delay="5.0">Wait.</p>
+      <p class="aw-line" data-delay="6.2">You know one thing.</p>
+    </div>
+    <div id="awakening-name"></div>
+    <div id="awakening-below">
+      <div id="awakening-tagline">Hold onto it. This city takes everything else.</div>
+      <div id="awakening-cta">— Open your eyes —</div>
+      <button type="button" id="awakening-btn" onclick="completeAwakening()">Wake Up</button>
+    </div>
   </div>
 </div>
 
@@ -2794,8 +2889,8 @@ let awakeningLoadPromise = null;
 function showAwakeningCinematic(characterName) {
   const screen = document.getElementById('awakening-screen');
   const overlay = document.getElementById('awakening-overlay');
-  const textEl = document.getElementById('awakening-text');
   const nameEl = document.getElementById('awakening-name');
+  const belowEl = document.getElementById('awakening-below');
 
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('true-welcome-screen').style.display = 'none';
@@ -2806,46 +2901,53 @@ function showAwakeningCinematic(characterName) {
   screen.classList.remove('awakening-fade-out');
   screen.setAttribute('aria-hidden', 'false');
 
-  const LINES = [
-    "You are on the floor.",
-    "The stone is cold. The air smells of ash and old fire.",
-    "You do not know how you got here.",
-    "You do not know where here is.",
-    "You do not know your name.",
-    "Wait.",
-    "You know one thing.",
-  ];
-  textEl.innerHTML = LINES.map(l => '<p style="margin:0.4em 0">' + l + '</p>').join('');
-  nameEl.textContent = String(characterName || '').trim() || 'You';
+  overlay.style.display = 'flex';
+  overlay.style.opacity = '1';
 
-  overlay.style.display = 'block';
+  document.querySelectorAll('.aw-line').forEach(el => el.classList.remove('visible'));
+  nameEl.textContent = String(characterName || '').trim() || 'You';
+  nameEl.className = '';
+  nameEl.style.opacity = '0';
+  belowEl.classList.remove('visible');
+
+  document.querySelectorAll('.aw-line').forEach(line => {
+    const delay = parseFloat(line.dataset.delay || 0) * 1000;
+    setTimeout(() => line.classList.add('visible'), delay);
+  });
+
+  setTimeout(() => {
+    nameEl.classList.add('name-snap');
+    nameEl.style.opacity = '1';
+    setTimeout(() => {
+      nameEl.classList.remove('name-snap');
+      nameEl.classList.add('name-settle');
+    }, 80);
+  }, 7400);
+
+  setTimeout(() => belowEl.classList.add('visible'), 9000);
 
   awakeningLoadPromise = loadGame();
 }
 
 async function completeAwakening() {
+  const overlay = document.getElementById('awakening-overlay');
   const screen = document.getElementById('awakening-screen');
-  const container = document.getElementById('awakening-ash-container');
-  const rect = screen.getBoundingClientRect();
-  for (let i = 0; i < 40; i++) {
-    const dot = document.createElement('span');
-    dot.className = 'awakening-ash';
-    dot.style.left = (rect.left + Math.random() * rect.width) + 'px';
-    dot.style.top = (rect.top + rect.height - 10 + Math.random() * 20) + 'px';
-    dot.style.setProperty('--fall-y', (80 + Math.random() * 120) + 'px');
-    dot.style.setProperty('--fall-x', (Math.random() * 30 - 15) + 'px');
-    dot.style.animationDuration = (0.8 + Math.random() * 0.8) + 's';
-    dot.style.animationDelay = (Math.random() * 0.4) + 's';
-    container.appendChild(dot);
-  }
-  screen.classList.add('awakening-fade-out');
-  await new Promise(r => setTimeout(r, 1500));
-  screen.style.display = 'none';
-  screen.setAttribute('aria-hidden', 'true');
-  showScreen('game');
-  if (awakeningLoadPromise) await awakeningLoadPromise;
-  awakeningLoadPromise = null;
-  requestAnimationFrame(() => document.getElementById('app').classList.add('visible'));
+  overlay.style.transition = 'opacity 1.5s ease';
+  overlay.style.opacity = '0';
+  setTimeout(async () => {
+    overlay.style.display = 'none';
+    overlay.style.opacity = '';
+    overlay.style.transition = '';
+    screen.style.display = 'none';
+    screen.setAttribute('aria-hidden', 'true');
+    showScreen('game');
+    if (awakeningLoadPromise) await awakeningLoadPromise;
+    awakeningLoadPromise = null;
+    requestAnimationFrame(() => {
+      const app = document.getElementById('app');
+      if (app) app.classList.add('visible');
+    });
+  }, 1500);
 }
 
 function formatStatMods(mods) {
