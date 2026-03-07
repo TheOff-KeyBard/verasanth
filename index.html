@@ -240,6 +240,17 @@
     background: rgba(139,32,32,0.1);
     color: #e66;
   }
+  .fight-btn {
+    opacity: 0.55;
+    font-size: 0.8rem;
+    border-color: rgba(255,92,122,0.2);
+    color: var(--muted);
+  }
+  .fight-btn:hover {
+    opacity: 1;
+    border-color: rgba(255,92,122,0.5);
+    color: var(--danger);
+  }
 
   #node-map {
     width: 300px;
@@ -2668,6 +2679,9 @@ let vToken = localStorage.getItem('v_token') || '';
 let currentNPC = '';
 let npcTopics  = {};
 let combatState = null;
+let lingerTimer = null;
+let lingerTicks = 0;
+let currentRoomFightable = false;
 let locationNamesMap = {};
 let connectionsList = [];
 let visitedSet = new Set();
@@ -2820,7 +2834,16 @@ async function api(method, path, body) {
   };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(API + path, opts);
-  const data = await r.json();
+  // #region agent log
+  const rawText = await r.text();
+  let data;
+  try {
+    data = rawText ? JSON.parse(rawText) : {};
+  } catch (parseErr) {
+    fetch('http://127.0.0.1:7611/ingest/b76c038c-517a-4b96-b04d-519ffd35bf60',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1e9205'},body:JSON.stringify({sessionId:'1e9205',location:'index.html:api',message:'JSON parse failed',data:{path,status:r.status,contentType:r.headers.get('Content-Type'),bodyLen:rawText.length,bodySnippet:rawText.slice(0,200),parseErr:String(parseErr)},timestamp:Date.now()})}).catch(()=>{});
+    throw parseErr;
+  }
+  // #endregion
   if (!r.ok) throw new Error(data.detail || 'Request failed');
   return data;
 }
@@ -3521,6 +3544,7 @@ async function loadGame() {
   updateWallet(walletData);
   updateInventory(invData);
   renderRoom(lookData);
+  if (!lookData.in_combat) startLingerTimer(lookData.fightable);
 
   if (lookData.in_combat) {
     const cs = await GET('/api/combat/state').catch(() => null);
@@ -4035,6 +4059,7 @@ function renderRoom(data) {
 
   renderNodeMap(data.location);
   currentGameLocation = data.location || '';
+  currentRoomFightable = data.fightable ?? false;
 
   // Objects
   const objRow = document.getElementById('objects-row');
@@ -4104,15 +4129,10 @@ function renderRoom(data) {
     actRow.appendChild(b);
   }
 
-  const fightable = ['overflow_channel','broken_pipe_room','vermin_nest','rusted_gate',
-    'fungal_bloom_chamber','collapsed_passage','echoing_hall','spore_garden','cracked_aqueduct',
-    'flooded_hall','submerged_tunnel','broken_pump_room','drowned_vault','sluice_gate',
-    'gear_hall','steam_vent_corridor','broken_regulator_chamber','iron_walkway',
-    'heart_pump','pressure_valve_shaft','ash_pillar_hall','whispering_chamber',
-    'rune_lit_corridor','cathedral_floor','ash_heart_chamber','sump_pit'];
-  if (fightable.includes(loc)) {
-    const b = makeActionBtn('Fight', doFight);
-    b.className = 'btn danger-btn';
+  if ((data.fightable || false) && !combatState) {
+    const b = makeActionBtn('Engage', doFight);
+    b.className = 'btn danger-btn fight-btn';
+    b.title = 'Manually initiate combat';
     actRow.appendChild(b);
   }
   if (data.death_drops_present) {
@@ -4153,11 +4173,57 @@ async function doMove(dir) {
     await POST('/api/flag', { flag: 'visited_' + data.location, value: 1 }).catch(() => {});
     visitedSet.add(data.location);
     renderRoom(data);
-    log(`<em>You move ${dir}.</em>`);
+    startLingerTimer(data.fightable);
+    if (data.encounter?.triggered) {
+      await handleAutoEncounter(data.encounter);
+    } else {
+      log(`<em>You move ${dir}.</em>`);
+    }
     refreshSidebar();
     window.dispatchEvent(new CustomEvent('player-moved', { detail: { location: data.location } }));
   } catch(e) {
     log(`<em>${e.message}</em>`);
+  }
+}
+
+async function handleAutoEncounter(enc) {
+  log(`<em>${enc.cue}</em>`);
+  await new Promise(r => setTimeout(r, 900));
+  log(`<em>*${enc.enemy_name} emerges from the dark.*</em>`);
+  if (enc.enemy_desc) log(`<em>${enc.enemy_desc}</em>`);
+  await new Promise(r => setTimeout(r, 600));
+  stopLingerTimer();
+  combatState = enc.combat_state;
+  playerMaxHp = enc.combat_state.player_hp_max;
+  document.getElementById('combat-log').innerHTML = '';
+  showCombat(enc.combat_state);
+}
+
+function startLingerTimer(isFightable) {
+  stopLingerTimer();
+  currentRoomFightable = isFightable;
+  lingerTicks = 0;
+  if (!isFightable) return;
+  lingerTimer = setInterval(async () => {
+    if (combatState) return;
+    lingerTicks++;
+    try {
+      const data = await POST('/api/linger', { ticks: lingerTicks });
+      if (data.encounter?.triggered) {
+        stopLingerTimer();
+        await handleAutoEncounter(data.encounter);
+      } else if (data.ambient) {
+        log(`<em>${data.ambient}</em>`);
+      }
+    } catch (_) {}
+  }, 45000);
+}
+
+function stopLingerTimer() {
+  if (lingerTimer) {
+    clearInterval(lingerTimer);
+    lingerTimer = null;
+    lingerTicks = 0;
   }
 }
 
@@ -4579,6 +4645,7 @@ function closeTrade() {
 // ── Combat ───────────────────────────────────────────────────────
 async function doFight() {
   try {
+    stopLingerTimer();
     const data = await POST('/api/combat/start');
     combatState = data;
     showCombat(data);
@@ -4618,6 +4685,7 @@ async function combatAction(action) {
       refreshSidebar();
       const lookData = await GET('/api/look');
       renderRoom(lookData);
+      startLingerTimer(currentRoomFightable);
     } else if (data.result === 'death') {
       combatState = null;
       document.getElementById('combat-overlay').classList.remove('open');
@@ -4625,6 +4693,7 @@ async function combatAction(action) {
       const lookData = await GET('/api/look');
       renderRoom(lookData);
       refreshSidebar();
+      startLingerTimer(currentRoomFightable);
     } else if (data.result === 'ongoing') {
       const enemyMax = data.enemy_hp_max ?? combatState?.enemy_hp_max ?? data.enemy_hp;
       if (combatState) combatState = { ...combatState, ...data, enemy_hp_max: enemyMax };

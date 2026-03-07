@@ -424,3 +424,172 @@ const SEWER_SAFE_ZONES = new Set(["drain_entrance", "workers_alcove", "drowned_a
 export const FIGHTABLE_LOCATIONS = new Set(
   Object.keys(LOCATION_TO_FLOOR).filter(id => !SEWER_SAFE_ZONES.has(id))
 );
+
+/** Base encounter chance (0–100) per fightable location on entry */
+export const ENCOUNTER_CHANCES = {
+  overflow_channel: 35,
+  broken_pipe_room: 45,
+  vermin_nest: 50,
+  rusted_gate: 40,
+  fungal_bloom_chamber: 45,
+  collapsed_passage: 42,
+  echoing_hall: 48,
+  spore_garden: 50,
+  cracked_aqueduct: 44,
+  flooded_hall: 50,
+  submerged_tunnel: 48,
+  broken_pump_room: 52,
+  drowned_vault: 55,
+  sluice_gate: 50,
+  gear_hall: 52,
+  steam_vent_corridor: 48,
+  broken_regulator_chamber: 55,
+  iron_walkway: 50,
+  heart_pump: 52,
+  pressure_valve_shaft: 48,
+  ash_pillar_hall: 55,
+  whispering_chamber: 58,
+  rune_lit_corridor: 55,
+  cathedral_floor: 60,
+  ash_heart_chamber: 65,
+  sump_pit: 55,
+};
+
+/** Sensory cues before combat — keyed by location prefix */
+export const ENCOUNTER_CUES = {
+  overflow: [
+    "*The water ripples near your feet. The current isn't strong enough to do that.*",
+    "*Something moves in the black water. It is not the current.*",
+    "*A shape drifts below the surface, then holds still.*",
+  ],
+  broken_pipe: [
+    "*Something skitters in the dark ahead.*",
+    "*A low chittering echoes from the walls.*",
+    "*Ash shifts near your feet. Something was just here.*",
+  ],
+  vermin: [
+    "*The warmth in this chamber is wrong. Something has been sleeping here.*",
+    "*You hear breathing that isn't yours.*",
+    "*Bones crunch underfoot. Fresh ones.*",
+  ],
+  rusted: [
+    "*The gate creaks. Something moved on the other side.*",
+    "*Metal scrapes against stone. Not from you.*",
+    "*The air tastes of old iron and something else.*",
+  ],
+  fungal: [
+    "*A single bubble rises from the growth.*",
+    "*Your torchlight catches something circling in the spores.*",
+    "*The echo of your footstep returns wrong — too close, too fast.*",
+  ],
+  collapsed: [
+    "*Dust settles. Then moves again.*",
+    "*Something shifts in the rubble.*",
+    "*The silence changes quality.*",
+  ],
+  echoing: [
+    "*Your footstep echoes. The second echo is not yours.*",
+    "*Something very large shifts in the dark ahead.*",
+    "*The air pressure changes. Something exhaled.*",
+  ],
+  spore: [
+    "*The spores part. Something passed through.*",
+    "*A trail in the growth leads toward you.*",
+    "*Something in this room has been waiting.*",
+  ],
+  cracked: [
+    "*Water drips. The rhythm is wrong.*",
+    "*Something moves in the channel below.*",
+    "*The reflection in the water moves before you do.*",
+  ],
+  flooded: [
+    "*Hands burst from the water.*",
+    "*Something rises from the flooded floor.*",
+    "*The reflection in the water moves before you do.*",
+  ],
+  submerged: [
+    "*Something moves in the black water. It is not the current.*",
+    "*A shape drifts below the surface, then holds still.*",
+    "*The water ripples. The current is not strong enough.*",
+  ],
+  broken_pump: [
+    "*The pull from the drain intensifies. Something is climbing up.*",
+    "*A low vibration travels up through your boots.*",
+    "*Skittering, close, from below.*",
+  ],
+  drowned: [
+    "*One of the shapes under the water moves.*",
+    "*Something was disturbed here recently. The surface says so.*",
+    "*The water stills. Too still.*",
+  ],
+  sluice: [
+    "*The gate groans. Something is on the other side.*",
+    "*Water runs. Something runs with it.*",
+    "*You are not alone here.*",
+  ],
+  gear: [
+    "*One of the gears turns. The mechanism is still.*",
+    "*Metal scrapes. The machinery has been idle for years.*",
+    "*Something in the mechanism is wrong.*",
+  ],
+  steam: [
+    "*The steam parts. Something moved through it.*",
+    "*A shape in the mist. Then gone.*",
+    "*The hiss is not from the vents alone.*",
+  ],
+  broken_regulator: [
+    "*The pattern on the floor glows faintly where your shadow falls.*",
+    "*Something very large shifts in the dark ahead.*",
+    "*The air pressure changes. Something exhaled.*",
+  ],
+  iron: [
+    "*The walkway creaks. The weight is not yours.*",
+    "*Something drops from above. Then silence.*",
+    "*Metal rings. Something is climbing.*",
+  ],
+  heart_pump: [
+    "*The pump skips a beat. Then two.*",
+    "*Something in the chamber has been waiting.*",
+    "*The rhythm of the machinery changes.*",
+  ],
+  pressure: [
+    "*The shaft breathes. You are not the only thing in it.*",
+    "*Something moves in the steam.*",
+    "*The valve turns. No one touched it.*",
+  ],
+  ash_pillar: [
+    "*The pattern on the floor glows faintly where your shadow falls.*",
+    "*Something very large shifts in the dark ahead.*",
+    "*The air moves. There is no source for the air movement.*",
+  ],
+  whispering: [
+    "*The whispers stop. Something listened.*",
+    "*One of the voices was not a whisper.*",
+    "*The silence changes quality.*",
+  ],
+  rune_lit: [
+    "*One of the runes flickers. Wrong.*",
+    "*The light shifts. Something passed between.*",
+    "*Something in this corridor has been waiting.*",
+  ],
+  cathedral: [
+    "*One of the stone shelves is empty that wasn't before.*",
+    "*The door behind you is open again.*",
+    "*Something was disturbed here recently. The dust says so.*",
+  ],
+  ash_heart: [
+    "*The plinth at the center vibrates under your hand.*",
+    "*The air moves. There is no source for the air movement.*",
+    "*Something in this room has been waiting.*",
+  ],
+  sump: [
+    "*Something stirs in the pit.*",
+    "*The surface of the sump ripples. No one touched it.*",
+    "*You are not alone here.*",
+  ],
+  default: [
+    "*Something moves in the dark.*",
+    "*You are not alone here.*",
+    "*The silence changes quality.*",
+  ],
+};

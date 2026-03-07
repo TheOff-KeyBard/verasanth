@@ -7,7 +7,7 @@
 
 import { runAdminCommand } from "./admin.js";
 import { WORLD, FIRST_VISIT_INTROS } from "./data/world.js";
-import { COMBAT_DATA, FIGHTABLE_LOCATIONS } from "./data/combat.js";
+import { COMBAT_DATA, FIGHTABLE_LOCATIONS, ENCOUNTER_CHANCES, ENCOUNTER_CUES } from "./data/combat.js";
 import { RACES } from "./data/races.js";
 import { INSTINCTS } from "./data/instincts.js";
 import { NPC_LOCATIONS, NPC_NAMES, NPC_TOPICS, BARTENDER_FEE } from "./data/npcs.js";
@@ -50,6 +50,25 @@ const BOSS_NODES = {
   broken_regulator_chamber: { boss_id: "broken_regulator", flag: "boss_floor4" },
   ash_heart_chamber: { boss_id: "ash_heart_custodian", flag: "boss_floor5" },
 };
+
+function rollEncounter(location, modifiers = {}) {
+  const base = ENCOUNTER_CHANCES[location] ?? 0;
+  if (base === 0) return false;
+  const { woundedBonus = 0, lootBonus = 0, crimeHeatBonus = 0, postFightBonus = 0 } = modifiers;
+  const total = base + woundedBonus + lootBonus + crimeHeatBonus + postFightBonus;
+  return Math.random() * 100 < Math.min(total, 85);
+}
+
+function getEncounterCue(location) {
+  for (const [prefix, cues] of Object.entries(ENCOUNTER_CUES)) {
+    if (prefix === "default") continue;
+    if (location.startsWith(prefix) || location === prefix) {
+      return cues[Math.floor(Math.random() * cues.length)];
+    }
+  }
+  const fallback = ENCOUNTER_CUES.default;
+  return fallback[Math.floor(Math.random() * fallback.length)];
+}
 
 // Gate nodes: requires_flag null = always open; otherwise player must have flag to see deeper/down exit
 const FLOOR_GATES = {
@@ -263,7 +282,7 @@ async function addItemToInventory(db, uid, itemId, qty = 1) {
 // Player sheet
 async function getPlayerSheet(db, uid) {
   return await dbGet(db, `
-    SELECT p.user_id, p.location,
+    SELECT p.user_id, p.location, p.last_encounter_at,
            c.alignment_morality, c.alignment_order, c.crime_heat, c.archetype,
            c.name, c.race, c.instinct,
            c.strength, c.dexterity, c.constitution,
@@ -531,6 +550,9 @@ async function initDb(db) {
     } catch (_) {
       // Column already exists on re-run
     }
+    try {
+      await dbRun(db, `ALTER TABLE players ADD COLUMN last_encounter_at INTEGER DEFAULT 0`);
+    } catch (_) {}
 
     // Item system (Phase 1) — add columns for tier, corrupted, curse, etc.
     try { await dbRun(db, `ALTER TABLE inventory ADD COLUMN tier INTEGER DEFAULT 1`); } catch (_) {}
@@ -1331,6 +1353,84 @@ if (path === "/api/admin/command" && method === "POST") {
         destDescription += "\n\nSomething glints near the drain. Ash Marks — someone left them here quickly.";
       }
 
+      // ── Dynamic encounter check ───────────────────────────────────
+      let encounterData = null;
+      if (FIGHTABLE_LOCATIONS.has(dest)) {
+        const now = Date.now();
+        const lastEnc = row.last_encounter_at || 0;
+        const onCooldown = (now - lastEnc) < 12000;
+
+        if (!onCooldown) {
+          const hp = await getPlayerHp(db, uid, row);
+          const hpPct = hp.max > 0 ? hp.current / hp.max : 1;
+          const woundedBonus = hpPct < 0.5 ? 20 : 0;
+
+          let crimeHeatBonus = 0;
+          if ((row.crime_heat ?? 0) >= 7) crimeHeatBonus = 15;
+
+          const postFight = await getFlag(db, uid, "post_fight_noise", 0);
+          const postFightBonus = postFight ? 15 : 0;
+          if (postFight) await setFlag(db, uid, "post_fight_noise", 0);
+
+          const triggered = rollEncounter(dest, {
+            woundedBonus,
+            crimeHeatBonus,
+            postFightBonus,
+          });
+
+          if (triggered) {
+            await dbRun(db, "UPDATE players SET last_encounter_at=? WHERE user_id=?", [now, uid]);
+
+            const cue = getEncounterCue(dest);
+            const activeCondition = await getActiveSewerCondition(db);
+            const enemy = randomEnemy(dest, activeCondition);
+
+            const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
+            let weaponDie = 6, armorReduction = 0, shieldBonus = 0;
+            for (const eq of eqRows) {
+              const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
+              const tier = Math.min(invRow?.tier ?? 1, 3);
+              if (eq.slot === "weapon") weaponDie = [6, 8, 10, 12][tier];
+              else if (eq.slot === "armor") armorReduction = [0, 2, 4, 6][tier];
+              else if (eq.slot === "shield") shieldBonus = 2;
+            }
+
+            const state = {
+              enemy_id: enemy.id,
+              enemy_name: enemy.name,
+              enemy_hp: enemy.hp,
+              enemy_hp_max: enemy.hp,
+              player_hp: hp.current,
+              player_hp_max: hp.max,
+              ability_used: false,
+              turn: 1,
+              round: 1,
+              location: dest,
+              weapon_die: weaponDie,
+              armor_reduction: armorReduction,
+              shield_bonus: shieldBonus,
+              enemy_staggered: false,
+              status_effects: [],
+              trait_state: {},
+              armor_break_effects: [],
+              auto_triggered: true,
+            };
+            await dbRun(db,
+              "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
+              [uid, JSON.stringify(state)]);
+
+            encounterData = {
+              triggered: true,
+              cue,
+              enemy_name: enemy.name,
+              enemy_desc: enemy.desc || "",
+              combat_state: state,
+            };
+          }
+        }
+      }
+      // ── End encounter check ─────────────────────────────────────────
+
       // PvPvE: Ash Heart Chamber group warning when solo
       let pvpveWarning = null;
       if (dest === "ash_heart_chamber") {
@@ -1348,10 +1448,86 @@ if (path === "/api/admin/command" && method === "POST") {
         items: [], npcs: npcsHere, ambient,
         fightable: FIGHTABLE_LOCATIONS.has(dest),
         death_drops_present: deathDrops.length > 0,
+        encounter: encounterData,
       };
       if (destRoom.pvpve) movePayload.pvpve = destRoom.pvpve;
       if (pvpveWarning) movePayload.pvpve_warning = pvpveWarning;
       return json(movePayload);
+    }
+
+    // ── POST: Linger (idle encounter check) ──
+    if (path === "/api/linger" && method === "POST") {
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (!FIGHTABLE_LOCATIONS.has(row.location)) return json({ encounter: null });
+      const existing = await dbGet(db, "SELECT 1 FROM combat_state WHERE user_id=?", [uid]);
+      if (existing) return json({ encounter: null });
+
+      const now = Date.now();
+      const lastEnc = row.last_encounter_at || 0;
+      if ((now - lastEnc) < 12000) return json({ encounter: null });
+
+      const hp = await getPlayerHp(db, uid, row);
+      const hpPct = hp.max > 0 ? hp.current / hp.max : 1;
+      const { ticks = 1 } = body;
+      const lingerBase = Math.min(20 + (ticks * 8), 60);
+      const woundedBonus = hpPct < 0.5 ? 25 : 0;
+      const triggered = Math.random() * 100 < (lingerBase + woundedBonus);
+
+      if (!triggered) {
+        const cue = getEncounterCue(row.location);
+        return json({ encounter: null, ambient: cue });
+      }
+
+      await dbRun(db, "UPDATE players SET last_encounter_at=? WHERE user_id=?", [now, uid]);
+
+      const cue = getEncounterCue(row.location);
+      const activeCondition = await getActiveSewerCondition(db);
+      const enemy = randomEnemy(row.location, activeCondition);
+
+      const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
+      let weaponDie = 6, armorReduction = 0, shieldBonus = 0;
+      for (const eq of eqRows) {
+        const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
+        const tier = Math.min(invRow?.tier ?? 1, 3);
+        if (eq.slot === "weapon") weaponDie = [6, 8, 10, 12][tier];
+        else if (eq.slot === "armor") armorReduction = [0, 2, 4, 6][tier];
+        else if (eq.slot === "shield") shieldBonus = 2;
+      }
+
+      const state = {
+        enemy_id: enemy.id,
+        enemy_name: enemy.name,
+        enemy_hp: enemy.hp,
+        enemy_hp_max: enemy.hp,
+        player_hp: hp.current,
+        player_hp_max: hp.max,
+        ability_used: false,
+        turn: 1,
+        round: 1,
+        location: row.location,
+        weapon_die: weaponDie,
+        armor_reduction: armorReduction,
+        shield_bonus: shieldBonus,
+        enemy_staggered: false,
+        status_effects: [],
+        trait_state: {},
+        armor_break_effects: [],
+        auto_triggered: true,
+      };
+      await dbRun(db,
+        "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
+        [uid, JSON.stringify(state)]);
+
+      return json({
+        encounter: {
+          triggered: true,
+          cue,
+          enemy_name: enemy.name,
+          enemy_desc: enemy.desc || "",
+          combat_state: state,
+        },
+      });
     }
 
     // ── POST: Death drop claim ──
@@ -2214,6 +2390,7 @@ if (path === "/api/combat/state" && method === "GET") {
         const victoryLoc = state.location || "drain_entrance";
         if (victoryLoc === "vermin_nest") await setFlag(db, uid, "nest_cleared_floor1", 1);
         await recordEnemyKill(db, dbAll, dbRun, uid, state.enemy_id);
+        await setFlag(db, uid, "post_fight_noise", 1);
 
         const xpGain = enemy.xp || 50;
         const xpRow  = await dbGet(db, "SELECT xp,class_stage FROM characters WHERE user_id=?", [uid]);
