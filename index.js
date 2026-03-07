@@ -424,7 +424,10 @@ async function getPlayerSheet(db, uid) {
 async function getPlayerHp(db, uid, row) {
   const con = row ? row.constitution : 10;
   const maxHp = maxPlayerHp(con);
-  const cur = row && row.current_hp > 0 ? row.current_hp : maxHp;
+  // Use NULL (not 0) as the "never initialized" sentinel.
+  // 0 is a valid HP value — a player can be at 0 HP and still alive
+  // (e.g. won a fight on 1 HP, took hazard damage, etc.)
+  const cur = (row && row.current_hp != null) ? row.current_hp : maxHp;
   return { current: cur, max: maxHp };
 }
 
@@ -612,7 +615,7 @@ async function initDb(db) {
     stats_set INTEGER DEFAULT 0,
     alignment_morality INTEGER DEFAULT 0, alignment_order INTEGER DEFAULT 0,
     ash_marks INTEGER DEFAULT 0, ember_shards INTEGER DEFAULT 0, soul_coins INTEGER DEFAULT 0,
-    xp INTEGER DEFAULT 0, class_stage INTEGER DEFAULT 0, current_hp INTEGER DEFAULT 0)`);
+    xp INTEGER DEFAULT 0, class_stage INTEGER DEFAULT 0, current_hp INTEGER)`);
   await dbRun(db, `CREATE TABLE IF NOT EXISTS player_flags (
     user_id INTEGER NOT NULL REFERENCES players(user_id),
     flag TEXT NOT NULL, value INTEGER DEFAULT 1,
@@ -1146,7 +1149,7 @@ if (path === "/api/character/reset" && method === "POST") {
   }
   await dbRun(db, "UPDATE players SET location=?, mercy_score=0, order_score=0, crime_heat=0, archetype='Survivor', last_decay=NULL WHERE user_id=?", ["tavern", targetUid]);
   await dbRun(db, `UPDATE characters SET instinct=NULL, strength=10, dexterity=10, constitution=10, intelligence=10, wisdom=10, charisma=10, stats_set=0,
-    alignment_morality=0, alignment_order=0, crime_heat=0, archetype='Survivor', last_decay=NULL, ash_marks=0, ember_shards=0, soul_coins=0, xp=0, class_stage=0, current_hp=0 WHERE user_id=?`, [targetUid]);
+    alignment_morality=0, alignment_order=0, crime_heat=0, archetype='Survivor', last_decay=NULL, ash_marks=0, ember_shards=0, soul_coins=0, xp=0, class_stage=0, current_hp=NULL WHERE user_id=?`, [targetUid]);
   await dbRun(db, "DELETE FROM crime_log WHERE user_id=?", [targetUid]);
   await dbRun(db, "UPDATE bounties SET status='expired' WHERE target_id=?", [targetUid]);
   await dbRun(db, "DELETE FROM sentences WHERE user_id=?", [targetUid]);
@@ -1209,7 +1212,7 @@ if (path === "/api/admin/command" && method === "POST") {
       const hp = await getPlayerHp(db, uid, row);
       const alignment_ui = { ...buildAlignmentUI(row.alignment_morality, row.alignment_order, row.crime_heat, row.archetype) };
       alignment_ui.has_bounty = !!(await dbGet(db, "SELECT id FROM bounties WHERE target_id=? AND status='active'", [uid]));
-      return json({ ...row, max_hp: hp.max, alignment_ui });
+      return json({ ...row, current_hp: hp.current, max_hp: hp.max, alignment_ui });
     }
 
     if (path === "/api/alignment" && method === "GET") {
