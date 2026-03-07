@@ -2909,16 +2909,17 @@ async function api(method, path, body) {
   };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(API + path, opts);
-  // #region agent log
   const rawText = await r.text();
   let data;
   try {
     data = rawText ? JSON.parse(rawText) : {};
   } catch (parseErr) {
-    fetch('http://127.0.0.1:7611/ingest/b76c038c-517a-4b96-b04d-519ffd35bf60',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1e9205'},body:JSON.stringify({sessionId:'1e9205',location:'index.html:api',message:'JSON parse failed',data:{path,status:r.status,contentType:r.headers.get('Content-Type'),bodyLen:rawText.length,bodySnippet:rawText.slice(0,200),parseErr:String(parseErr)},timestamp:Date.now()})}).catch(()=>{});
-    throw parseErr;
+    const isHtml = /^\s*</.test(rawText);
+    const msg = isHtml
+      ? 'Server returned an error page. Try refreshing.'
+      : 'Invalid response from server. Try refreshing.';
+    throw new Error(msg);
   }
-  // #endregion
   if (!r.ok) throw new Error(data.detail || 'Request failed');
   return data;
 }
