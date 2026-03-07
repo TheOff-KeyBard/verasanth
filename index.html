@@ -3040,6 +3040,7 @@ async function runAwakening(playerName) {
 
   playOnce('/Audio/drone/name_reveal.mp3', 0.85);
   nameEl.textContent = String(playerName || '').trim() || 'You';
+  nameEl.style.opacity = '';
   nameEl.classList.add('name-snap');
 
   await wait(80);
