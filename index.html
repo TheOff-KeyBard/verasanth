@@ -1097,6 +1097,22 @@
     transition: width 0.4s ease;
   }
 
+  #combat-statuses {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+    min-height: 20px;
+  }
+
+  #combat-statuses .status-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    margin: 2px 4px 2px 0;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+
   #combat-log {
     font-size: 0.9rem;
     color: var(--text-dim);
@@ -2460,6 +2476,8 @@
       </div>
       <div class="hp-bar-bg"><div class="hp-bar-fill-player" id="player-bar" style="width:100%"></div></div>
     </div>
+
+    <div id="combat-statuses"></div>
 
     <div id="combat-log"></div>
 
@@ -4715,6 +4733,8 @@ function showCombat(data, isBoss) {
   else overlay.classList.remove('boss-encounter');
   document.getElementById('combat-enemy-name').textContent = data.enemy_name || data.enemy_id || 'Enemy';
   updateCombatBars(data.player_hp, playerMaxHp, data.enemy_hp, data.enemy_hp);
+  updateStatusDisplay(data.statuses ?? {}, data.enemy_statuses ?? {});
+  updateAbilityButton(data.ability_cooldown ?? 0);
 }
 
 function updateCombatBars(php, pmax, ehp, emax) {
@@ -4723,6 +4743,34 @@ function updateCombatBars(php, pmax, ehp, emax) {
   document.getElementById('enemy-hp-text').textContent = ehp;
   const epct = emax > 0 ? Math.max(0,(ehp/emax)*100) : 0;
   document.getElementById('enemy-bar').style.width = epct + '%';
+}
+
+const STATUS_LABELS = { resolve: 'Resolve', stealth: 'Stealth', iron_stance: 'Iron Stance', burning: 'Burning', staggered: 'Staggered', taunt: 'Taunt', slip_dodge: 'Slip' };
+
+function updateStatusDisplay(statuses, enemyStatuses) {
+  const el = document.getElementById('combat-statuses');
+  if (!el) return;
+  const chips = [];
+  for (const [k, v] of Object.entries(statuses || {})) {
+    if (v > 0) chips.push(`<span class="status-chip">${STATUS_LABELS[k] || k} (${v})</span>`);
+  }
+  if (Object.keys(enemyStatuses || {}).length) chips.push('<span class="status-chip" style="opacity:0.8">—</span>');
+  for (const [k, v] of Object.entries(enemyStatuses || {})) {
+    if (v > 0) chips.push(`<span class="status-chip">${STATUS_LABELS[k] || k} (${v})</span>`);
+  }
+  el.innerHTML = chips.join('');
+}
+
+function updateAbilityButton(cooldown) {
+  const btn = document.getElementById('btn-ability');
+  if (!btn) return;
+  if (cooldown > 0) {
+    btn.disabled = true;
+    btn.textContent = `Ability (${cooldown} turns)`;
+  } else {
+    btn.disabled = false;
+    btn.textContent = 'Ability';
+  }
 }
 
 async function combatAction(action) {
@@ -4735,6 +4783,8 @@ async function combatAction(action) {
 
     if (data.result === 'victory' || data.result === 'fled') {
       combatState = null;
+      updateStatusDisplay({}, {});
+      updateAbilityButton(0);
       const co = document.getElementById('combat-overlay');
       co.classList.remove('open', 'boss-encounter');
       log(render(data.message));
@@ -4745,6 +4795,8 @@ async function combatAction(action) {
       startLingerTimer(currentRoomFightable);
     } else if (data.result === 'death') {
       combatState = null;
+      updateStatusDisplay({}, {});
+      updateAbilityButton(0);
       document.getElementById('combat-overlay').classList.remove('open', 'boss-encounter');
       log(render(data.message));
       const lookData = await GET('/api/look');
@@ -4755,6 +4807,8 @@ async function combatAction(action) {
       const enemyMax = data.enemy_hp_max ?? combatState?.enemy_hp_max ?? data.enemy_hp;
       if (combatState) combatState = { ...combatState, ...data, enemy_hp_max: enemyMax };
       updateCombatBars(data.player_hp, playerMaxHp, data.enemy_hp, enemyMax);
+      updateStatusDisplay(data.statuses, data.enemy_statuses);
+      updateAbilityButton(data.ability_cooldown ?? 0);
     }
   } catch(e) {
     log(`<em>${e.message}</em>`);

@@ -15,7 +15,7 @@ import { SERIS_NOTICES, FLAVOR_NOTICES, ANONYMOUS_NOTICES, IMPOSSIBLE_TEMPLATES,
 import { SERIS_INTEREST_ITEMS, getSellValue, displayNameToKey, TIER_BASE_VALUES } from "./data/seris.js";
 import { VENDOR_STOCK, VENDOR_NPCS, CAELIR_STOCK, VEYRA_STOCK } from "./data/vendor_stock.js";
 import { getNPCResponse, boardNPCReaction } from "./services/npc_dialogue.js";
-import { statMod, rollDie, maxPlayerHp, randomEnemy, playerAttack, enemyAttack, tickStatusEffects, resolveEnemyTrait, getTraitDamageModifier, getStatusEffectOnHit, getTraitOnHitEffect } from "./services/combat.js";
+import { statMod, rollDie, maxPlayerHp, randomEnemy, resolvePlayerAction, resolveEnemyAttack, tickStatusEffects, tickStatuses, resolveEnemyTrait, getTraitDamageModifier, getStatusEffectOnHit, getTraitOnHitEffect, INSTINCT_DEFS } from "./services/combat.js";
 import { generateItem } from "./services/item_generator.js";
 import { getCombatLoot, ROOM_LOOT } from "./data/sewer_loot.js";
 import { rollLoot, ITEM_DATA } from "./data/items.js";
@@ -492,8 +492,8 @@ const ALIGN_INSTINCT_BIAS = {
   ember_touched: [0, 0],
   ironblood: [0, 0],
   streetcraft: [0, -1],
-  shadowbound: [0, 0],
-  warden: [0, 0],
+  shadowbound: [-1, 0],  // chaos-leaning
+  warden: [1, 1],         // moral + ordered
 };
 
 async function updateAlignment(db, uid, mercyDelta, orderDelta, instinct = "") {
@@ -1518,7 +1518,7 @@ if (path === "/api/admin/command" && method === "POST") {
               enemy_hp_max: enemy.hp,
               player_hp: hp.current,
               player_hp_max: hp.max,
-              ability_used: false,
+              ability_cooldown: 0, statuses: {}, enemy_statuses: {}, fade_used: false, hearth_healed: false,
               turn: 1,
               round: 1,
               location: loc,
@@ -1602,7 +1602,7 @@ if (path === "/api/admin/command" && method === "POST") {
               enemy_hp_max: enemy.hp,
               player_hp: hp.current,
               player_hp_max: hp.max,
-              ability_used: false,
+              ability_cooldown: 0, statuses: {}, enemy_statuses: {}, fade_used: false, hearth_healed: false,
               turn: 1,
               round: 1,
               location: row.location,
@@ -1815,7 +1815,7 @@ if (path === "/api/admin/command" && method === "POST") {
                 enemy_hp_max: enemy.hp,
                 player_hp: hp.current,
                 player_hp_max: hp.max,
-                ability_used: false,
+                ability_cooldown: 0, statuses: {}, enemy_statuses: {}, fade_used: false, hearth_healed: false,
                 turn: 1,
                 round: 1,
                 location: dest,
@@ -1888,7 +1888,7 @@ if (path === "/api/admin/command" && method === "POST") {
                 enemy_hp_max: enemy.hp,
                 player_hp: hp.current,
                 player_hp_max: hp.max,
-                ability_used: false,
+                ability_cooldown: 0, statuses: {}, enemy_statuses: {}, fade_used: false, hearth_healed: false,
                 turn: 1,
                 round: 1,
                 location: dest,
@@ -1943,7 +1943,7 @@ if (path === "/api/admin/command" && method === "POST") {
             enemy_hp_max: enemy.hp,
             player_hp: hp.current,
             player_hp_max: hp.max,
-            ability_used: false,
+            ability_cooldown: 0, statuses: {}, enemy_statuses: {}, fade_used: false, hearth_healed: false,
             turn: 1,
             round: 1,
             location: dest,
@@ -2044,7 +2044,7 @@ if (path === "/api/admin/command" && method === "POST") {
               enemy_hp_max: enemy.hp,
               player_hp: hp.current,
               player_hp_max: hp.max,
-              ability_used: false,
+              ability_cooldown: 0, statuses: {}, enemy_statuses: {}, fade_used: false, hearth_healed: false,
               turn: 1,
               round: 1,
               location: dest,
@@ -2153,7 +2153,7 @@ if (path === "/api/admin/command" && method === "POST") {
         enemy_hp_max: enemy.hp,
         player_hp: hp.current,
         player_hp_max: hp.max,
-        ability_used: false,
+        ability_cooldown: 0, statuses: {}, enemy_statuses: {}, fade_used: false, hearth_healed: false,
         turn: 1,
         round: 1,
         location: row.location,
@@ -2861,7 +2861,7 @@ if (path === "/api/combat/state" && method === "GET") {
         enemy_id: enemy.id, enemy_name: enemy.name,
         enemy_hp: enemy.hp, enemy_hp_max: enemy.hp,
         player_hp: hp.current, player_hp_max: hp.max,
-        ability_used: false, turn: 1, round: 1, location: row.location,
+        ability_cooldown: 0, statuses: {}, enemy_statuses: {}, fade_used: false, hearth_healed: false, turn: 1, round: 1, location: row.location,
         weapon_die: weaponDie, armor_reduction: armorReduction, shield_bonus: shieldBonus,
         enemy_staggered: false, status_effects: [], trait_state: {},
         armor_break_effects: [],
@@ -2898,15 +2898,18 @@ if (path === "/api/combat/state" && method === "GET") {
         });
       }
 
-      if (action === "ability" && state.ability_used) return err("Ability already used.");
+      if (action === "ability" && (state.ability_cooldown ?? 0) > 0) return err(`Ability recharging — ${state.ability_cooldown} turn${state.ability_cooldown !== 1 ? 's' : ''} remaining.`);
 
       const useAbility = action === "ability";
-      const equipment = { weaponDie: state.weapon_die ?? 6 };
 
       // Ensure new state fields exist (backwards compat)
       state.status_effects = state.status_effects ?? [];
       state.trait_state = state.trait_state ?? {};
       state.armor_break_effects = state.armor_break_effects ?? [];
+      state.statuses = state.statuses ?? {};
+      state.enemy_statuses = state.enemy_statuses ?? {};
+      state.fade_used = state.fade_used ?? false;
+      state.hearth_healed = state.hearth_healed ?? false;
       state.round = state.round ?? state.turn ?? 1;
 
       // 1. Tick status effects (bleed/poison/fire_touch)
@@ -2921,9 +2924,19 @@ if (path === "/api/combat/state" && method === "GET") {
       const armorBreakReduction = state.armor_break_effects.reduce((s, e) => s + (e.defense_reduction ?? 0), 0);
       const effectiveArmor = Math.max(0, (state.armor_reduction ?? 0) - armorBreakReduction);
 
-      // 3. Player attack
-      const attack = playerAttack(stats, enemy, useAbility, instinct, equipment);
-      if (useAbility) state.ability_used = true;
+      // 3. Resolve player action
+      const attack = resolvePlayerAction(stats, enemy, useAbility, instinct, state);
+
+      if (attack.fade_triggered) state.fade_used = true;
+      if (attack.stealth_consumed) delete state.statuses.stealth;
+      if (attack.set_flag === "hearth_healed") state.hearth_healed = true;
+
+      if (useAbility) {
+        const def = INSTINCT_DEFS[instinct];
+        state.ability_cooldown = def?.primary?.cadence ?? 3;
+      } else {
+        state.ability_cooldown = Math.max(0, (state.ability_cooldown ?? 0) - 1);
+      }
 
       let enemyHp = state.enemy_hp;
 
@@ -2931,18 +2944,28 @@ if (path === "/api/combat/state" && method === "GET") {
         playerHp = Math.min(playerHp + attack.heal, state.player_hp_max);
       } else {
         const guardMod = getTraitDamageModifier(enemy, state);
-        const playerDmg = Math.floor(attack.dmg * guardMod);
+        const playerDmg = Math.floor((attack.dmg ?? 0) * guardMod);
         enemyHp = Math.max(0, enemyHp - playerDmg);
-        if (attack.staggered) state.enemy_staggered = true;
       }
 
-      // 4. Enemy retaliation (skip if staggered or skipRetaliation)
+      if (attack.status_on_enemy) {
+        const dur = attack.status_duration_enemy ?? attack.status_duration ?? 1;
+        state.enemy_statuses[attack.status_on_enemy] = dur;
+      }
+      if (attack.status_on_player) {
+        const dur = attack.status_duration_player ?? attack.status_duration ?? 1;
+        state.statuses[attack.status_on_player] = dur;
+      }
+
+      // 4. Enemy retaliation (skip if staggered or skip_retaliation)
       let enemyDmg = 0;
       let enemyHit = false;
       let enemySkippedStagger = false;
-      if (!(action === "ability" && attack.skipRetaliation)) {
-        if (state.enemy_staggered) {
-          state.enemy_staggered = false;
+      const skipRetaliation = attack.skip_retaliation ?? attack.skipRetaliation ?? false;
+      const staggered = (state.enemy_statuses?.staggered ?? 0) > 0;
+
+      if (!skipRetaliation) {
+        if (staggered) {
           enemySkippedStagger = true;
         } else {
           const traitResult = resolveEnemyTrait(enemy, state);
@@ -2958,13 +2981,15 @@ if (path === "/api/combat/state" && method === "GET") {
               hit: traitResult.replacementAttack.hit,
             };
           } else {
-            attackResult = enemyAttack(enemy, stats, state.shield_bonus ?? 0);
+            attackResult = resolveEnemyAttack(enemy, stats, state.statuses, state.enemy_statuses, state.shield_bonus ?? 0);
           }
           enemyDmg = attackResult.dmg ?? 0;
           enemyHit = attackResult.hit ?? false;
 
           enemyDmg = Math.floor(enemyDmg * (attack.damageReduction ? 1 - attack.damageReduction : 1));
           enemyDmg = Math.max(0, enemyDmg - effectiveArmor);
+
+          if (instinct === "warden" && playerHp < state.player_hp_max * 0.5) enemyDmg = Math.max(0, enemyDmg - 1);
 
           if (enemyHit) {
             const statusEffect = getStatusEffectOnHit(enemy);
@@ -2984,6 +3009,9 @@ if (path === "/api/combat/state" && method === "GET") {
           }
         }
       }
+
+      state.statuses = tickStatuses(state.statuses);
+      state.enemy_statuses = tickStatuses(state.enemy_statuses);
 
       playerHp = Math.max(0, playerHp - enemyDmg);
 
@@ -3015,10 +3043,11 @@ if (path === "/api/combat/state" && method === "GET") {
             state.enemy_hp_max = state.summoned_minion.hp_max;
             delete state.summoned_minion;
             state.enemy_staggered = false;
+            state.enemy_statuses = {};
             await dbRun(db, "UPDATE combat_state SET state_json=? WHERE user_id=?", [JSON.stringify(state), uid]);
             await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [playerHp, uid]);
             const summonMsg = `*The Rat King falls — but something else rises from the ash.*\n\n*${minion.name} emerges.*`;
-            return json({ result: "ongoing", message: summonMsg, player_hp: playerHp, enemy_hp: state.enemy_hp, enemy_hp_max: state.enemy_hp_max });
+            return json({ result: "ongoing", message: summonMsg, player_hp: playerHp, enemy_hp: state.enemy_hp, enemy_hp_max: state.enemy_hp_max, ability_cooldown: state.ability_cooldown ?? 0, statuses: state.statuses ?? {}, enemy_statuses: state.enemy_statuses ?? {} });
           }
         }
 
@@ -3192,6 +3221,9 @@ if (path === "/api/combat/state" && method === "GET") {
         message: msg,
         player_hp: playerHp, enemy_hp: enemyHp,
         enemy_hp_max: state.enemy_hp_max,
+        ability_cooldown: state.ability_cooldown ?? 0,
+        statuses: state.statuses ?? {},
+        enemy_statuses: state.enemy_statuses ?? {},
       });
     }
 

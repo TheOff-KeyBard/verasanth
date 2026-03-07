@@ -35,67 +35,237 @@ export function randomEnemy(location, activeCondition = null) {
   return { ...cd.enemies[id], id };
 }
 
-/**
- * Player attack. Always hits; damage reduced by enemy.defense. Returns staggered if dmg >= break_threshold.
- */
-export function playerAttack(stats, enemy, useAbility, instinct, equipment = {}) {
-  const strMod = statMod(stats.strength);
-  const weaponDie = equipment.weaponDie || 6;
-  let dmg = 0, narrative = "";
+// ── Status effects (instinct system) ─────────────────────────────
+// Stored in combat_state as { status_name: turns_remaining }
+// All statuses expire by decrementing each round in tickStatuses()
+export const STATUS_DEFS = {
+  burning: {
+    label: "Burning",
+    passive_dmg_bonus: 1,
+  },
+  staggered: {
+    label: "Staggered",
+    skip_retaliation: true,
+  },
+  resolve: {
+    label: "Resolve",
+    damage_reduction: 0.25,
+  },
+  stealth: {
+    label: "Stealth",
+    bonus_dmg_multiplier: 2.0,
+    consumed_on_hit: true,
+  },
+  taunt: {
+    label: "Taunt",
+    disadvantage: true,
+  },
+  iron_stance: {
+    label: "Iron Stance",
+    flat_damage_reduction: 1,
+  },
+  slip_dodge: {
+    label: "Slip",
+    disadvantage: true,
+  },
+};
 
-  if (useAbility) {
-    if (instinct === "streetcraft") {
-      dmg = rollDie(6) + strMod + 2;
-      narrative = `**Dirty Strike** — You slip inside their guard. ${dmg} damage.`;
-      return { dmg, narrative, skipRetaliation: true };
-    }
-    if (instinct === "ironblood") {
-      narrative = "**Brace** — You absorb the blow. Incoming damage is halved this turn.";
-      dmg = rollDie(6) + strMod;
-      return { dmg, narrative, damageReduction: 0.5 };
-    }
-    if (instinct === "ember_touched") {
-      dmg = rollDie(8) + 2;
-      narrative = `**Ember Pulse** — Something surges from your core. ${dmg} magic damage.`;
-      return { dmg, narrative, magic: true };
-    }
-    if (instinct === "hearthborn") {
-      const heal = rollDie(6) + statMod(stats.constitution);
-      narrative = `**Steady** — You pull yourself together. Recover ${heal} HP.`;
-      return { dmg: 0, narrative, heal };
-    }
+// Instinct definitions — primary abilities and passives
+export const INSTINCT_DEFS = {
+  ember_touched: {
+    role: "burst / DoT",
+    primary: {
+      name: "Kindle",
+      cadence: 3,
+      narrative: (dmg) => `**Kindle** — Arcane fire tears through them. ${dmg} damage. They are *Burning*.`,
+      effect: (stats, enemy) => {
+        const dmg = rollDie(8) + 2 + Math.max(0, statMod(stats.intelligence ?? stats.wisdom ?? 10));
+        return { dmg, status_on_enemy: "burning", status_duration: 3 };
+      },
+    },
+    passive: { name: "Smolder", desc: "Burning enemies take +1 damage from all sources." },
+  },
+  hearthborn: {
+    role: "sustain / support",
+    primary: {
+      name: "Kindle the Hearth",
+      cadence: 2,
+      narrative: (heal) => `**Kindle the Hearth** — Something warm moves through you. Recover ${heal} HP. *Resolve* settles on you.`,
+      effect: (stats, enemy, state) => {
+        const base = rollDie(6) + statMod(stats.constitution ?? 10);
+        const bonus = state.hearth_healed ? 0 : Math.floor(base * 0.2);
+        const heal = base + bonus;
+        return { heal, status_on_player: "resolve", status_duration: 2, set_flag: "hearth_healed" };
+      },
+    },
+    passive: { name: "Warmth", desc: "First heal each combat is 20% stronger." },
+  },
+  streetcraft: {
+    role: "opportunist / control",
+    primary: {
+      name: "Opportunist Strike",
+      cadence: 2,
+      narrative: (dmg, wounded) =>
+        `**Opportunist Strike** — ${wounded ? "You find the gap in their weakness. " : "You slip inside their guard. "}${dmg} damage.`,
+      effect: (stats, enemy, state) => {
+        const strMod = statMod(stats.strength);
+        const wounded = enemy && state.enemy_hp < (state.enemy_hp_max * 0.5);
+        const bonus = wounded ? rollDie(4) : 0;
+        const dmg = rollDie(6) + strMod + bonus + 2;
+        return { dmg, wounded, skip_retaliation: false, status_on_player: "slip_dodge", status_duration: 1 };
+      },
+    },
+    passive: { name: "Slip", desc: "+10% dodge on the turn after using the ability." },
+  },
+  ironblood: {
+    role: "frontliner / control",
+    primary: {
+      name: "Crushing Blow",
+      cadence: 3,
+      narrative: (dmg) => `**Crushing Blow** — The impact staggers them back. ${dmg} damage. They are *Staggered*.`,
+      effect: (stats, enemy) => {
+        const strMod = statMod(stats.strength);
+        const dmg = rollDie(8) + strMod + 2;
+        return { dmg, status_on_enemy: "staggered", status_duration: 1, status_on_player: "iron_stance", status_duration_player: 1 };
+      },
+    },
+    passive: { name: "Iron Stance", desc: "+1 flat damage reduction for 1 turn after using the ability." },
+  },
+  shadowbound: {
+    role: "assassin / burst",
+    primary: {
+      name: "Veil Step",
+      cadence: 3,
+      narrative: () => `**Veil Step** — You step into the shadow between moments. *Stealth* settles on you.`,
+      effect: (stats, enemy) => {
+        return { dmg: 0, status_on_player: "stealth", status_duration: 2, skip_retaliation: true };
+      },
+    },
+    passive: { name: "Fade", desc: "First attack each combat has +10% crit chance (roll twice, take higher)." },
+  },
+  warden: {
+    role: "protector / tank",
+    primary: {
+      name: "Stand Fast",
+      cadence: 3,
+      narrative: () => `**Stand Fast** — You plant your feet. *Resolve* and *Taunt* — you absorb what comes.`,
+      effect: (stats, enemy) => {
+        return {
+          dmg: 0,
+          status_on_player: "resolve",
+          status_duration: 2,
+          status_on_enemy: "taunt",
+          status_duration_enemy: 1,
+          skip_retaliation: false,
+        };
+      },
+    },
+    passive: { name: "Bulwark", desc: "+1 flat armor when below 50% HP." },
+  },
+};
+
+export function tickStatuses(statuses) {
+  const next = {};
+  for (const [k, v] of Object.entries(statuses || {})) {
+    if (v > 1) next[k] = v - 1;
   }
-
-  dmg = rollDie(weaponDie) + strMod;
-  const defense = enemy.defense ?? 0;
-  const finalDmg = Math.max(1, dmg - defense);
-  narrative = `You strike for **${finalDmg}** damage.`;
-
-  const breakThreshold = enemy.break_threshold ?? 999;
-  const staggered = finalDmg >= breakThreshold;
-  if (staggered) narrative += " **STAGGER** — the enemy loses its next action.";
-
-  return { dmg: finalDmg, narrative, staggered };
+  return next;
 }
 
 /**
- * Enemy attack. Uses accuracy-based hit check and damage range.
- * Blueprint: accuracy% = chance enemy hits; dodge when d20+DEX+shield >= threshold.
- * Formula: hit when dodgeRoll < threshold; threshold from combat_rebalance.md.
- * Returns { dmg, hit } — dmg is 0 on miss.
+ * Resolve player action — ability or normal attack. Uses INSTINCT_DEFS.
  */
-export function enemyAttack(enemy, stats, shieldBonus = 0) {
-  const dexMod = statMod(stats.dexterity);
-  const dodgeRoll = rollDie(20) + dexMod + shieldBonus;
-  const hitThreshold = Math.floor((100 - (enemy.accuracy ?? 65)) / 5);
-  const hit = dodgeRoll < hitThreshold;
+export function resolvePlayerAction(stats, enemy, useAbility, instinct, state) {
+  const strMod = statMod(stats.strength);
+  const def = INSTINCT_DEFS[instinct];
+  const weaponDie = state?.weapon_die ?? 6;
 
-  if (!hit) return { dmg: 0, hit: false };
+  if (useAbility && def) {
+    const result = def.primary.effect(stats, enemy, state);
+    const narrative =
+      typeof def.primary.narrative === "function"
+        ? def.primary.narrative(result.dmg ?? result.heal, result.wounded)
+        : def.primary.narrative;
+    return { ...result, narrative, ability: true };
+  }
+
+  let roll = rollDie(20) + strMod;
+  const isFade = instinct === "shadowbound" && !state?.fade_used;
+  if (isFade) {
+    roll = Math.max(roll, rollDie(20) + strMod);
+  }
+
+  const inStealth = (state?.statuses?.stealth ?? 0) > 0;
+  const defense = enemy?.defense ?? 0;
+  let dmg = 0,
+    narrative = "";
+
+  if (roll >= defense) {
+    dmg = rollDie(weaponDie) + strMod;
+    dmg = Math.max(1, dmg);
+
+    if (inStealth) {
+      dmg = Math.floor(dmg * STATUS_DEFS.stealth.bonus_dmg_multiplier);
+      narrative = `You strike from shadow for **${dmg}** damage.`;
+    } else {
+      narrative = `You strike for **${dmg}** damage.`;
+    }
+
+    if (instinct === "ember_touched" && (state?.enemy_statuses?.burning ?? 0) > 0) {
+      dmg += STATUS_DEFS.burning.passive_dmg_bonus;
+      narrative += ` *The burning worsens it.*`;
+    }
+  } else {
+    narrative = `Your attack misses — ${enemy?.name ?? "the enemy"} evades.`;
+  }
+
+  return {
+    dmg,
+    narrative,
+    hit: roll >= defense,
+    fade_triggered: isFade,
+    stealth_consumed: inStealth && roll >= defense,
+  };
+}
+
+/**
+ * Enemy attack — status-aware. Uses playerStatuses and enemyStatuses.
+ * Returns { dmg, hit } — dmg is 0 on miss or when staggered.
+ */
+export function resolveEnemyAttack(enemy, stats, playerStatuses = {}, enemyStatuses = {}, shieldBonus = 0) {
+  const defMod = statMod(stats.dexterity) + shieldBonus;
+
+  if ((enemyStatuses?.staggered ?? 0) > 0) return { dmg: 0, hit: false };
+
+  let roll = rollDie(20) + Math.floor(((enemy.accuracy ?? 65) - 50) / 5);
+
+  if ((enemyStatuses?.taunt ?? 0) > 0) {
+    roll = Math.min(roll, rollDie(20) + Math.floor(((enemy.accuracy ?? 65) - 50) / 5));
+  }
+  if ((playerStatuses?.slip_dodge ?? 0) > 0) {
+    roll = Math.min(roll, rollDie(20) + Math.floor(((enemy.accuracy ?? 65) - 50) / 5));
+  }
+
+  const hitThreshold = 10 + defMod;
+  if (roll < hitThreshold) return { dmg: 0, hit: false };
 
   const d = enemy.damage ?? { min: 3, max: 5 };
   const range = d.max - d.min + 1;
-  const dmg = Math.max(1, d.min + Math.floor(Math.random() * range));
+  let dmg = Math.max(1, d.min + Math.floor(Math.random() * range));
+
+  if ((playerStatuses?.resolve ?? 0) > 0) {
+    dmg = Math.floor(dmg * (1 - STATUS_DEFS.resolve.damage_reduction));
+  }
+  if ((playerStatuses?.iron_stance ?? 0) > 0) {
+    dmg = Math.max(0, dmg - STATUS_DEFS.iron_stance.flat_damage_reduction);
+  }
+
   return { dmg, hit: true };
+}
+
+/** Legacy enemyAttack — delegates to resolveEnemyAttack for backwards compat */
+export function enemyAttack(enemy, stats, shieldBonus = 0) {
+  return resolveEnemyAttack(enemy, stats, {}, {}, shieldBonus);
 }
 
 /**
