@@ -1955,6 +1955,15 @@
     opacity: 1;
     transform: translateY(0);
   }
+  .awakening-line {
+    font-family: var(--font-body);
+    font-size: 1.05rem;
+    color: var(--text-dim);
+    line-height: 1.8;
+    margin: 0;
+    padding: 0;
+    letter-spacing: 0.03em;
+  }
   #awakening-name {
     font-family: var(--font-title);
     font-size: 3.2rem;
@@ -1965,24 +1974,20 @@
     opacity: 0;
     transform: scale(1.18);
     text-shadow: none;
-    transition: none;
+    transition: transform 0.1s ease, opacity 0.3s ease, text-shadow 0.3s ease, font-size 0.2s ease;
   }
   #awakening-name.name-snap {
+    font-size: 2.8rem;
     opacity: 1;
-    transform: scale(1.18);
-    text-shadow:
-      0 0 60px rgba(196,98,42,0.95),
-      0 0 120px rgba(196,98,42,0.5),
-      0 0 8px rgba(255,200,140,0.9);
-    transition: none;
+    transform: scale(1.08);
+    text-shadow: 0 0 40px var(--ember), 0 0 80px rgba(196,98,42,0.6);
   }
   #awakening-name.name-settle {
+    font-size: 2.2rem;
     opacity: 1;
     transform: scale(1.0);
-    text-shadow:
-      0 0 30px rgba(196,98,42,0.5),
-      0 0 60px rgba(196,98,42,0.2);
-    transition: transform 0.7s ease, text-shadow 1.2s ease;
+    text-shadow: 0 0 20px rgba(196,98,42,0.4);
+    transition: transform 0.4s ease, font-size 0.4s ease, text-shadow 0.6s ease;
   }
   #awakening-below {
     display: flex;
@@ -2003,34 +2008,6 @@
     font-style: italic;
     letter-spacing: 0.06em;
     text-align: center;
-  }
-  #awakening-cta {
-    font-family: var(--font-title);
-    font-size: 0.72rem;
-    letter-spacing: 0.25em;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    animation: breatheSubtle 2.5s ease-in-out infinite;
-  }
-  @keyframes breatheSubtle {
-    0%, 100% { opacity: 0.5; }
-    50%       { opacity: 1; }
-  }
-  #awakening-btn {
-    background: transparent;
-    border: 1px solid var(--ember);
-    color: var(--ember-glow);
-    font-family: var(--font-title);
-    font-size: 0.85rem;
-    letter-spacing: 0.15em;
-    padding: 12px 32px;
-    cursor: pointer;
-    text-transform: uppercase;
-    transition: all 0.2s;
-  }
-  #awakening-btn:hover {
-    background: rgba(196,98,42,0.1);
-    box-shadow: 0 0 20px rgba(196,98,42,0.3);
   }
   .awakening-ash { position: absolute; width: 4px; height: 4px; background: #c4622a; border-radius: 50%; opacity: 0.9; pointer-events: none; animation: entryAshFall linear forwards; z-index: 210; }
 
@@ -2242,8 +2219,6 @@
     <div id="awakening-name"></div>
     <div id="awakening-below">
       <div id="awakening-tagline">Hold onto it. This city takes everything else.</div>
-      <div id="awakening-cta">— Open your eyes —</div>
-      <button type="button" id="awakening-btn" onclick="completeAwakening()">Wake Up</button>
     </div>
   </div>
 </div>
@@ -2718,6 +2693,62 @@ const PROGRESSION_LABELS = {
   seris_arc3_complete: "Seris arc complete",
 };
 
+// ── Audio ────────────────────────────────────────────────────────
+function playOnce(src, volume = 0.8) {
+  const el = new Audio(src);
+  el.volume = volume;
+  el.play().catch(() => {});
+  return el;
+}
+function playLoop(src, volume = 0.3) {
+  const el = new Audio(src);
+  el.loop = true;
+  el.volume = volume;
+  el.play().catch(() => {});
+  return el;
+}
+function fadeOutAudio(el, ms, cb) {
+  if (!el) return;
+  const steps = 20;
+  const delta = el.volume / steps;
+  const interval = ms / steps;
+  const t = setInterval(() => {
+    el.volume = Math.max(0, el.volume - delta);
+    if (el.volume <= 0) {
+      clearInterval(t);
+      el.pause();
+      cb?.();
+    }
+  }, interval);
+}
+function fadeInAudio(el, targetVolume, ms) {
+  if (!el) return;
+  el.volume = 0;
+  const steps = 20;
+  const delta = targetVolume / steps;
+  const interval = ms / steps;
+  const t = setInterval(() => {
+    el.volume = Math.min(targetVolume, el.volume + delta);
+    if (el.volume >= targetVolume) clearInterval(t);
+  }, interval);
+}
+let _bgAudio = null;
+function startBackground(src, volume = 0.25) {
+  if (_bgAudio) fadeOutAudio(_bgAudio, 1500);
+  _bgAudio = playLoop(src, 0);
+  fadeInAudio(_bgAudio, volume, 2000);
+  return _bgAudio;
+}
+
+// Unlock audio context on first user interaction
+let _audioUnlocked = false;
+document.addEventListener('click', () => {
+  if (_audioUnlocked) return;
+  _audioUnlocked = true;
+  const unlock = new Audio();
+  unlock.play().catch(() => {});
+}, { once: false });
+
 // ── State ────────────────────────────────────────────────────────
 let vToken = localStorage.getItem('v_token') || '';
 let currentNPC = '';
@@ -2951,12 +2982,12 @@ function needsOnboard(c) {
   return c == null || c.instinct == null || c.instinct === '' || c.stats_set == null || Number(c.stats_set) === 0;
 }
 
-let awakeningLoadPromise = null;
-
-function showAwakeningCinematic(characterName) {
+async function runAwakening(playerName) {
   const screen = document.getElementById('awakening-screen');
   const overlay = document.getElementById('awakening-overlay');
   const nameEl = document.getElementById('awakening-name');
+  const taglineEl = document.getElementById('awakening-tagline');
+  const linesEl = document.getElementById('awakening-lines');
   const belowEl = document.getElementById('awakening-below');
 
   document.getElementById('auth-screen').style.display = 'none';
@@ -2971,50 +3002,95 @@ function showAwakeningCinematic(characterName) {
   overlay.style.display = 'flex';
   overlay.style.opacity = '1';
 
-  document.querySelectorAll('.aw-line').forEach(el => el.classList.remove('visible'));
-  nameEl.textContent = String(characterName || '').trim() || 'You';
+  nameEl.textContent = '';
   nameEl.className = '';
   nameEl.style.opacity = '0';
   belowEl.classList.remove('visible');
+  if (taglineEl) taglineEl.style.opacity = '0';
 
-  document.querySelectorAll('.aw-line').forEach(line => {
-    const delay = parseFloat(line.dataset.delay || 0) * 1000;
-    setTimeout(() => line.classList.add('visible'), delay);
-  });
+  const wait = ms => new Promise(r => setTimeout(r, ms));
 
-  setTimeout(() => {
-    nameEl.classList.add('name-snap');
-    nameEl.style.opacity = '1';
-    setTimeout(() => {
-      nameEl.classList.remove('name-snap');
-      nameEl.classList.add('name-settle');
-    }, 80);
-  }, 7400);
+  if (_bgAudio) fadeOutAudio(_bgAudio, 2000);
+  const drone = playLoop('/Audio/background/Abyssal.mp3', 0);
+  fadeInAudio(drone, 0.28, 3000);
 
-  setTimeout(() => belowEl.classList.add('visible'), 9000);
+  function addLine(text) {
+    const p = document.createElement('p');
+    p.className = 'awakening-line';
+    p.style.opacity = '0';
+    p.style.transition = 'opacity 0.9s ease';
+    p.textContent = text;
+    linesEl.appendChild(p);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => { p.style.opacity = '1'; });
+    });
+  }
 
-  awakeningLoadPromise = loadGame();
-}
+  linesEl.innerHTML = '';
 
-async function completeAwakening() {
-  const overlay = document.getElementById('awakening-overlay');
-  const screen = document.getElementById('awakening-screen');
+  await wait(300);  addLine("You are on the floor.");
+  await wait(800);  addLine("The stone is cold.");
+  await wait(1000); addLine("You do not know how you got here.");
+  await wait(900);  addLine("You do not know where here is.");
+  await wait(900);  addLine("You do not know your name.");
+  await wait(1100); addLine("Wait.");
+  await wait(1200); addLine("You know one thing.");
+
+  await wait(1200);
+
+  playOnce('/Audio/drone/name_reveal.mp3', 0.85);
+  nameEl.textContent = String(playerName || '').trim() || 'You';
+  nameEl.classList.add('name-snap');
+
+  await wait(80);
+  playOnce('/Audio/drone/name_settle.mp3', 0.6);
+  nameEl.classList.remove('name-snap');
+  nameEl.classList.add('name-settle');
+
+  await wait(1000);
+  playOnce('/Audio/drone/dark_strings_swell.mp3', 0.7);
+
+  await wait(1500);
+
+  belowEl.classList.add('visible');
+  if (taglineEl) {
+    taglineEl.style.opacity = '0';
+    taglineEl.style.transition = 'opacity 1.2s ease';
+    taglineEl.textContent = 'Open your eyes.';
+    taglineEl.style.display = 'block';
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => { taglineEl.style.opacity = '1'; });
+    });
+  }
+
+  await wait(2200);
+
+  playOnce('/Audio/drone/wakeup.mp3', 1.0);
+  fadeOutAudio(drone, 1800);
+
+  await wait(500);
+
   overlay.style.transition = 'opacity 1.5s ease';
   overlay.style.opacity = '0';
-  setTimeout(async () => {
-    overlay.style.display = 'none';
-    overlay.style.opacity = '';
-    overlay.style.transition = '';
-    screen.style.display = 'none';
-    screen.setAttribute('aria-hidden', 'true');
-    showScreen('game');
-    if (awakeningLoadPromise) await awakeningLoadPromise;
-    awakeningLoadPromise = null;
-    requestAnimationFrame(() => {
-      const app = document.getElementById('app');
-      if (app) app.classList.add('visible');
-    });
-  }, 1500);
+
+  await wait(1500);
+
+  overlay.style.display = 'none';
+  overlay.style.transition = '';
+  overlay.style.opacity = '1';
+  screen.style.display = 'none';
+  screen.setAttribute('aria-hidden', 'true');
+
+  linesEl.innerHTML = '';
+  nameEl.classList.remove('name-snap', 'name-settle');
+  if (taglineEl) taglineEl.style.opacity = '0';
+
+  showScreen('game');
+  await loadGame();
+  requestAnimationFrame(() => {
+    const app = document.getElementById('app');
+    if (app) app.classList.add('visible');
+  });
 }
 
 function formatStatMods(mods) {
@@ -3089,6 +3165,7 @@ async function showTrueWelcome() {
   };
   mainTwStep = 'race';
   showScreen('tw');
+  startBackground('/Audio/awakening/A%20Nightmare.mp3', 0.22);
 }
 
 function renderTwInstinctStep() {
@@ -3281,7 +3358,7 @@ async function finishTrueWelcome() {
       });
       mainCharacter = await GET('/api/character');
       if (data.first_awakening) {
-        showAwakeningCinematic(name);
+        runAwakening(name);
       } else {
         showScreen('sheet');
         await populateCharacterSheet();
