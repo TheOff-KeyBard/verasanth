@@ -4174,7 +4174,15 @@ async function doMove(dir) {
     visitedSet.add(data.location);
     renderRoom(data);
     startLingerTimer(data.fightable);
-    if (data.encounter?.triggered) {
+    if (data.encounter?.predator_detected) {
+      log(render(data.encounter.cue));
+    } else if (data.encounter?.predator_strike) {
+      log(`<em>*Something moves in the dark behind you.*</em>`);
+      await new Promise(r => setTimeout(r, 700));
+      log(render(data.encounter.cue));
+      await new Promise(r => setTimeout(r, 500));
+      await handleAutoEncounter(data.encounter);
+    } else if (data.encounter?.triggered) {
       await handleAutoEncounter(data.encounter);
     } else {
       log(`<em>You move ${dir}.</em>`);

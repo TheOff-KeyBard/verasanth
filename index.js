@@ -7,7 +7,7 @@
 
 import { runAdminCommand } from "./admin.js";
 import { WORLD, FIRST_VISIT_INTROS } from "./data/world.js";
-import { COMBAT_DATA, FIGHTABLE_LOCATIONS, ENCOUNTER_CHANCES, ENCOUNTER_CUES } from "./data/combat.js";
+import { COMBAT_DATA, FIGHTABLE_LOCATIONS, ENCOUNTER_CHANCES, ENCOUNTER_CUES, SCENT_ITEMS, PREDATOR_ENEMIES, getPredatorCue, AMBUSH_ROOMS, getAmbushCue } from "./data/combat.js";
 import { RACES } from "./data/races.js";
 import { INSTINCTS } from "./data/instincts.js";
 import { NPC_LOCATIONS, NPC_NAMES, NPC_TOPICS, BARTENDER_FEE } from "./data/npcs.js";
@@ -54,8 +54,8 @@ const BOSS_NODES = {
 function rollEncounter(location, modifiers = {}) {
   const base = ENCOUNTER_CHANCES[location] ?? 0;
   if (base === 0) return false;
-  const { woundedBonus = 0, lootBonus = 0, crimeHeatBonus = 0, postFightBonus = 0 } = modifiers;
-  const total = base + woundedBonus + lootBonus + crimeHeatBonus + postFightBonus;
+  const { woundedBonus = 0, lootBonus = 0, crimeHeatBonus = 0, postFightBonus = 0, scentBonus = 0, reputationBonus = 0 } = modifiers;
+  const total = base + woundedBonus + lootBonus + crimeHeatBonus + postFightBonus + scentBonus + reputationBonus;
   return Math.random() * 100 < Math.min(total, 85);
 }
 
@@ -69,6 +69,9 @@ function getEncounterCue(location) {
   const fallback = ENCOUNTER_CUES.default;
   return fallback[Math.floor(Math.random() * fallback.length)];
 }
+
+/** City locations where bounty hunters can spawn when crime_heat is high */
+const REPUTATION_CITY_LOCATIONS = new Set(["market_square", "north_road", "south_road", "east_road", "west_road"]);
 
 // Gate nodes: requires_flag null = always open; otherwise player must have flag to see deeper/down exit
 const FLOOR_GATES = {
@@ -499,6 +502,10 @@ async function initDb(db) {
   await dbRun(db, `CREATE TABLE IF NOT EXISTS combat_state (
     user_id INTEGER PRIMARY KEY REFERENCES players(user_id),
     state_json TEXT NOT NULL)`);
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS predator_tracking (
+    user_id INTEGER PRIMARY KEY REFERENCES players(user_id),
+    predator_id TEXT NOT NULL,
+    predator_ticks INTEGER DEFAULT 0)`);
   await dbRun(db, `CREATE TABLE IF NOT EXISTS sessions (
     token TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES players(user_id))`);
@@ -1355,7 +1362,116 @@ if (path === "/api/admin/command" && method === "POST") {
 
       // ── Dynamic encounter check ───────────────────────────────────
       let encounterData = null;
-      if (FIGHTABLE_LOCATIONS.has(dest)) {
+      const predRow = await dbGet(db, "SELECT predator_id, predator_ticks FROM predator_tracking WHERE user_id=?", [uid]);
+      if (predRow) {
+        if (FIGHTABLE_LOCATIONS.has(dest)) {
+          const newTicks = (predRow.predator_ticks || 0) + 1;
+          await dbRun(db, "UPDATE predator_tracking SET predator_ticks=? WHERE user_id=?", [newTicks, uid]);
+          if (newTicks >= 2) {
+            await dbRun(db, "DELETE FROM predator_tracking WHERE user_id=?", [uid]);
+            const enemy = COMBAT_DATA.enemies[predRow.predator_id];
+            if (enemy) {
+              const hp = await getPlayerHp(db, uid, row);
+              const now = Date.now();
+              await dbRun(db, "UPDATE players SET last_encounter_at=? WHERE user_id=?", [now, uid]);
+              const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
+              let weaponDie = 6, armorReduction = 0, shieldBonus = 0;
+              for (const eq of eqRows) {
+                const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
+                const tier = Math.min(invRow?.tier ?? 1, 3);
+                if (eq.slot === "weapon") weaponDie = [6, 8, 10, 12][tier];
+                else if (eq.slot === "armor") armorReduction = [0, 2, 4, 6][tier];
+                else if (eq.slot === "shield") shieldBonus = 2;
+              }
+              const state = {
+                enemy_id: enemy.id,
+                enemy_name: enemy.name,
+                enemy_hp: enemy.hp,
+                enemy_hp_max: enemy.hp,
+                player_hp: hp.current,
+                player_hp_max: hp.max,
+                ability_used: false,
+                turn: 1,
+                round: 1,
+                location: dest,
+                weapon_die: weaponDie,
+                armor_reduction: armorReduction,
+                shield_bonus: shieldBonus,
+                enemy_staggered: false,
+                status_effects: [],
+                trait_state: {},
+                armor_break_effects: [],
+                auto_triggered: true,
+              };
+              await dbRun(db,
+                "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
+                [uid, JSON.stringify(state)]);
+              encounterData = {
+                triggered: true,
+                predator_strike: true,
+                cue: "*It found you.*",
+                enemy_name: enemy.name,
+                enemy_desc: enemy.desc || "",
+                combat_state: state,
+              };
+            }
+          }
+        } else {
+          await dbRun(db, "DELETE FROM predator_tracking WHERE user_id=?", [uid]);
+          ambient = "*Whatever was following you has stopped. For now.*";
+        }
+      }
+
+      // Reputation: high crime in city — bounty hunter
+      if (!encounterData && REPUTATION_CITY_LOCATIONS.has(dest) && (row.crime_heat ?? 0) >= 8 && Math.random() < 0.6) {
+        const enemy = COMBAT_DATA.enemies.city_watchman;
+        if (enemy) {
+          const hp = await getPlayerHp(db, uid, row);
+          const now = Date.now();
+          await dbRun(db, "UPDATE players SET last_encounter_at=? WHERE user_id=?", [now, uid]);
+          const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
+          let weaponDie = 6, armorReduction = 0, shieldBonus = 0;
+          for (const eq of eqRows) {
+            const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
+            const tier = Math.min(invRow?.tier ?? 1, 3);
+            if (eq.slot === "weapon") weaponDie = [6, 8, 10, 12][tier];
+            else if (eq.slot === "armor") armorReduction = [0, 2, 4, 6][tier];
+            else if (eq.slot === "shield") shieldBonus = 2;
+          }
+          const state = {
+            enemy_id: enemy.id,
+            enemy_name: enemy.name,
+            enemy_hp: enemy.hp,
+            enemy_hp_max: enemy.hp,
+            player_hp: hp.current,
+            player_hp_max: hp.max,
+            ability_used: false,
+            turn: 1,
+            round: 1,
+            location: dest,
+            weapon_die: weaponDie,
+            armor_reduction: armorReduction,
+            shield_bonus: shieldBonus,
+            enemy_staggered: false,
+            status_effects: [],
+            trait_state: {},
+            armor_break_effects: [],
+            auto_triggered: true,
+          };
+          await dbRun(db,
+            "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
+            [uid, JSON.stringify(state)]);
+          encounterData = {
+            triggered: true,
+            cue: "*The watch has your description. They have had it for a while.*",
+            enemy_name: enemy.name,
+            enemy_desc: enemy.desc || "",
+            combat_state: state,
+          };
+        }
+      }
+
+      if (!encounterData && FIGHTABLE_LOCATIONS.has(dest)) {
         const now = Date.now();
         const lastEnc = row.last_encounter_at || 0;
         const onCooldown = (now - lastEnc) < 12000;
@@ -1372,19 +1488,46 @@ if (path === "/api/admin/command" && method === "POST") {
           const postFightBonus = postFight ? 15 : 0;
           if (postFight) await setFlag(db, uid, "post_fight_noise", 0);
 
+          let scentBonus = 0, scentLabel = null;
+          const invRows = await dbAll(db, "SELECT item FROM inventory WHERE user_id=? AND qty>0", [uid]);
+          for (const r of invRows) {
+            const def = SCENT_ITEMS[r.item];
+            if (def && def.bonus > scentBonus) { scentBonus = def.bonus; scentLabel = def.label; }
+          }
+
+          const order = row.alignment_order ?? 0;
+          const morality = row.alignment_morality ?? 0;
+          let reputationBonus = 0;
+          let woundedNpcChance = 0;
+          if (order <= -15) reputationBonus += 20;
+          if (order >= 15) reputationBonus += -15;
+          if (morality >= 15) woundedNpcChance = 0.25;
+
           const triggered = rollEncounter(dest, {
             woundedBonus,
             crimeHeatBonus,
             postFightBonus,
+            scentBonus,
+            reputationBonus,
           });
 
           if (triggered) {
             await dbRun(db, "UPDATE players SET last_encounter_at=? WHERE user_id=?", [now, uid]);
 
-            const cue = getEncounterCue(dest);
+            const rawCue = getEncounterCue(dest);
+            const cue = scentLabel ? `${scentLabel}\n\n${rawCue}` : rawCue;
             const activeCondition = await getActiveSewerCondition(db);
             const enemy = randomEnemy(dest, activeCondition);
 
+            const predDef = PREDATOR_ENEMIES[enemy.id];
+            if (predDef && predDef.eligible.has(dest) && Math.random() < predDef.chance && !predRow) {
+              await dbRun(db, "INSERT OR REPLACE INTO predator_tracking(user_id, predator_id, predator_ticks) VALUES(?,?,0)", [uid, enemy.id]);
+              encounterData = {
+                triggered: false,
+                predator_detected: true,
+                cue: getPredatorCue(dest, enemy.id),
+              };
+            } else {
             const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
             let weaponDie = 6, armorReduction = 0, shieldBonus = 0;
             for (const eq of eqRows) {
@@ -1426,6 +1569,7 @@ if (path === "/api/admin/command" && method === "POST") {
               enemy_desc: enemy.desc || "",
               combat_state: state,
             };
+            }
           }
         }
       }
@@ -1472,7 +1616,13 @@ if (path === "/api/admin/command" && method === "POST") {
       const { ticks = 1 } = body;
       const lingerBase = Math.min(20 + (ticks * 8), 60);
       const woundedBonus = hpPct < 0.5 ? 25 : 0;
-      const triggered = Math.random() * 100 < (lingerBase + woundedBonus);
+      let scentBonus = 0, scentLabel = null;
+      const invRows = await dbAll(db, "SELECT item FROM inventory WHERE user_id=? AND qty>0", [uid]);
+      for (const r of invRows) {
+        const def = SCENT_ITEMS[r.item];
+        if (def && def.bonus > scentBonus) { scentBonus = def.bonus; scentLabel = def.label; }
+      }
+      const triggered = Math.random() * 100 < (lingerBase + woundedBonus + scentBonus);
 
       if (!triggered) {
         const cue = getEncounterCue(row.location);
@@ -1481,7 +1631,8 @@ if (path === "/api/admin/command" && method === "POST") {
 
       await dbRun(db, "UPDATE players SET last_encounter_at=? WHERE user_id=?", [now, uid]);
 
-      const cue = getEncounterCue(row.location);
+      const rawCue = getEncounterCue(row.location);
+      const cue = scentLabel ? `${scentLabel}\n\n${rawCue}` : rawCue;
       const activeCondition = await getActiveSewerCondition(db);
       const enemy = randomEnemy(row.location, activeCondition);
 

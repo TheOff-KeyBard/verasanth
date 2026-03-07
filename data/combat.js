@@ -347,6 +347,52 @@ export const COMBAT_DATA = {
       xp: 200,
       desc: "A figure built from the cathedral stone with a core of dull light at its center. The light pulses with the same rhythm as the pit below. It guards the approach to the pit. It has always guarded the approach to the pit.",
     },
+    sewer_horror: {
+      id: "sewer_horror",
+      name: "Sewer Horror",
+      hp: 38,
+      damage: { min: 6, max: 10 },
+      accuracy: 72,
+      defense: 2,
+      speed: 8,
+      break_threshold: 10,
+      archetype: "skirmisher",
+      trait: "stagger",
+      trait_params: { chance: 0.25 },
+      tier: 3,
+      xp: 70,
+      desc: "It has been following you. The water does not hide your scent. It moves when you move. It stops when you stop. It has done this before.",
+    },
+    hollow_guard: {
+      id: "hollow_guard",
+      name: "Hollow Guard",
+      hp: 55,
+      damage: { min: 12, max: 17 },
+      accuracy: 80,
+      defense: 2,
+      speed: 9,
+      break_threshold: 14,
+      archetype: "skirmisher",
+      trait: "phase",
+      tier: 5,
+      xp: 150,
+      desc: "A figure that has been walking behind you for several rooms. The cathedral stone does not slow it. It appears where it chooses. The first time you see it clearly, it is already beside you.",
+    },
+    city_watchman: {
+      id: "city_watchman",
+      name: "City Watchman",
+      hp: 48,
+      damage: { min: 8, max: 12 },
+      accuracy: 75,
+      defense: 3,
+      speed: 6,
+      break_threshold: 12,
+      archetype: "skirmisher",
+      trait: null,
+      tier: 3,
+      xp: 80,
+      desc: "The watch has your description. They have had it for a while. The cudgel is already in hand.",
+    },
     ash_heart_custodian: {
       id: "ash_heart_custodian",
       name: "Ash Heart Custodian",
@@ -369,9 +415,9 @@ export const COMBAT_DATA = {
   sewer_floor_pools: {
     1: ["gutter_rat", "sewer_wretch", "ash_crawler", "drain_lurker"],
     2: ["fungal_shambler", "mold_vermin", "channel_stalker", "rustback_beetle"],
-    3: ["drowned_thrall", "cistern_leech", "flood_serpent", "slick_horror"],
+    3: ["drowned_thrall", "cistern_leech", "flood_serpent", "slick_horror", "sewer_horror"],
     4: ["gearbound_sentinel", "heat_wraith", "rust_golem"],
-    5: ["ashborn_acolyte", "cathedral_wraith", "sump_guardian"],
+    5: ["ashborn_acolyte", "cathedral_wraith", "sump_guardian", "hollow_guard"],
   },
 
   sewer_floor_bosses: {
@@ -593,3 +639,76 @@ export const ENCOUNTER_CUES = {
     "*The silence changes quality.*",
   ],
 };
+
+/** Items that attract enemies — highest bonus used per encounter */
+export const SCENT_ITEMS = {
+  rat_king_musk:       { bonus: 25, label: "The musk on your pack draws attention." },
+  slime_residue:       { bonus: 15, label: "Something in the dark smells the residue you carry." },
+  sewer_fungi:         { bonus: 10, label: "The fungi spores drift from your pack." },
+  deep_vent_ash:       { bonus: 10, label: "The ash carries heat. Something notices." },
+  flood_record_page:   { bonus: 5,  label: "Old paper. Old blood. Something remembers." },
+  heart_pump_fragment: { bonus: 20, label: "The mechanical pulse in your pack is audible to the wrong things." },
+  custodian_core:      { bonus: 30, label: "The core hums. Everything in the dark hears it." },
+  drowned_relic:      { bonus: 20, label: "Old magic radiates from what you carry." },
+};
+
+/** Predator enemies that stalk across rooms before striking */
+export const PREDATOR_ENEMIES = {
+  sewer_horror: {
+    chance: 0.15,
+    eligible: new Set(["drowned_vault", "submerged_tunnel", "flooded_hall", "broken_pump_room", "sump_pit", "ash_heart_chamber"]),
+  },
+  hollow_guard: {
+    chance: 0.12,
+    eligible: new Set(["ash_pillar_hall", "whispering_chamber", "rune_lit_corridor", "cathedral_floor", "ash_heart_chamber", "sump_pit"]),
+  },
+  gearbound_sentinel: {
+    chance: 0.10,
+    eligible: new Set(["gear_hall", "steam_vent_corridor", "broken_regulator_chamber", "iron_walkway", "heart_pump", "pressure_valve_shaft"]),
+  },
+};
+
+/** Cues when a predator is detected (no combat yet) */
+export const PREDATOR_CUES = {
+  drowned_vault: "*Something in the water has noticed you. It does not surface yet.*",
+  submerged_tunnel: "*The current shifts. Something is moving with you.*",
+  flooded_hall: "*A shape in the flood. Then gone. It is still there.*",
+  broken_pump_room: "*The pump skips. Something else is counting the beats.*",
+  sump_pit: "*The surface of the sump ripples. Not from you.*",
+  ash_heart_chamber: "*The plinth vibrates. Something has been following.*",
+  ash_pillar_hall: "*The pattern on the floor glows where something else stepped.*",
+  whispering_chamber: "*One of the whispers was not a whisper.*",
+  rune_lit_corridor: "*A shadow passes between the runes. It is still behind you.*",
+  cathedral_floor: "*The door behind you is open again. You did not open it.*",
+  gear_hall: "*One of the gears turns. The mechanism was idle.*",
+  steam_vent_corridor: "*The steam parts. Something moved through it.*",
+  broken_regulator_chamber: "*Something very large shifts in the dark ahead.*",
+  iron_walkway: "*The walkway creaks. The weight is not yours.*",
+  heart_pump: "*The rhythm of the machinery changes. Something is counting.*",
+  pressure_valve_shaft: "*The shaft breathes. You are not the only thing in it.*",
+};
+
+export function getPredatorCue(location, enemyId) {
+  return PREDATOR_CUES[location] ?? "*Something in the dark has noticed you. It does not strike yet.*";
+}
+
+/** Deep rooms where a second enemy can join on turn 2 */
+export const AMBUSH_ROOMS = new Set([
+  "ash_heart_chamber", "sump_pit", "ash_pillar_hall",
+  "drowned_vault", "flooded_hall", "submerged_tunnel",
+]);
+
+/** Cues when an ambush triggers */
+export const AMBUSH_CUES = {
+  ash_heart_chamber: "*The plinth at the center vibrates. The room wakes up.*",
+  sump_pit: "*Something stirs in the pit. Something else drops from above.*",
+  ash_pillar_hall: "*Two shapes detach from the wall simultaneously.*",
+  drowned_vault: "*Something erupts from the water as something else drops from above.*",
+  flooded_hall: "*Hands burst from the water on both sides.*",
+  submerged_tunnel: "*The current shifts. They were waiting.*",
+  default: "*They were waiting.*",
+};
+
+export function getAmbushCue(location) {
+  return AMBUSH_CUES[location] ?? AMBUSH_CUES.default;
+}
