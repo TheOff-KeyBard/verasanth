@@ -3358,7 +3358,7 @@ async function finishTrueWelcome() {
       });
       mainCharacter = await GET('/api/character');
       if (data.first_awakening) {
-        runAwakening(name);
+        await runAwakening(mainCharacter?.name || name);
       } else {
         showScreen('sheet');
         await populateCharacterSheet();
