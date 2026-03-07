@@ -497,15 +497,20 @@ const ALIGN_INSTINCT_BIAS = {
 };
 
 async function updateAlignment(db, uid, mercyDelta, orderDelta, instinct = "") {
-  const [mb, ob] = ALIGN_INSTINCT_BIAS[instinct] || [0, 0];
-  mercyDelta += mb;
-  orderDelta += ob;
-  const row = await dbGet(db, "SELECT alignment_morality, alignment_order, crime_heat FROM characters WHERE user_id=?", [uid]);
-  if (!row) return;
-  const newMercy = Math.max(-200, Math.min(200, (row.alignment_morality || 0) + mercyDelta));
-  const newOrder = Math.max(-200, Math.min(200, (row.alignment_order || 0) + orderDelta));
-  const archetype = computeArchetype(newMercy, newOrder, row.crime_heat || 0);
-  await dbRun(db, "UPDATE characters SET alignment_morality=?, alignment_order=?, archetype=? WHERE user_id=?", [newMercy, newOrder, archetype, uid]);
+  try {
+    const [mb, ob] = ALIGN_INSTINCT_BIAS[instinct] || [0, 0];
+    mercyDelta += mb;
+    orderDelta += ob;
+    const row = await dbGet(db, "SELECT alignment_morality, alignment_order, crime_heat FROM characters WHERE user_id=?", [uid]);
+    if (!row) return;
+    const newMercy = Math.max(-200, Math.min(200, (row.alignment_morality || 0) + mercyDelta));
+    const newOrder = Math.max(-200, Math.min(200, (row.alignment_order || 0) + orderDelta));
+    const archetype = computeArchetype(newMercy, newOrder, row.crime_heat || 0);
+    await dbRun(db, "UPDATE characters SET alignment_morality=?, alignment_order=?, archetype=? WHERE user_id=?", [newMercy, newOrder, archetype, uid]);
+  } catch {
+    // Alignment update is non-critical — swallow errors so they never
+    // interrupt combat, flee, death, or commune responses
+  }
 }
 
 async function checkBountyThreshold(db, uid, heat) {
@@ -1072,6 +1077,7 @@ export default {
     }
 
     if (path.startsWith("/api")) {
+      try {
       const db = env.DB;
       await initDb(db);
       // ── Auth: Register ──
@@ -2881,9 +2887,15 @@ if (path === "/api/combat/state" && method === "GET") {
       if (!enemy) return err("Combat state invalid. Flee to reset.");
 
       if (action === "flee") {
-        await dbRun(db, "DELETE FROM combat_state WHERE user_id=?", [uid]);
+        try {
+          await dbRun(db, "DELETE FROM combat_state WHERE user_id=?", [uid]);
+        } catch {}
         await updateAlignment(db, uid, 0, -1, instinct);
-        return json({ result: "fled", message: "*You retreat into the dark.*" });
+        return json({
+          result: "fled",
+          player_hp: state.player_hp,
+          message: "*You retreat into the dark.*",
+        });
       }
 
       if (action === "ability" && state.ability_used) return err("Ability already used.");
@@ -3637,6 +3649,17 @@ if (path === "/api/combat/state" && method === "GET") {
     }
 
     return err("Not found.", 404);
+
+      } catch (e) {
+        const corsHeaders = {
+          "Access-Control-Allow-Origin": "*",
+          "Content-Type": "application/json",
+        };
+        return new Response(
+          JSON.stringify({ error: "Internal server error.", detail: e.message }),
+          { status: 500, headers: corsHeaders }
+        );
+      }
     }
 
     return new Response("Not found", { status: 404 });
