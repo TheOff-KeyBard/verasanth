@@ -130,6 +130,22 @@
     border-bottom: 1px solid var(--border-warm);
   }
 
+  .hazard-warning {
+    font-size: 0.75rem;
+    color: var(--danger, #c44);
+    letter-spacing: 0.1em;
+    opacity: 0.85;
+    margin-bottom: 8px;
+    font-family: var(--font-title);
+    text-transform: uppercase;
+    animation: breathe 3s ease-in-out infinite;
+  }
+
+  @keyframes breathe {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+  }
+
   #room-desc {
     color: var(--text);
     line-height: 1.8;
@@ -1023,6 +1039,16 @@
   }
 
   #combat-overlay.open { display: flex; }
+
+  #combat-overlay.boss-encounter #combat-box {
+    box-shadow: 0 0 40px rgba(0,0,0,0.9), 0 0 50px rgba(196,98,42,0.35), 0 0 80px rgba(139,32,32,0.2);
+    border-color: var(--ember, #c4622a);
+  }
+
+  #combat-overlay.boss-encounter #combat-enemy-name {
+    color: var(--ember-glow, #e88);
+    text-shadow: 0 0 12px rgba(196,98,42,0.6);
+  }
 
   #combat-box {
     background: var(--bg2);
@@ -4030,8 +4056,20 @@ function renderNodeMap(currentLoc) {
 }
 
 // ── Room rendering ───────────────────────────────────────────────
+function renderHazardWarning(hazard) {
+  const existing = document.getElementById('hazard-warning');
+  if (existing) existing.remove();
+  if (!hazard) return;
+  const el = document.createElement('div');
+  el.id = 'hazard-warning';
+  el.className = 'hazard-warning';
+  el.textContent = '⚠ ' + (hazard.label || 'Hazard');
+  document.getElementById('room-name').after(el);
+}
+
 function renderRoom(data) {
   document.getElementById('room-name').textContent = data.name || '—';
+  renderHazardWarning(data.hazard || null);
   document.getElementById('room-desc').innerHTML   = render(data.description || '');
   document.getElementById('footer-loc').textContent = data.location || '';
   document.getElementById('header-sub').textContent = data.location || '';
@@ -4174,6 +4212,12 @@ async function doMove(dir) {
     visitedSet.add(data.location);
     renderRoom(data);
     startLingerTimer(data.fightable);
+    if (data.hazard) {
+      log(`<em>${data.hazard.cue_enter}</em>`);
+      await new Promise(r => setTimeout(r, 600));
+      log(`<em>${data.hazard.cue_damage}</em>`);
+      refreshSidebar();
+    }
     if (data.encounter?.predator_detected) {
       log(render(data.encounter.cue));
     } else if (data.encounter?.predator_strike) {
@@ -4196,7 +4240,8 @@ async function doMove(dir) {
 
 async function handleAutoEncounter(enc) {
   log(`<em>${enc.cue}</em>`);
-  await new Promise(r => setTimeout(r, 900));
+  const pause = enc.boss ? 1500 : 900;
+  await new Promise(r => setTimeout(r, pause));
   log(`<em>*${enc.enemy_name} emerges from the dark.*</em>`);
   if (enc.enemy_desc) log(`<em>${enc.enemy_desc}</em>`);
   await new Promise(r => setTimeout(r, 600));
@@ -4204,7 +4249,7 @@ async function handleAutoEncounter(enc) {
   combatState = enc.combat_state;
   playerMaxHp = enc.combat_state.player_hp_max;
   document.getElementById('combat-log').innerHTML = '';
-  showCombat(enc.combat_state);
+  showCombat(enc.combat_state, enc.boss);
 }
 
 function startLingerTimer(isFightable) {
@@ -4663,8 +4708,11 @@ async function doFight() {
   }
 }
 
-function showCombat(data) {
-  document.getElementById('combat-overlay').classList.add('open');
+function showCombat(data, isBoss) {
+  const overlay = document.getElementById('combat-overlay');
+  overlay.classList.add('open');
+  if (isBoss) overlay.classList.add('boss-encounter');
+  else overlay.classList.remove('boss-encounter');
   document.getElementById('combat-enemy-name').textContent = data.enemy_name || data.enemy_id || 'Enemy';
   updateCombatBars(data.player_hp, playerMaxHp, data.enemy_hp, data.enemy_hp);
 }
@@ -4687,7 +4735,8 @@ async function combatAction(action) {
 
     if (data.result === 'victory' || data.result === 'fled') {
       combatState = null;
-      document.getElementById('combat-overlay').classList.remove('open');
+      const co = document.getElementById('combat-overlay');
+      co.classList.remove('open', 'boss-encounter');
       log(render(data.message));
       if (data.can_advance) log('<em>⚡ You feel something shift. A new stage awaits.</em>');
       refreshSidebar();
@@ -4696,7 +4745,7 @@ async function combatAction(action) {
       startLingerTimer(currentRoomFightable);
     } else if (data.result === 'death') {
       combatState = null;
-      document.getElementById('combat-overlay').classList.remove('open');
+      document.getElementById('combat-overlay').classList.remove('open', 'boss-encounter');
       log(render(data.message));
       const lookData = await GET('/api/look');
       renderRoom(lookData);
@@ -4947,7 +4996,7 @@ document.addEventListener('keydown', e => {
     closeBoard();
     closeBountyBoard();
     closeNoticeboard();
-    document.getElementById('combat-overlay').classList.remove('open');
+    document.getElementById('combat-overlay').classList.remove('open', 'boss-encounter');
   }
 });
 

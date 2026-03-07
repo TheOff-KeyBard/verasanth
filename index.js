@@ -42,6 +42,128 @@ const OLD_SEWER_LOCATIONS = new Set([
   "sewer_deep_threshold", "sewer_deep_vault", "sewer_deep_foundation"
 ]);
 
+// Phase 3: Roaming monsters — patrol routes use actual location IDs
+const ROAMER_DEFS = {
+  the_hollow_warden: {
+    enemy_id: "hollow_guard",
+    name: "The Hollow Warden",
+    start_room: "broken_pump_room",
+    patrol: ["broken_pump_room", "submerged_tunnel", "flooded_hall", "drowned_vault", "broken_pump_room"],
+    approach_cues: [
+      "*Armor scrapes against stone somewhere nearby. Getting closer.*",
+      "*A rhythmic clang echoes through the walls. Regular. Deliberate.*",
+      "*Something heavy is moving in the passage you just came from.*",
+    ],
+    arrival_cue: "*The Hollow Warden steps into the passage. It does not hurry.*",
+  },
+  the_cistern_thing: {
+    enemy_id: "sewer_horror",
+    name: "The Cistern Thing",
+    start_room: "drowned_vault",
+    patrol: ["drowned_vault", "ash_pillar_hall", "sump_pit", "ash_pillar_hall", "drowned_vault"],
+    approach_cues: [
+      "*The water in the drain shifts. Something large displaced it.*",
+      "*A deep vibration travels up through the stone under your feet.*",
+      "*You hear something breathing that has no rhythm you recognize.*",
+    ],
+    arrival_cue: "*Something rises from the dark at the far end of the chamber.*",
+  },
+};
+
+function getRoomNeighbors(locationId) {
+  const room = WORLD[locationId];
+  if (!room?.exits) return [];
+  return Object.values(room.exits);
+}
+
+// Phase 3: Environmental hazards — sewer_hazards table (sewer_conditions is for rotation)
+const HAZARD_DEFS = {
+  gas_pocket: {
+    label: "Sewer Gas",
+    rooms: ["broken_pump_room", "submerged_tunnel", "overflow_channel"],
+    damage: { min: 3, max: 8 },
+    cue_enter: "*The air here has a quality that makes your eyes water. Breathe shallow.*",
+    cue_damage: "*The gas burns your throat. You take {dmg} damage.*",
+    duration_ms: 8 * 60 * 1000,
+    spawn_chance: 0.3,
+  },
+  rising_water: {
+    label: "Rising Water",
+    rooms: ["flooded_hall", "overflow_channel", "submerged_tunnel"],
+    damage: { min: 2, max: 5 },
+    cue_enter: "*The water is higher than it should be. The current pulls at your legs.*",
+    cue_damage: "*The current knocks you against the wall. {dmg} damage.*",
+    encounter_bonus: 15,
+    duration_ms: 12 * 60 * 1000,
+    spawn_chance: 0.2,
+  },
+  fungal_bloom: {
+    label: "Fungal Bloom",
+    rooms: ["ash_pillar_hall", "sump_pit", "drowned_vault"],
+    damage: { min: 1, max: 4 },
+    cue_enter: "*The walls are thick with pale growth. The spores drift visibly in your torchlight.*",
+    cue_damage: "*Spores fill your lungs. {dmg} damage. Something in the bloom pulses.*",
+    encounter_bonus: 20,
+    duration_ms: 15 * 60 * 1000,
+    spawn_chance: 0.25,
+  },
+  collapse_risk: {
+    label: "Unstable Ceiling",
+    rooms: ["drowned_vault", "cathedral_floor", "vermin_nest"],
+    damage: { min: 5, max: 14 },
+    cue_enter: "*Dust falls from the ceiling in slow streams. The stone creaks overhead.*",
+    cue_damage: "*Stone falls. {dmg} damage. Move fast.*",
+    one_shot: true,
+    duration_ms: 20 * 60 * 1000,
+    spawn_chance: 0.15,
+  },
+};
+
+// Phase 3: Boss spawn conditions — earned, telegraphed
+const BOSS_DEFS = {
+  rat_king: {
+    enemy_id: "rat_king",
+    name: "The Rat King",
+    spawn_room: "vermin_nest",
+    conditions: { kills_in_location: { location: "vermin_nest", min: 3 } },
+    telegraph: [
+      "*The ash on the floor shifts. Everything in the den has gone still.*",
+      "*The clicking stops. Complete silence for the first time since you entered.*",
+      "*Something very large moves beneath the ash pile. It has been waiting.*",
+    ],
+    arrival: "*The ash erupts. The Rat King rises.*",
+    reward: { ash_marks: 350, item: "rat_king_musk", flag: "boss_rat_king_killed" },
+  },
+  the_warden_captain: {
+    enemy_id: "hollow_guard",
+    name: "The Warden Captain",
+    spawn_room: "broken_pump_room",
+    hp_override: 80,
+    conditions: { player_kills_total: { min: 10 }, depth_tier: { min: 2 } },
+    telegraph: [
+      "*The wall orders on the board rattle. The duty roster updates itself.*",
+      "*A voice — hollow, metallic — reads a name from the list. Your name is not on the list.*",
+      "*The shapes under the cloth on the sleeping platforms all sit up at once.*",
+    ],
+    arrival: "*The Warden Captain steps through the far door. It has been waiting for someone to report to.*",
+    reward: { ash_marks: 500, flag: "boss_warden_captain_killed" },
+  },
+  the_cistern_depth: {
+    enemy_id: "sewer_horror",
+    name: "The Depth",
+    spawn_room: "drowned_vault",
+    hp_override: 120,
+    conditions: { player_kills_total: { min: 20 }, depth_tier: { min: 3 }, hazard_active: { type: "rising_water" } },
+    telegraph: [
+      "*The cistern water begins to drain. Slowly. All at once.*",
+      "*The walkway trembles. Something is climbing the wall below you.*",
+      "*The echoes stop. The cistern has gone completely silent for the first time.*",
+    ],
+    arrival: "*The water level drops to nothing. Something enormous fills the space where it was.*",
+    reward: { ash_marks: 800, item: "custodian_core", flag: "boss_depth_killed" },
+  },
+};
+
 // Boss nodes: when combat starts here and player lacks flag, force this boss. On victory, set flag.
 const BOSS_NODES = {
   rusted_gate: { boss_id: "rat_king", flag: "boss_floor1" },
@@ -54,8 +176,8 @@ const BOSS_NODES = {
 function rollEncounter(location, modifiers = {}) {
   const base = ENCOUNTER_CHANCES[location] ?? 0;
   if (base === 0) return false;
-  const { woundedBonus = 0, lootBonus = 0, crimeHeatBonus = 0, postFightBonus = 0, scentBonus = 0, reputationBonus = 0 } = modifiers;
-  const total = base + woundedBonus + lootBonus + crimeHeatBonus + postFightBonus + scentBonus + reputationBonus;
+  const { woundedBonus = 0, lootBonus = 0, crimeHeatBonus = 0, postFightBonus = 0, scentBonus = 0, reputationBonus = 0, hazardBonus = 0 } = modifiers;
+  const total = base + woundedBonus + lootBonus + crimeHeatBonus + postFightBonus + scentBonus + reputationBonus + hazardBonus;
   return Math.random() * 100 < Math.min(total, 85);
 }
 
@@ -671,6 +793,35 @@ async function initDb(db) {
       data TEXT
     )`);
 
+    // Phase 3: Roaming monsters
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS roamers (
+      id TEXT PRIMARY KEY,
+      enemy_id TEXT NOT NULL,
+      location TEXT NOT NULL,
+      last_moved_at INTEGER DEFAULT 0,
+      active INTEGER DEFAULT 1
+    )`);
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS roamer_arrivals (
+      user_id INTEGER PRIMARY KEY REFERENCES players(user_id),
+      roamer_id TEXT NOT NULL
+    )`);
+
+    // Phase 3: Environmental hazards (sewer_conditions is for rotating conditions)
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS sewer_hazards (
+      location TEXT PRIMARY KEY,
+      hazard_type TEXT NOT NULL,
+      severity INTEGER DEFAULT 1,
+      expires_at INTEGER NOT NULL,
+      set_at INTEGER NOT NULL
+    )`);
+
+    // Phase 3: Boss telegraph state (stores boss_id string)
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS boss_telegraph_state (
+      user_id INTEGER PRIMARY KEY REFERENCES players(user_id),
+      boss_id TEXT NOT NULL,
+      tick INTEGER DEFAULT 1
+    )`);
+
     await dbRun(db, `CREATE TABLE IF NOT EXISTS quests (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -693,6 +844,16 @@ async function initDb(db) {
       await dbRun(db, `INSERT INTO sewer_conditions (condition_id, active, started_at, ends_at, data)
         VALUES (?, 1, ?, ?, ?)`,
         [cond.id, now, endsAt, JSON.stringify(cond)]);
+    }
+
+    // Phase 3: Seed roamers if empty
+    const roamerCount = await dbGet(db, "SELECT COUNT(*) as n FROM roamers");
+    if ((roamerCount?.n || 0) === 0) {
+      for (const [id, def] of Object.entries(ROAMER_DEFS)) {
+        await dbRun(db,
+          "INSERT OR IGNORE INTO roamers(id, enemy_id, location, last_moved_at, active) VALUES(?,?,?,?,1)",
+          [id, def.enemy_id, def.start_room, 0]);
+      }
     }
 
     // One-time migration: seed mercy_score/order_score from characters
@@ -764,6 +925,72 @@ async function getBlockedRoutes(db) {
   return cond?.effects?.route_blocked ?? [];
 }
 
+// Phase 3: Roamer tick — advance patrol, flag players in room
+async function tickRoamers(db) {
+  const roamers = await dbAll(db, "SELECT * FROM roamers WHERE active=1");
+  for (const roamer of roamers) {
+    const def = ROAMER_DEFS[roamer.id];
+    if (!def) continue;
+    const idx = def.patrol.indexOf(roamer.location);
+    const nextIdx = idx >= 0 ? (idx + 1) % def.patrol.length : 0;
+    const nextRoom = def.patrol[nextIdx];
+    await dbRun(db, "UPDATE roamers SET location=?, last_moved_at=? WHERE id=?", [nextRoom, Date.now(), roamer.id]);
+    const playersInRoom = await dbAll(db, "SELECT user_id FROM players WHERE location=?", [nextRoom]);
+    for (const p of playersInRoom) {
+      const inCombat = await dbGet(db, "SELECT 1 FROM combat_state WHERE user_id=?", [p.user_id]);
+      if (!inCombat) {
+        await dbRun(db, "INSERT OR REPLACE INTO roamer_arrivals(user_id, roamer_id) VALUES(?,?)", [p.user_id, roamer.id]);
+      }
+    }
+  }
+}
+
+// Phase 3: Hazard tick — expire old, spawn new
+async function tickHazards(db) {
+  const now = Date.now();
+  await dbRun(db, "DELETE FROM sewer_hazards WHERE expires_at < ?", [now]);
+  for (const [type, def] of Object.entries(HAZARD_DEFS)) {
+    if (Math.random() > def.spawn_chance) continue;
+    const room = def.rooms[Math.floor(Math.random() * def.rooms.length)];
+    const existing = await dbGet(db, "SELECT 1 FROM sewer_hazards WHERE location=? AND hazard_type=?", [room, type]);
+    if (existing) continue;
+    await dbRun(db,
+      "INSERT OR REPLACE INTO sewer_hazards(location, hazard_type, severity, expires_at, set_at) VALUES(?,?,?,?,?)",
+      [room, type, 1, now + def.duration_ms, now]);
+  }
+}
+
+// Phase 3: Boss condition checker
+async function checkBossConditions(db, uid, location) {
+  const telegraphRow = await dbGet(db, "SELECT boss_id FROM boss_telegraph_state WHERE user_id=?", [uid]);
+  if (telegraphRow) return null;
+  for (const [bossId, def] of Object.entries(BOSS_DEFS)) {
+    const flag = def.reward?.flag || `boss_${bossId}_killed`;
+    if (await getFlag(db, uid, flag, 0)) continue;
+    if (def.spawn_room !== location) continue;
+    const c = def.conditions || {};
+    let met = true;
+    if (c.kills_in_location) {
+      const kills = await getFlag(db, uid, `kills_in_${c.kills_in_location.location}`, 0);
+      if (kills < c.kills_in_location.min) met = false;
+    }
+    if (c.player_kills_total) {
+      const total = await getFlag(db, uid, "total_kills", 0);
+      if (total < c.player_kills_total.min) met = false;
+    }
+    if (c.depth_tier) {
+      const tier = await getFlag(db, uid, "depth_tier", 0);
+      if (tier < c.depth_tier.min) met = false;
+    }
+    if (c.hazard_active) {
+      const hazard = await dbGet(db, "SELECT 1 FROM sewer_hazards WHERE location=? AND hazard_type=?", [location, c.hazard_active.type]);
+      if (!hazard) met = false;
+    }
+    if (met) return { bossId, def };
+  }
+  return null;
+}
+
 // ─────────────────────────────────────────────────────────────
 // PASSWORD HASHING (simple SHA-256 — fine for this game)
 // ─────────────────────────────────────────────────────────────
@@ -788,7 +1015,11 @@ export default {
     const db = env.DB;
     if (!db) return;
     await initDb(db);
-    await rotateSewerCondition(db, dbGet, dbRun);
+    ctx.waitUntil(Promise.all([
+      rotateSewerCondition(db, dbGet, dbRun),
+      tickRoamers(db),
+      tickHazards(db),
+    ]));
   },
   async fetch(request, env) {
     // CORS preflight
@@ -1242,16 +1473,83 @@ if (path === "/api/admin/command" && method === "POST") {
         description += "\n\nSomething glints near the drain. Ash Marks — someone left them here quickly.";
       }
 
+      // Phase 3: Hazard in room (for renderHazardWarning)
+      let hazardInRoom = null;
+      const hazardRow = await dbGet(db, "SELECT hazard_type FROM sewer_hazards WHERE location=? AND expires_at>?", [loc, Date.now()]);
+      if (hazardRow) {
+        const def = HAZARD_DEFS[hazardRow.hazard_type];
+        if (def) hazardInRoom = { type: hazardRow.hazard_type, label: def.label };
+      }
+
+      // Phase 3: Roamer arrived — include encounter for frontend to trigger combat
+      let roamerEncounter = null;
+      const arrivedRow = await dbGet(db, "SELECT roamer_id FROM roamer_arrivals WHERE user_id=?", [uid]);
+      if (arrivedRow && !inCombat && FIGHTABLE_LOCATIONS.has(loc)) {
+        await dbRun(db, "DELETE FROM roamer_arrivals WHERE user_id=?", [uid]);
+        const def = ROAMER_DEFS[arrivedRow.roamer_id];
+        if (def) {
+          const enemy = COMBAT_DATA.enemies[def.enemy_id];
+          if (enemy) {
+            const hp = await getPlayerHp(db, uid, row);
+            const now = Date.now();
+            await dbRun(db, "UPDATE players SET last_encounter_at=? WHERE user_id=?", [now, uid]);
+            const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
+            let weaponDie = 6, armorReduction = 0, shieldBonus = 0;
+            for (const eq of eqRows) {
+              const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
+              const tier = Math.min(invRow?.tier ?? 1, 3);
+              if (eq.slot === "weapon") weaponDie = [6, 8, 10, 12][tier];
+              else if (eq.slot === "armor") armorReduction = [0, 2, 4, 6][tier];
+              else if (eq.slot === "shield") shieldBonus = 2;
+            }
+            const state = {
+              enemy_id: def.enemy_id,
+              enemy_name: def.name,
+              enemy_hp: enemy.hp,
+              enemy_hp_max: enemy.hp,
+              player_hp: hp.current,
+              player_hp_max: hp.max,
+              ability_used: false,
+              turn: 1,
+              round: 1,
+              location: loc,
+              weapon_die: weaponDie,
+              armor_reduction: armorReduction,
+              shield_bonus: shieldBonus,
+              enemy_staggered: false,
+              status_effects: [],
+              trait_state: {},
+              armor_break_effects: [],
+              auto_triggered: true,
+              roamer: true,
+            };
+            await dbRun(db,
+              "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
+              [uid, JSON.stringify(state)]);
+            roamerEncounter = {
+              triggered: true,
+              roamer: true,
+              cue: def.arrival_cue,
+              enemy_name: def.name,
+              enemy_desc: enemy.desc || "",
+              combat_state: state,
+            };
+          }
+        }
+      }
+
       const locPayload = {
         location: loc, name: room.name, description,
         exits, exit_map,
         objects: Object.keys(room.objects || {}),
         items: [],  // room items seeded statically for now
         npcs: npcsHere,
-        in_combat: inCombat,
+        in_combat: roamerEncounter ? true : inCombat,
         fightable: FIGHTABLE_LOCATIONS.has(loc),
         death_drops_present: deathDrops.length > 0,
       };
+      if (roamerEncounter) locPayload.encounter = roamerEncounter;
+      if (hazardInRoom) locPayload.hazard = hazardInRoom;
       if (room.pvpve) locPayload.pvpve = room.pvpve;
       return json(locPayload);
     }
@@ -1267,6 +1565,80 @@ if (path === "/api/admin/command" && method === "POST") {
       }
       const inCombat = await dbGet(db, "SELECT 1 FROM combat_state WHERE user_id=?", [uid]);
       if (inCombat) return err("You're in combat. Flee first.");
+
+      // Phase 3: Roamer arrived in current room — trigger combat before moving
+      const arrivedRow = await dbGet(db, "SELECT roamer_id FROM roamer_arrivals WHERE user_id=?", [uid]);
+      if (arrivedRow) {
+        await dbRun(db, "DELETE FROM roamer_arrivals WHERE user_id=?", [uid]);
+        const def = ROAMER_DEFS[arrivedRow.roamer_id];
+        if (def && FIGHTABLE_LOCATIONS.has(row.location)) {
+          const enemy = COMBAT_DATA.enemies[def.enemy_id];
+          if (enemy) {
+            const hp = await getPlayerHp(db, uid, row);
+            const now = Date.now();
+            await dbRun(db, "UPDATE players SET last_encounter_at=? WHERE user_id=?", [now, uid]);
+            const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
+            let weaponDie = 6, armorReduction = 0, shieldBonus = 0;
+            for (const eq of eqRows) {
+              const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
+              const tier = Math.min(invRow?.tier ?? 1, 3);
+              if (eq.slot === "weapon") weaponDie = [6, 8, 10, 12][tier];
+              else if (eq.slot === "armor") armorReduction = [0, 2, 4, 6][tier];
+              else if (eq.slot === "shield") shieldBonus = 2;
+            }
+            const state = {
+              enemy_id: def.enemy_id,
+              enemy_name: def.name,
+              enemy_hp: enemy.hp,
+              enemy_hp_max: enemy.hp,
+              player_hp: hp.current,
+              player_hp_max: hp.max,
+              ability_used: false,
+              turn: 1,
+              round: 1,
+              location: row.location,
+              weapon_die: weaponDie,
+              armor_reduction: armorReduction,
+              shield_bonus: shieldBonus,
+              enemy_staggered: false,
+              status_effects: [],
+              trait_state: {},
+              armor_break_effects: [],
+              auto_triggered: true,
+              roamer: true,
+            };
+            await dbRun(db,
+              "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
+              [uid, JSON.stringify(state)]);
+            const room = WORLD[row.location];
+            const destExits = Object.keys(room?.exits || {});
+            const destExitMap = { ...(room?.exits || {}) };
+            const npcsHere = Object.entries(NPC_LOCATIONS).filter(([, l]) => l === row.location).map(([id]) => id);
+            const deathDrops = await getUnclaimedDropsAtLocation(db, row.location);
+            return json({
+              location: row.location,
+              name: room?.name,
+              description: room?.description,
+              exits: destExits,
+              exit_map: destExitMap,
+              objects: Object.keys(room?.objects || {}),
+              items: [],
+              npcs: npcsHere,
+              ambient: null,
+              fightable: FIGHTABLE_LOCATIONS.has(row.location),
+              death_drops_present: deathDrops.length > 0,
+              encounter: {
+                triggered: true,
+                roamer: true,
+                cue: def.arrival_cue,
+                enemy_name: def.name,
+                enemy_desc: enemy.desc || "",
+                combat_state: state,
+              },
+            });
+          }
+        }
+      }
 
       const room = WORLD[row.location];
       let dest = room?.exits?.[direction];
@@ -1293,6 +1665,23 @@ if (path === "/api/admin/command" && method === "POST") {
         const r = Math.random();
         if (r < 0.1) ambient = "*A single bubble rises from the still water. The surface does not ripple.*";
         else if (r < 0.225) ambient = "*Something skitters just beyond your torchlight. The sound stops the moment you turn.*";
+      }
+
+      // Phase 3: Footstep cue — roamer in adjacent room
+      const neighbors = getRoomNeighbors(dest);
+      if (neighbors.length > 0) {
+        const placeholders = neighbors.map(() => "?").join(",");
+        const roamersNearby = await dbAll(db,
+          `SELECT * FROM roamers WHERE active=1 AND location IN (${placeholders})`,
+          neighbors);
+        if (roamersNearby.length > 0) {
+          const nearRoamer = roamersNearby[Math.floor(Math.random() * roamersNearby.length)];
+          const def = ROAMER_DEFS[nearRoamer.id];
+          if (def) {
+            const cue = def.approach_cues[Math.floor(Math.random() * def.approach_cues.length)];
+            ambient = ambient ? ambient + "\n\n" + cue : cue;
+          }
+        }
       }
 
       const destRoom = WORLD[dest];
@@ -1360,8 +1749,108 @@ if (path === "/api/admin/command" && method === "POST") {
         destDescription += "\n\nSomething glints near the drain. Ash Marks — someone left them here quickly.";
       }
 
-      // ── Dynamic encounter check ───────────────────────────────────
+      // Phase 3: Environmental hazard check
+      let hazardData = null;
+      let hazardEncounterBonus = 0;
+      const now = Date.now();
+      const activeHazard = await dbGet(db, "SELECT * FROM sewer_hazards WHERE location=? AND expires_at>?", [dest, now]);
+      if (activeHazard) {
+        const def = HAZARD_DEFS[activeHazard.hazard_type];
+        if (def) {
+          const dmg = Math.floor(Math.random() * (def.damage.max - def.damage.min + 1)) + def.damage.min;
+          const hp = await getPlayerHp(db, uid, row);
+          const newHp = Math.max(0, hp.current - dmg);
+          await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [newHp, uid]);
+          if (def.one_shot) {
+            await dbRun(db, "DELETE FROM sewer_hazards WHERE location=? AND hazard_type=?", [dest, activeHazard.hazard_type]);
+          }
+          hazardData = {
+            type: activeHazard.hazard_type,
+            label: def.label,
+            cue_enter: def.cue_enter,
+            cue_damage: def.cue_damage.replace("{dmg}", String(dmg)),
+            damage: dmg,
+            player_hp: newHp,
+            player_hp_max: hp.max,
+          };
+          if (def.encounter_bonus) hazardEncounterBonus = def.encounter_bonus;
+        }
+      }
+
+      // Phase 3: Boss telegraph check — before normal encounter
       let encounterData = null;
+      const telegraphRow = await dbGet(db, "SELECT boss_id, tick FROM boss_telegraph_state WHERE user_id=?", [uid]);
+      if (telegraphRow) {
+        const def = BOSS_DEFS[telegraphRow.boss_id];
+        if (def && def.spawn_room === dest) {
+          const telegraphTick = (telegraphRow.tick || 1) + 1;
+          if (telegraphTick >= def.telegraph.length) {
+            await dbRun(db, "DELETE FROM boss_telegraph_state WHERE user_id=?", [uid]);
+            const baseEnemy = COMBAT_DATA.enemies[def.enemy_id];
+            const enemy = baseEnemy ? { ...baseEnemy, hp: def.hp_override ?? baseEnemy.hp } : null;
+            if (enemy) {
+              const hp = await getPlayerHp(db, uid, row);
+              const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
+              let weaponDie = 6, armorReduction = 0, shieldBonus = 0;
+              for (const eq of eqRows) {
+                const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
+                const tier = Math.min(invRow?.tier ?? 1, 3);
+                if (eq.slot === "weapon") weaponDie = [6, 8, 10, 12][tier];
+                else if (eq.slot === "armor") armorReduction = [0, 2, 4, 6][tier];
+                else if (eq.slot === "shield") shieldBonus = 2;
+              }
+              const state = {
+                enemy_id: def.enemy_id,
+                enemy_name: def.name,
+                enemy_hp: enemy.hp,
+                enemy_hp_max: enemy.hp,
+                player_hp: hp.current,
+                player_hp_max: hp.max,
+                ability_used: false,
+                turn: 1,
+                round: 1,
+                location: dest,
+                weapon_die: weaponDie,
+                armor_reduction: armorReduction,
+                shield_bonus: shieldBonus,
+                enemy_staggered: false,
+                status_effects: [],
+                trait_state: {},
+                armor_break_effects: [],
+                auto_triggered: true,
+                boss: true,
+                boss_id: telegraphRow.boss_id,
+                boss_reward: def.reward,
+              };
+              await dbRun(db,
+                "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
+                [uid, JSON.stringify(state)]);
+              encounterData = {
+                triggered: true,
+                boss: true,
+                cue: def.arrival,
+                enemy_name: def.name,
+                enemy_desc: "",
+                combat_state: state,
+              };
+            }
+          } else {
+            await dbRun(db, "UPDATE boss_telegraph_state SET tick=? WHERE user_id=?", [telegraphTick, uid]);
+            ambient = (ambient ? ambient + "\n\n" : "") + def.telegraph[telegraphTick - 1];
+          }
+        }
+      }
+
+      // Phase 3: Check for new boss conditions if no telegraph active
+      if (!telegraphRow) {
+        const bossMatch = await checkBossConditions(db, uid, dest);
+        if (bossMatch) {
+          await dbRun(db, "INSERT OR REPLACE INTO boss_telegraph_state(user_id, boss_id, tick) VALUES(?,?,1)", [uid, bossMatch.bossId]);
+          ambient = (ambient ? ambient + "\n\n" : "") + bossMatch.def.telegraph[0];
+        }
+      }
+
+      // ── Dynamic encounter check ───────────────────────────────────
       const predRow = await dbGet(db, "SELECT predator_id, predator_ticks FROM predator_tracking WHERE user_id=?", [uid]);
       if (predRow) {
         if (FIGHTABLE_LOCATIONS.has(dest)) {
@@ -1509,6 +1998,7 @@ if (path === "/api/admin/command" && method === "POST") {
             postFightBonus,
             scentBonus,
             reputationBonus,
+            hazardBonus: hazardEncounterBonus,
           });
 
           if (triggered) {
@@ -1594,6 +2084,7 @@ if (path === "/api/admin/command" && method === "POST") {
         death_drops_present: deathDrops.length > 0,
         encounter: encounterData,
       };
+      if (hazardData) movePayload.hazard = hazardData;
       if (destRoom.pvpve) movePayload.pvpve = destRoom.pvpve;
       if (pvpveWarning) movePayload.pvpve_warning = pvpveWarning;
       return json(movePayload);
@@ -2214,6 +2705,13 @@ if (path === "/api/admin/command" && method === "POST") {
       return json({ notices: combined });
     }
 
+    // ── GET: Conditions (Phase 3 — hazards + roamers for noticeboard/world state) ──
+    if (path === "/api/conditions" && method === "GET") {
+      const conditions = await dbAll(db, "SELECT location, hazard_type, severity, expires_at FROM sewer_hazards WHERE expires_at > ?", [Date.now()]);
+      const roamers = await dbAll(db, "SELECT id, enemy_id, location FROM roamers WHERE active=1");
+      return json({ conditions, roamers });
+    }
+
     // ── POST: Post to noticeboard ──
     if (path === "/api/chat/noticeboard" && method === "POST") {
       const body = await request.json().catch(() => ({}));
@@ -2543,6 +3041,17 @@ if (path === "/api/combat/state" && method === "GET") {
         await recordEnemyKill(db, dbAll, dbRun, uid, state.enemy_id);
         await setFlag(db, uid, "post_fight_noise", 1);
 
+        // Phase 3: Kill tracking for boss spawn conditions
+        const killsInLoc = await getFlag(db, uid, `kills_in_${victoryLoc}`, 0);
+        await setFlag(db, uid, `kills_in_${victoryLoc}`, killsInLoc + 1);
+        const totalKills = await getFlag(db, uid, "total_kills", 0);
+        await setFlag(db, uid, "total_kills", totalKills + 1);
+        const locTier = SEWER_LEVEL_5.includes(victoryLoc) ? 3 : SEWER_LEVEL_4.includes(victoryLoc) || SEWER_LEVEL_3.includes(victoryLoc) ? 2 : SEWER_LEVEL_1.includes(victoryLoc) || SEWER_LEVEL_2.includes(victoryLoc) ? 1 : 0;
+        if (locTier > 0) {
+          const curTier = await getFlag(db, uid, "depth_tier", 0);
+          if (locTier > curTier) await setFlag(db, uid, "depth_tier", locTier);
+        }
+
         const xpGain = enemy.xp || 50;
         const xpRow  = await dbGet(db, "SELECT xp,class_stage FROM characters WHERE user_id=?", [uid]);
         const newXp  = (xpRow.xp || 0) + xpGain;
@@ -2550,7 +3059,23 @@ if (path === "/api/combat/state" && method === "GET") {
         const canAdvance = newXp >= [0,500,1500,3500,7500,15000][(xpRow.class_stage||0)+1];
 
         // Loot — simple cash drop
-        const lootAsh = Math.floor(Math.random() * 15) + 5;
+        let lootAsh = Math.floor(Math.random() * 15) + 5;
+        let bossRewardLine = "";
+
+        // Phase 3: Boss reward (telegraphed boss from BOSS_DEFS)
+        if (state.boss && state.boss_reward) {
+          const reward = state.boss_reward;
+          if (reward.ash_marks) {
+            lootAsh += reward.ash_marks;
+          }
+          if (reward.item) {
+            await addItemToInventory(db, uid, reward.item, 1);
+            const itemName = ITEM_DATA[reward.item]?.name || reward.item;
+            bossRewardLine = ` | **${itemName}** (boss)`;
+          }
+          if (reward.flag) await setFlag(db, uid, reward.flag, 1);
+        }
+
         await dbRun(db, "UPDATE characters SET ash_marks=ash_marks+? WHERE user_id=?", [lootAsh, uid]);
 
         // Loot — floor-specific from sewer_loot, or procedural fallback
@@ -2601,7 +3126,7 @@ if (path === "/api/combat/state" && method === "GET") {
         const itemLine = itemLines.length ? ` | **${itemLines.join("**, **")}**` : "";
         let victoryMsg = `*${enemy.name} falls.*\n\n${attack.narrative}${fallRiskMsg ? fallRiskMsg : ""}`;
         if (sporeBurstEnemies.includes(state.enemy_id)) victoryMsg += `\n\n*It bursts — spores fill your lungs. **4** damage.*`;
-        victoryMsg += `\n\n**+${xpGain} XP** | **+${lootAsh} Ash Marks**${itemLine}`;
+        victoryMsg += `\n\n**+${xpGain} XP** | **+${lootAsh} Ash Marks**${bossRewardLine || ""}${itemLine}`;
         return json({
           result: "victory",
           message: victoryMsg,
