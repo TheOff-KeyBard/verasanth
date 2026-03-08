@@ -2611,9 +2611,25 @@ if (path === "/api/admin/command" && method === "POST") {
         serisArc3CompleteWarden = await getFlag(db, uid, "seris_arc3_complete");
       }
       const hp = await getPlayerHp(db, uid, row);
+      const guildStandingVaelith = await getFlag(db, uid, "guild_standing_vaelith") || 0;
+      const guildStandingGarruk = await getFlag(db, uid, "guild_standing_garruk") || 0;
+      const guildStandingHalden = await getFlag(db, uid, "guild_standing_halden") || 0;
+      const guildStandingLirael = await getFlag(db, uid, "guild_standing_lirael") || 0;
+      const guildStandingSerix = await getFlag(db, uid, "guild_standing_serix") || 0;
+      const guildStandingRhyla = await getFlag(db, uid, "guild_standing_rhyla") || 0;
 
       const playerContext = {
         items_sold: itemsSold, deaths, morality, depth_tier: depthTier,
+        instinct: row.instinct || null,
+        has_corruption: !!(await getFlag(db, uid, "has_corruption")),
+        guild_standing: {
+          vaelith: guildStandingVaelith,
+          garruk: guildStandingGarruk,
+          halden: guildStandingHalden,
+          lirael: guildStandingLirael,
+          serix: guildStandingSerix,
+          rhyla: guildStandingRhyla,
+        },
         alignment: morality >= 40 ? "light" : morality <= -40 ? "dark" : "neutral",
         archetype: row.archetype ?? "Survivor",
         mercy_score: row.alignment_morality ?? row.mercy_score ?? 0,

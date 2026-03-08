@@ -5,6 +5,12 @@ export const BOARD_NPC_REACTIONS = {
   herbalist:   "\"It posts what it needs to. Or what the city needs. Hard to tell the difference.\"",
   curator:     "\"The board and I have an understanding. It posts. I read.\"",
   othorion:    "\"The board reflects the city's stated concerns. I track what the city hasn't named yet.\"",
+  vaelith:     "\"The board posts what the city wants found. And what it has not yet decided to forget.\"",
+  garruk:      "\"Read it. Then decide if it's worth the risk.\"",
+  halden:      "\"Some of those notices are older than the city admits. The ink does not fade here.\"",
+  lirael:      "\"I read it before the ink dries. It helps.\"",
+  serix:       "\"The board and the city share an understanding. So do I.\"",
+  rhyla:       "\"We post our own notices. The board posts others. I watch both.\"",
 };
 
 export function boardNPCReaction(npcId) {

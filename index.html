@@ -4776,7 +4776,7 @@ function renderRoom(data) {
   document.getElementById('footer-loc').textContent = locationText;
   document.getElementById('header-sub').textContent = locationText;
 
-  const DIRECTION_ARROWS = { north: '↑', south: '↓', east: '→', west: '←', up: '↑', down: '↓', deeper: '↓', back: '←', out: '→', southeast: '↘' };
+  const DIRECTION_ARROWS = { north: '↑', south: '↓', east: '→', west: '←', up: '↑', down: '↓', deeper: '↓', back: '←', out: '→', southeast: '↘', northwest: '↖', in: '→' };
   const exits = data.exits || [];
   const exitMap = data.exit_map || {};
 
