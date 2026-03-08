@@ -19,14 +19,15 @@ import { PIP_REACTIONS } from "./data/npc_dialogue_lines.js";
 import { statMod, rollDie, maxPlayerHp, randomEnemy, resolvePlayerAction, resolveEnemyAttack, tickStatusEffects, tickStatuses, resolveEnemyTrait, getTraitDamageModifier, getStatusEffectOnHit, getTraitOnHitEffect, INSTINCT_DEFS } from "./services/combat.js";
 import { generateItem } from "./services/item_generator.js";
 import { getCombatLoot, ROOM_LOOT } from "./data/sewer_loot.js";
-import { rollLoot, ITEM_DATA } from "./data/items.js";
+import { rollLoot, ITEM_DATA, getEffectSummary } from "./data/items.js";
 import { SEWER_CONDITIONS } from "./data/sewer_conditions.js";
 import { getRelationship, setRelationship, getPartyMembers, triggerBetrayalCascade } from "./services/pvp.js";
 import { handleQuestDialogue, recordEnemyKill, checkQuestProgressForItem, assignNextQuestIfAvailable } from "./services/quests.js";
 import { QUEST_BY_ID } from "./data/quests.js";
 import { rotateSewerCondition } from "./services/sewer_rotation.js";
-import { LEGACY_SLOT_MAP, EQUIPMENT_SLOTS, EQUIPMENT_DATA } from "./data/equipment.js";
-import { getEquipmentSlot, resolveLegacySlot, isValidEquipmentSlot, canEquipItem, equipItem, unequipItem, getEquippedItemMap } from "./services/equipment.js";
+import { LEGACY_SLOT_MAP, EQUIPMENT_SLOTS, EQUIPMENT_DATA, INSTINCT_AFFINITIES } from "./data/equipment.js";
+import { getEquipmentSlot, resolveLegacySlot, isValidEquipmentSlot, canEquipItem, equipItem, unequipItem, getEquippedItemMap, getAffinityHint } from "./services/equipment.js";
+import { aggregateEquipmentStats, applyInstinctAffinities } from "./services/equipment_stats.js";
 
 // ─────────────────────────────────────────────────────────────
 // GAME DATA (remaining in index)
@@ -432,6 +433,45 @@ async function getPlayerHp(db, uid, row) {
   // (e.g. won a fight on 1 HP, took hazard damage, etc.)
   const cur = (row && row.current_hp != null) ? row.current_hp : maxHp;
   return { current: cur, max: maxHp };
+}
+
+// Consumable effect application (item use)
+async function applyConsumableEffect(db, dbRun, dbGet, uid, effect, combatState) {
+  const result = {
+    message: effect.message,
+    hp_change: 0,
+    buff: null,
+    status_removed: null,
+    enemy_damage: 0,
+  };
+  const row = await dbGet(db, "SELECT constitution, current_hp FROM characters WHERE user_id=?", [uid]);
+  const hp = await getPlayerHp(db, uid, row);
+
+  if (effect.type === "heal") {
+    const newHp = Math.min(hp.max, hp.current + effect.value);
+    await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [newHp, uid]);
+    result.hp_change = newHp - hp.current;
+  }
+
+  if (effect.type === "buff") {
+    result.buff = {
+      stat: effect.stat,
+      value: effect.value,
+      turns_remaining: effect.duration_turns,
+      source: "consumable",
+    };
+  }
+
+  if (effect.type === "utility" && effect.removes_status) {
+    result.status_removed = effect.removes_status;
+    if (combatState?.statuses) delete combatState.statuses[effect.removes_status];
+  }
+
+  if (effect.type === "damage") {
+    result.enemy_damage = effect.value;
+  }
+
+  return result;
 }
 
 // Death penalty: 20% Ash Marks drop, min 1 if any
@@ -1549,6 +1589,7 @@ if (path === "/api/admin/command" && method === "POST") {
               status_effects: [],
               trait_state: {},
               armor_break_effects: [],
+              active_buffs: [],
               auto_triggered: true,
               roamer: true,
             };
@@ -1633,6 +1674,7 @@ if (path === "/api/admin/command" && method === "POST") {
               status_effects: [],
               trait_state: {},
               armor_break_effects: [],
+              active_buffs: [],
               auto_triggered: true,
               roamer: true,
             };
@@ -1846,6 +1888,7 @@ if (path === "/api/admin/command" && method === "POST") {
                 status_effects: [],
                 trait_state: {},
                 armor_break_effects: [],
+                active_buffs: [],
                 auto_triggered: true,
                 boss: true,
                 boss_id: telegraphRow.boss_id,
@@ -1919,6 +1962,7 @@ if (path === "/api/admin/command" && method === "POST") {
                 status_effects: [],
                 trait_state: {},
                 armor_break_effects: [],
+                active_buffs: [],
                 auto_triggered: true,
               };
               await dbRun(db,
@@ -2184,6 +2228,7 @@ if (path === "/api/admin/command" && method === "POST") {
         status_effects: [],
         trait_state: {},
         armor_break_effects: [],
+        active_buffs: [],
         auto_triggered: true,
       };
       await dbRun(db,
@@ -2539,7 +2584,11 @@ if (path === "/api/admin/command" && method === "POST") {
 
     // ── GET: Map discovered locations (persisted; survives death/refresh) ──
     if (path === "/api/map/discovered" && method === "GET") {
-      const rows = await dbAll(db, "SELECT flag FROM player_flags WHERE user_id=? AND (flag LIKE 'visited_%' OR flag='has_seen_market_square')", [uid]);
+      // #region agent log
+      const _rows = await dbAll(db, "SELECT flag FROM player_flags WHERE user_id=? AND (flag LIKE 'visited_%' OR flag='has_seen_market_square')", [uid]);
+      fetch('http://127.0.0.1:7611/ingest/b76c038c-517a-4b96-b04d-519ffd35bf60',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1e9205'},body:JSON.stringify({sessionId:'1e9205',location:'index.js:map/discovered',message:'DB query result',data:{uid,rowCount:_rows?.length,flags:_rows?.map(r=>r.flag).slice(0,15)},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+      const rows = _rows;
+      // #endregion
       const discovered = new Set();
       for (const r of rows) {
         if (r.flag === "has_seen_market_square") discovered.add("market_square");
@@ -2900,7 +2949,7 @@ if (path === "/api/combat/state" && method === "GET") {
         ability_cooldown: 0, statuses: {}, enemy_statuses: {}, fade_used: false, hearth_healed: false, turn: 1, round: 1, location: row.location,
         weapon_die: weaponDie, armor_reduction: armorReduction, shield_bonus: shieldBonus,
         enemy_staggered: false, status_effects: [], trait_state: {},
-        armor_break_effects: [],
+        armor_break_effects: [], active_buffs: [],
       };
       await dbRun(db, "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
         [uid, JSON.stringify(state)]);
@@ -2937,6 +2986,7 @@ if (path === "/api/combat/state" && method === "GET") {
       if (action === "ability" && (state.ability_cooldown ?? 0) > 0) return err(`Ability recharging — ${state.ability_cooldown} turn${state.ability_cooldown !== 1 ? 's' : ''} remaining.`);
 
       const useAbility = action === "ability";
+      const usePass = action === "pass";  // Used after item use — skip player action, run enemy turn
 
       // Ensure new state fields exist (backwards compat)
       state.status_effects = state.status_effects ?? [];
@@ -2947,6 +2997,23 @@ if (path === "/api/combat/state" && method === "GET") {
       state.fade_used = state.fade_used ?? false;
       state.hearth_healed = state.hearth_healed ?? false;
       state.round = state.round ?? state.turn ?? 1;
+      state.active_buffs = state.active_buffs ?? [];
+
+      // Decay active buffs at turn start
+      if (state.active_buffs?.length) {
+        state.active_buffs = state.active_buffs
+          .map((b) => ({ ...b, turns_remaining: (b.turns_remaining ?? 1) - 1 }))
+          .filter((b) => (b.turns_remaining ?? 0) > 0);
+      }
+
+      // Equipment stat bonuses (add ON TOP of tier values)
+      const equippedItemMap = await getEquippedItemMap(db, dbAll, uid);
+      const baseEquipStats = aggregateEquipmentStats(equippedItemMap);
+      const equippedStats = applyInstinctAffinities(baseEquipStats, equippedItemMap, instinct);
+      const activeBonuses = {};
+      for (const buff of (state.active_buffs || [])) {
+        activeBonuses[buff.stat] = (activeBonuses[buff.stat] || 0) + (buff.value ?? 0);
+      }
 
       // 1. Tick status effects (bleed/poison/fire_touch)
       const statusDmg = tickStatusEffects(state);
@@ -2958,10 +3025,25 @@ if (path === "/api/combat/state" && method === "GET") {
         .filter((e) => e.duration > 0);
 
       const armorBreakReduction = state.armor_break_effects.reduce((s, e) => s + (e.defense_reduction ?? 0), 0);
-      const effectiveArmor = Math.max(0, (state.armor_reduction ?? 0) - armorBreakReduction);
+      const baseTierArmor = Math.max(0, (state.armor_reduction ?? 0) - armorBreakReduction);
+      const equipDefense = (equippedStats.defense || 0) + (activeBonuses.defense || 0);
+      const effectiveArmor = baseTierArmor + equipDefense;
 
-      // 3. Resolve player action
-      const attack = resolvePlayerAction(stats, enemy, useAbility, instinct, state);
+      // 3. Resolve player action (pass = no action, e.g. after item use)
+      const attack = usePass
+        ? { dmg: 0, heal: 0, skip_retaliation: false }
+        : resolvePlayerAction(stats, enemy, useAbility, instinct, state);
+
+      // Add equipment + buff attack bonus (melee_power or spell_power for wand/staff)
+      if (!attack.heal && attack.dmg != null && attack.dmg > 0) {
+        const weaponMainId = equippedItemMap?.weapon_main;
+        const weaponDef = weaponMainId ? EQUIPMENT_DATA[weaponMainId] : null;
+        const isSpellWeapon = weaponDef && ["wand", "staff"].includes(weaponDef.sub_type || "");
+        const atkBonus = isSpellWeapon
+          ? ((equippedStats.spell_power || 0) + (activeBonuses.spell_power || 0))
+          : ((equippedStats.melee_power || 0) + (activeBonuses.melee_power || 0));
+        attack.dmg = (attack.dmg || 0) + atkBonus;
+      }
 
       if (attack.fade_triggered) state.fade_used = true;
       if (attack.stealth_consumed) delete state.statuses.stealth;
@@ -2997,6 +3079,7 @@ if (path === "/api/combat/state" && method === "GET") {
       let enemyDmg = 0;
       let enemyHit = false;
       let enemySkippedStagger = false;
+      let dodged = false;
       const skipRetaliation = attack.skip_retaliation ?? attack.skipRetaliation ?? false;
       const staggered = (state.enemy_statuses?.staggered ?? 0) > 0;
 
@@ -3017,13 +3100,27 @@ if (path === "/api/combat/state" && method === "GET") {
               hit: traitResult.replacementAttack.hit,
             };
           } else {
-            attackResult = resolveEnemyAttack(enemy, stats, state.statuses, state.enemy_statuses, state.shield_bonus ?? 0);
+            const offhandId = equippedItemMap?.weapon_offhand;
+            const offhandDef = offhandId ? EQUIPMENT_DATA[offhandId] : null;
+            const isShield = offhandDef && ["shield", "buckler"].includes(offhandDef.sub_type || "");
+            const effectiveShieldBonus = isShield
+              ? ((state.shield_bonus ?? 0) + (equippedStats.block_value || 0))
+              : (state.shield_bonus ?? 0);
+            attackResult = resolveEnemyAttack(enemy, stats, state.statuses, state.enemy_statuses, effectiveShieldBonus);
           }
           enemyDmg = attackResult.dmg ?? 0;
           enemyHit = attackResult.hit ?? false;
 
           enemyDmg = Math.floor(enemyDmg * (attack.damageReduction ? 1 - attack.damageReduction : 1));
           enemyDmg = Math.max(0, enemyDmg - effectiveArmor);
+
+          // Dodge check
+          const dodgeChance = (equippedStats.dodge || 0) + (activeBonuses.dodge || 0);
+          dodged = dodgeChance > 0 && Math.random() * 100 < dodgeChance;
+          if (dodged && enemyHit) {
+            enemyDmg = 0;
+            enemyHit = false;
+          }
 
           if (instinct === "warden" && playerHp < state.player_hp_max * 0.5) enemyDmg = Math.max(0, enemyDmg - 1);
 
@@ -3083,7 +3180,7 @@ if (path === "/api/combat/state" && method === "GET") {
             await dbRun(db, "UPDATE combat_state SET state_json=? WHERE user_id=?", [JSON.stringify(state), uid]);
             await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [playerHp, uid]);
             const summonMsg = `*The Rat King falls — but something else rises from the ash.*\n\n*${minion.name} emerges.*`;
-            return json({ result: "ongoing", message: summonMsg, player_hp: playerHp, enemy_hp: state.enemy_hp, enemy_hp_max: state.enemy_hp_max, ability_cooldown: state.ability_cooldown ?? 0, statuses: state.statuses ?? {}, enemy_statuses: state.enemy_statuses ?? {} });
+            return json({ result: "ongoing", message: summonMsg, player_hp: playerHp, enemy_hp: state.enemy_hp, enemy_hp_max: state.enemy_hp_max, ability_cooldown: state.ability_cooldown ?? 0, statuses: state.statuses ?? {}, enemy_statuses: state.enemy_statuses ?? {}, active_buffs: state.active_buffs ?? [] });
           }
         }
 
@@ -3246,9 +3343,17 @@ if (path === "/api/combat/state" && method === "GET") {
       await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [playerHp, uid]);
 
       let msg = attack.narrative;
+      if (equippedStats.dual_wield && !attack.heal && (attack.dmg ?? 0) > 0) {
+        const offhandId = equippedItemMap?.weapon_offhand;
+        const offhandDef = offhandId ? EQUIPMENT_DATA[offhandId] : null;
+        const offhandPower = offhandDef?.stat_modifiers?.melee_power || 0;
+        const offhandBonus = Math.floor(offhandPower / 2);
+        if (offhandBonus > 0) msg += ` Your offhand strikes for ${offhandBonus} additional damage.`;
+      }
       if (statusDmg > 0) msg += `\n\n*Bleed/poison/fire — ${statusDmg} damage.*`;
       if (state.summoned_minion) msg += `\n\n*${enemy.name} summons something from the ash. A Gutter Rat emerges.*`;
       else if (enemySkippedStagger) msg += `\n\n*${enemy.name} staggers — it loses its turn.*`;
+      else if (dodged) msg += `\n\n*You sidestep the attack.*`;
       else msg += `\n\n*${enemy.name} retaliates — ${enemyDmg > 0 ? `${enemyDmg} damage.` : "misses."}*`;
       if (fallRiskMsg) msg += fallRiskMsg;
 
@@ -3259,6 +3364,7 @@ if (path === "/api/combat/state" && method === "GET") {
         enemy_hp_max: state.enemy_hp_max,
         ability_cooldown: state.ability_cooldown ?? 0,
         statuses: state.statuses ?? {},
+        active_buffs: state.active_buffs ?? [],
         enemy_statuses: state.enemy_statuses ?? {},
       });
     }
@@ -3490,6 +3596,8 @@ if (path === "/api/combat/state" && method === "GET") {
       }
       const equipment = await getEquippedItemMap(db, dbAll, uid);
       const equipmentMap = new Set(Object.values(equipment).filter(Boolean));
+      const charRow = await dbGet(db, "SELECT instinct FROM characters WHERE user_id=?", [uid]);
+      const instinct = (charRow?.instinct || "").toLowerCase();
       const items = rows.map(r => {
         const label = r.display_name || r.item;
         return r.qty === 1 ? label : `${label} x${r.qty}`;
@@ -3497,6 +3605,10 @@ if (path === "/api/combat/state" && method === "GET") {
       const itemDetails = rows.map(r => {
         const slot = getEquipmentSlot(r.item) ?? resolveLegacySlot(getItemSlot(r.item, r.display_name)) ?? null;
         const equipped = !!(r.equipped || equipmentMap.has(r.item));
+        const itemDef = ITEM_DATA[r.item];
+        const effect = itemDef?.effect;
+        const eqDef = EQUIPMENT_DATA[r.item];
+        const affinity = slot && instinct && eqDef ? getAffinityHint(eqDef, instinct) : null;
         return {
           id: r.item,
           display_name: r.display_name || r.item,
@@ -3504,9 +3616,71 @@ if (path === "/api/combat/state" && method === "GET") {
           tier: r.tier ?? 1,
           slot: slot ?? null,
           equipped,
+          item_type: itemDef?.item_type ?? "loot",
+          effect_summary: getEffectSummary(r.item, itemDef),
+          in_combat: effect?.in_combat ?? false,
+          out_of_combat: effect?.out_of_combat ?? true,
+          value_am: itemDef?.value ?? 0,
+          affinity_marker: affinity?.marker ?? null,
+          affinity_tooltip: affinity?.tooltip ?? null,
         };
       });
-      return json({ items, itemDetails, equipment });
+      const offhandLocked = !!(await getFlag(db, uid, "offhand_locked", 0));
+      const baseStats = aggregateEquipmentStats(equipment);
+      return json({ items, itemDetails, equipment, offhand_locked: offhandLocked, dual_wield: !!baseStats.dual_wield });
+    }
+
+    // ── POST: Item Use (consumables) ──
+    if (path === "/api/item/use" && method === "POST") {
+      const { item_id } = body;
+      if (!item_id) return err("Missing item_id.", 400);
+      const itemDef = ITEM_DATA[item_id];
+      if (!itemDef || itemDef.item_type !== "consumable" || !itemDef.effect) return err("That item cannot be used.", 400);
+      const invRow = await dbGet(db, "SELECT item,qty FROM inventory WHERE user_id=? AND item=?", [uid, item_id]);
+      if (!invRow || invRow.qty < 1) return err("You don't have that item.", 404);
+      const effect = itemDef.effect;
+
+      const csRow = await dbGet(db, "SELECT state_json FROM combat_state WHERE user_id=?", [uid]);
+      const inCombat = !!csRow;
+      let combatState = csRow ? JSON.parse(csRow.state_json) : null;
+
+      if (inCombat && !effect.in_combat) return err("Can't use that during combat.", 400);
+      if (!inCombat && !effect.out_of_combat) return err("That only works in combat.", 400);
+
+      const applyResult = await applyConsumableEffect(db, dbRun, dbGet, uid, effect, combatState);
+
+      if (applyResult.buff && combatState) {
+        combatState.active_buffs = combatState.active_buffs ?? [];
+        combatState.active_buffs.push(applyResult.buff);
+        await dbRun(db, "UPDATE combat_state SET state_json=? WHERE user_id=?", [JSON.stringify(combatState), uid]);
+      }
+
+      if (applyResult.enemy_damage > 0 && combatState) {
+        combatState.enemy_hp = Math.max(0, (combatState.enemy_hp ?? 0) - applyResult.enemy_damage);
+        await dbRun(db, "UPDATE combat_state SET state_json=? WHERE user_id=?", [JSON.stringify(combatState), uid]);
+      }
+
+      if (invRow.qty <= 1) {
+        await dbRun(db, "DELETE FROM inventory WHERE user_id=? AND item=?", [uid, item_id]);
+      } else {
+        await dbRun(db, "UPDATE inventory SET qty=qty-1 WHERE user_id=? AND item=?", [uid, item_id]);
+      }
+
+      const hpRow = await dbGet(db, "SELECT constitution, current_hp FROM characters WHERE user_id=?", [uid]);
+      const hp = await getPlayerHp(db, uid, hpRow);
+
+      let resultStatus = "ok";
+      if (combatState && combatState.enemy_hp <= 0) resultStatus = "victory";
+
+      return json({
+        success: true,
+        message: applyResult.message,
+        player_hp: hp.current,
+        player_hp_max: hp.max,
+        active_buffs: combatState?.active_buffs ?? [],
+        enemy_hp: combatState?.enemy_hp ?? null,
+        result: resultStatus,
+      });
     }
 
     // ── GET: Quests (active and recent) ──
@@ -3569,9 +3743,9 @@ if (path === "/api/combat/state" && method === "GET") {
       const resolvedSlot = resolveLegacySlot(targetSlot) || targetSlot;
       if (!isValidEquipmentSlot(resolvedSlot)) return err("Invalid slot.", 400);
       const row = await getPlayerSheet(db, uid);
-      const check = canEquipItem(row, itemDef || { slot: itemSlot }, resolvedSlot);
+      const check = await canEquipItem(row, itemDef || { slot: itemSlot }, resolvedSlot, { db, uid, getFlag });
       if (!check.ok) return err(check.message || "Cannot equip.", 400);
-      const result = await equipItem(db, dbRun, dbGet, uid, itemId, resolvedSlot);
+      const result = await equipItem(db, dbRun, dbGet, uid, itemId, resolvedSlot, { getFlag, setFlag });
       return json({ ok: true, slot: result.slot, item: itemId });
     }
 
@@ -3581,7 +3755,7 @@ if (path === "/api/combat/state" && method === "GET") {
       if (!slot) return err("Missing slot.", 400);
       const targetSlot = resolveLegacySlot(slot) || slot;
       if (!isValidEquipmentSlot(targetSlot)) return err("Invalid slot.", 400);
-      await unequipItem(db, dbRun, dbGet, uid, targetSlot);
+      await unequipItem(db, dbRun, dbGet, uid, targetSlot, { getFlag, setFlag });
       return json({ ok: true, slot: targetSlot });
     }
 

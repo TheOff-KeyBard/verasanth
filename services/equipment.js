@@ -8,6 +8,7 @@ import {
   EQUIPMENT_DATA,
   EQUIPMENT_STAT_KEYS,
   LEGACY_SLOT_MAP,
+  INSTINCT_AFFINITIES,
   createEmptyEquipmentLoadout,
 } from "../data/equipment.js";
 
@@ -32,12 +33,13 @@ export { createEmptyEquipmentLoadout };
 
 /**
  * Check if character can equip item into slot.
- * @param {object} character - Character row (for future level/stat checks)
+ * @param {object} character - Character row (for level/instinct checks)
  * @param {object} item - Item def from EQUIPMENT_DATA or legacy mapping
  * @param {string} slot - Target slot
- * @returns {{ ok: boolean, message?: string }}
+ * @param {{ db, uid, getFlag }} opts - Optional; required for offhand_locked check
+ * @returns {Promise<{ ok: boolean, message?: string }>}
  */
-export function canEquipItem(character, item, slot) {
+export async function canEquipItem(character, item, slot, opts = {}) {
   if (!slot || !isValidEquipmentSlot(slot)) return { ok: false, message: "Invalid slot." };
   if (!item) return { ok: false, message: "No item." };
   const itemDef = typeof item === "string" ? EQUIPMENT_DATA[item] : item;
@@ -47,6 +49,15 @@ export function canEquipItem(character, item, slot) {
   const levelReq = (itemDef?.level_requirement ?? 1) || 1;
   const charLevel = character?.class_stage ?? character?.xp ?? 0;
   if (charLevel < levelReq) return { ok: false, message: `Requires level ${levelReq}.` };
+  const charInstinct = (character?.instinct || "").toLowerCase();
+  const reqInstinct = (itemDef?.instinct_required || "").toLowerCase();
+  if (reqInstinct && charInstinct !== reqInstinct) {
+    return { ok: false, message: `This item can only be wielded by the ${itemDef.instinct_required}.` };
+  }
+  if (slot === "weapon_offhand" && opts.getFlag && opts.db != null && opts.uid != null) {
+    const offhandLocked = await opts.getFlag(opts.db, opts.uid, "offhand_locked", 0);
+    if (offhandLocked) return { ok: false, message: "Your offhand is occupied by a two-handed weapon." };
+  }
   return { ok: true };
 }
 
@@ -59,16 +70,37 @@ export function resolveLegacySlot(slot) {
 
 /**
  * Equip item into slot. Replaces existing item in slot.
+ * Handles two-handed: unequips offhand and sets offhand_locked when equipping two_handed to weapon_main.
  * @param {object} db - Database handle
  * @param {function} dbRun - dbRun(db, sql, params)
  * @param {function} dbGet - dbGet(db, sql, params)
  * @param {number} uid - User ID
  * @param {string} itemId - Item ID
  * @param {string} slot - Target slot (new slot names)
+ * @param {{ getFlag, setFlag }} opts - Optional; required for two-handed offhand_locked
  */
-export async function equipItem(db, dbRun, dbGet, uid, itemId, slot) {
+export async function equipItem(db, dbRun, dbGet, uid, itemId, slot, opts = {}) {
   const resolvedSlot = resolveLegacySlot(slot) || slot;
   if (!isValidEquipmentSlot(resolvedSlot)) throw new Error("Invalid slot.");
+  const itemDef = EQUIPMENT_DATA[itemId];
+  const tags = itemDef?.tags ?? [];
+  const isTwoHanded = tags.includes("two_handed");
+
+  if (resolvedSlot === "weapon_main" && isTwoHanded && opts.setFlag) {
+    const offhandRow = await dbGet(db, "SELECT item FROM equipment_slots WHERE user_id=? AND slot=?", [uid, "weapon_offhand"]);
+    if (offhandRow) {
+      await dbRun(db, "UPDATE inventory SET equipped=0 WHERE user_id=? AND item=?", [uid, offhandRow.item]);
+      await dbRun(db, "DELETE FROM equipment_slots WHERE user_id=? AND slot=?", [uid, "weapon_offhand"]);
+      const invRow = await dbGet(db, "SELECT qty FROM inventory WHERE user_id=? AND item=?", [uid, offhandRow.item]);
+      if (invRow) {
+        await dbRun(db, "UPDATE inventory SET qty=qty+1 WHERE user_id=? AND item=?", [uid, offhandRow.item]);
+      } else {
+        await dbRun(db, "INSERT INTO inventory (user_id, item, qty) VALUES (?, ?, 1)", [uid, offhandRow.item]);
+      }
+    }
+    await opts.setFlag(db, uid, "offhand_locked", 1);
+  }
+
   const old = await dbGet(db, "SELECT item FROM equipment_slots WHERE user_id=? AND slot=?", [uid, resolvedSlot]);
   if (old) {
     await dbRun(db, "UPDATE inventory SET equipped=0 WHERE user_id=? AND item=?", [uid, old.item]);
@@ -81,12 +113,19 @@ export async function equipItem(db, dbRun, dbGet, uid, itemId, slot) {
 
 /**
  * Unequip item from slot.
+ * Clears offhand_locked when unequipping two_handed from weapon_main.
+ * @param {{ getFlag, setFlag }} opts - Optional; required for two-handed offhand_locked
  */
-export async function unequipItem(db, dbRun, dbGet, uid, slot) {
+export async function unequipItem(db, dbRun, dbGet, uid, slot, opts = {}) {
   const resolvedSlot = resolveLegacySlot(slot) || slot;
   if (!isValidEquipmentSlot(resolvedSlot)) throw new Error("Invalid slot.");
   const old = await dbGet(db, "SELECT item FROM equipment_slots WHERE user_id=? AND slot=?", [uid, resolvedSlot]);
   if (old) {
+    const itemDef = EQUIPMENT_DATA[old.item];
+    const tags = itemDef?.tags ?? [];
+    if (resolvedSlot === "weapon_main" && tags.includes("two_handed") && opts.setFlag) {
+      await opts.setFlag(db, uid, "offhand_locked", 0);
+    }
     await dbRun(db, "UPDATE inventory SET equipped=0 WHERE user_id=? AND item=?", [uid, old.item]);
     await dbRun(db, "DELETE FROM equipment_slots WHERE user_id=? AND slot=?", [uid, resolvedSlot]);
   }
@@ -150,4 +189,41 @@ export function formatCorruptionText(item) {
   const c = def?.corruption;
   if (!c) return null;
   return c.passive_text || `Corrupted (${c.corruption_type || "unknown"})`;
+}
+
+/**
+ * Compute affinity hint for an equipment item vs player instinct.
+ * @param {object} item - Item def (from EQUIPMENT_DATA) with tags
+ * @param {string} instinct - Player instinct (lowercase)
+ * @returns {{ hasBonuses: boolean, hasPenalties: boolean, bonusStats: object, penaltyStats: object, marker: string|null, tooltip: string|null }}
+ */
+export function getAffinityHint(item, instinct) {
+  const affinities = INSTINCT_AFFINITIES[instinct];
+  if (!affinities || !item?.tags?.length) return { hasBonuses: false, hasPenalties: false, bonusStats: {}, penaltyStats: {}, marker: null, tooltip: null };
+
+  const bonusStats = {};
+  const penaltyStats = {};
+  for (const tag of item.tags) {
+    if (affinities.tag_bonuses?.[tag]) Object.assign(bonusStats, affinities.tag_bonuses[tag]);
+    if (affinities.tag_penalties?.[tag]) Object.assign(penaltyStats, affinities.tag_penalties[tag]);
+  }
+  const hasBonuses = Object.keys(bonusStats).length > 0;
+  const hasPenalties = Object.keys(penaltyStats).length > 0;
+
+  let marker = null;
+  if (hasBonuses && hasPenalties) marker = "✦↓";
+  else if (hasBonuses) marker = "✦";
+  else if (hasPenalties) marker = "↓";
+
+  const parts = [];
+  for (const [stat, val] of Object.entries(bonusStats)) {
+    if (val > 0) parts.push(`+${val} ${stat.replace(/_/g, " ")}`);
+  }
+  for (const [stat, val] of Object.entries(penaltyStats)) {
+    if (val < 0) parts.push(`${val} ${stat.replace(/_/g, " ")}`);
+  }
+  const instinctName = (instinct || "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const tooltip = parts.length ? `${instinctName}: ${parts.join(", ")}` : null;
+
+  return { hasBonuses, hasPenalties, bonusStats, penaltyStats, marker, tooltip };
 }

@@ -3,7 +3,7 @@
  * @see verasanth_equipment_system_blueprint.md
  */
 
-import { EQUIPMENT_STAT_KEYS, EQUIPMENT_DATA } from "../data/equipment.js";
+import { EQUIPMENT_STAT_KEYS, EQUIPMENT_DATA, INSTINCT_AFFINITIES } from "../data/equipment.js";
 
 /**
  * Merge base stats with bonus stats (additive).
@@ -37,17 +37,66 @@ export function getItemEffectiveStats(item) {
 
 /**
  * Aggregate stats from all equipped items.
+ * @param {object} equippedItemMap - Slot -> itemId map (from getEquippedItemMap)
+ * @returns {object} Aggregated stats plus dual_wield, has_focus_offhand flags
  */
-export function aggregateEquipmentStats(equippedItems) {
+export function aggregateEquipmentStats(equippedItemMap) {
   const aggregated = {};
   for (const k of EQUIPMENT_STAT_KEYS) aggregated[k] = 0;
-  for (const item of equippedItems || []) {
-    const stats = getItemEffectiveStats(item);
+  const itemIds = Object.values(equippedItemMap || {}).filter(Boolean);
+  for (const itemId of itemIds) {
+    const stats = getItemEffectiveStats(itemId);
     for (const [k, v] of Object.entries(stats)) {
       if (EQUIPMENT_STAT_KEYS.includes(k) && typeof v === "number") aggregated[k] = (aggregated[k] ?? 0) + v;
     }
   }
+
+  const mainWeaponId = equippedItemMap?.weapon_main;
+  const offhandWeaponId = equippedItemMap?.weapon_offhand;
+  const mainWeapon = mainWeaponId ? EQUIPMENT_DATA[mainWeaponId] : null;
+  const offhandWeapon = offhandWeaponId ? EQUIPMENT_DATA[offhandWeaponId] : null;
+
+  const isDualWield = mainWeapon?.sub_type === "light_blade" && offhandWeapon?.sub_type === "light_blade";
+  if (isDualWield) {
+    aggregated.dual_wield = true;
+    const offhandPower = offhandWeapon?.stat_modifiers?.melee_power || 0;
+    aggregated.melee_power = (aggregated.melee_power || 0) + Math.floor(offhandPower / 2);
+  }
+
+  if (offhandWeapon?.sub_type === "focus") {
+    aggregated.has_focus_offhand = true;
+  }
+
   return aggregated;
+}
+
+/**
+ * Apply instinct affinities (tag bonuses/penalties) on top of aggregated stats.
+ */
+export function applyInstinctAffinities(aggregatedStats, equippedItemMap, instinct) {
+  const affinities = INSTINCT_AFFINITIES[instinct];
+  if (!affinities) return aggregatedStats;
+
+  const result = { ...aggregatedStats };
+
+  for (const itemId of Object.values(equippedItemMap || {}).filter(Boolean)) {
+    const item = typeof itemId === "string" ? EQUIPMENT_DATA[itemId] : itemId;
+    if (!item?.tags?.length) continue;
+    for (const tag of item.tags) {
+      if (affinities.tag_bonuses?.[tag]) {
+        for (const [stat, value] of Object.entries(affinities.tag_bonuses[tag])) {
+          result[stat] = (result[stat] ?? 0) + value;
+        }
+      }
+      if (affinities.tag_penalties?.[tag]) {
+        for (const [stat, value] of Object.entries(affinities.tag_penalties[tag])) {
+          result[stat] = (result[stat] ?? 0) + value;
+        }
+      }
+    }
+  }
+
+  return result;
 }
 
 /**

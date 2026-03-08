@@ -887,7 +887,20 @@
   .inv-item.equipped { border-left: 2px solid var(--ember-glow); padding-left: 6px; }
   .inv-loadout { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
   .inv-loadout span { display: block; margin: 2px 0; }
+  .inv-offhand-locked { color: var(--text-dim); font-style: italic; }
+  .inv-dual-wield-ind { font-size: 0.7rem; color: var(--text-dim); margin-left: 4px; }
   .inv-equip-btn { font-size: 0.7rem; margin-left: 6px; padding: 1px 6px; cursor: pointer; }
+  .inv-type-tag { font-size: 0.65rem; text-transform: uppercase; color: var(--text-dim); margin-right: 6px; }
+  .inv-affinity-marker { font-size: 0.8rem; margin-right: 4px; }
+  .inv-affinity-bonus { color: var(--ember-glow); }
+  .inv-affinity-penalty { color: var(--amber-muted, #8a7a5a); }
+  .inv-effect-summary { font-size: 0.75rem; color: var(--text-dim); margin-top: 2px; }
+  .inv-btn-row { margin-top: 4px; }
+  .inv-use-btn { font-size: 0.7rem; margin-left: 6px; padding: 1px 6px; cursor: pointer; }
+  .combat-item-panel { margin-top: 8px; padding: 8px; background: var(--bg2); border-radius: 4px; border: 1px solid var(--border); }
+  .combat-item-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 0.85rem; }
+  .combat-item-effect { color: var(--text-dim); font-size: 0.8rem; }
+  .combat-item-empty { color: var(--text-dim); font-size: 0.85rem; }
 
   /* ── Dialogue overlay ──────────────────────────────────────────── */
   #dialogue-overlay {
@@ -2534,8 +2547,10 @@
     <div id="combat-actions">
       <button class="btn" onclick="combatAction('attack')">Attack</button>
       <button class="btn" id="btn-ability" onclick="combatAction('ability')">Ability</button>
+      <button class="btn" id="btn-use-item" onclick="openCombatInventory()">Use Item</button>
       <button class="btn danger-btn" onclick="combatAction('flee')">Flee</button>
     </div>
+    <div id="combat-item-panel" class="combat-item-panel" style="display:none;"></div>
   </div>
 </div>
 
@@ -3495,11 +3510,19 @@ async function populateCharacterSheet() {
   document.getElementById('cs-soul').textContent = wallet.soul_coins ?? 0;
   const items = inv.items || [];
   const eq = inv.equipment || {};
+  const offhandLocked = !!inv.offhand_locked;
+  const dualWield = !!inv.dual_wield;
   const idToName = {};
   (inv.itemDetails || []).forEach(it => { idToName[it.id] = it.display_name || it.id; });
   const slotLabels = { weapon_main:'Weapon',weapon_offhand:'Offhand',head:'Head',chest:'Chest',hands:'Hands',legs:'Legs',feet:'Feet',cloak:'Cloak',ring_1:'Ring 1',ring_2:'Ring 2',charm:'Charm',relic:'Relic' };
   const slotOrder = ['weapon_main','weapon_offhand','head','chest','hands','legs','feet','cloak','ring_1','ring_2','charm','relic'];
-  const loadoutParts = slotOrder.map(s => (slotLabels[s] || s) + ': ' + (idToName[eq[s]] || '—'));
+  const loadoutParts = slotOrder.map(s => {
+    let val = '—';
+    if (s === 'weapon_offhand' && offhandLocked) val = '— Two-Handed —';
+    else val = idToName[eq[s]] || '—';
+    const label = (slotLabels[s] || s) + ': ' + val;
+    return (s === 'weapon_offhand' && dualWield && eq[s]) ? label + ' ⚔ Dual Wield' : label;
+  });
   const loadout = loadoutParts.join(' · ');
   document.getElementById('cs-inv-list').innerHTML = (loadout ? '<div class="inv-loadout" style="margin-bottom:6px">' + escapeHtml(loadout) + '</div>' : '') + (items.length ? escapeHtml(items.join(', ')) : 'Nothing carried.');
   const ul = document.getElementById('cs-flags-list');
@@ -3678,11 +3701,19 @@ async function refreshSheetPanel() {
   document.getElementById('panel-tab-stats').innerHTML = statsHtml;
   const items = inv.items || [];
   const eq = inv.equipment || {};
+  const offhandLocked = !!inv.offhand_locked;
+  const dualWield = !!inv.dual_wield;
   const idToName = {};
   (inv.itemDetails || []).forEach(it => { idToName[it.id] = it.display_name || it.id; });
   const slotLabels = { weapon_main:'Weapon',weapon_offhand:'Offhand',head:'Head',chest:'Chest',hands:'Hands',legs:'Legs',feet:'Feet',cloak:'Cloak',ring_1:'Ring 1',ring_2:'Ring 2',charm:'Charm',relic:'Relic' };
   const slotOrder = ['weapon_main','weapon_offhand','head','chest','hands','legs','feet','cloak','ring_1','ring_2','charm','relic'];
-  const loadoutParts = slotOrder.map(s => (slotLabels[s] || s) + ': ' + (idToName[eq[s]] || '—'));
+  const loadoutParts = slotOrder.map(s => {
+    let val = '—';
+    if (s === 'weapon_offhand' && offhandLocked) val = '— Two-Handed —';
+    else val = idToName[eq[s]] || '—';
+    const label = (slotLabels[s] || s) + ': ' + val;
+    return (s === 'weapon_offhand' && dualWield && eq[s]) ? label + ' ⚔ Dual Wield' : label;
+  });
   const loadout = loadoutParts.join(' · ');
   document.getElementById('panel-tab-inventory').innerHTML = '<p>◈ ' + (wallet.ash_marks ?? 0) + ' Ash · ◆ ' + (wallet.ember_shards ?? 0) + ' Ember · ○ ' + (wallet.soul_coins ?? 0) + ' Soul</p>' +
     '<p class="inv-loadout" style="margin-bottom:6px">' + escapeHtml(loadout) + '</p>' +
@@ -3754,18 +3785,24 @@ async function doRegister() {
 
 // ── Load / refresh game state ────────────────────────────────────
 async function loadGame() {
+  // #region agent log
+  const mapFetch = GET('/api/map/discovered').then(r => { fetch('http://127.0.0.1:7611/ingest/b76c038c-517a-4b96-b04d-519ffd35bf60',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1e9205'},body:JSON.stringify({sessionId:'1e9205',location:'index.html:loadGame',message:'map API success',data:{discovered:r?.discovered,count:r?.discovered?.length},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{}); return r; }).catch(e => { fetch('http://127.0.0.1:7611/ingest/b76c038c-517a-4b96-b04d-519ffd35bf60',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1e9205'},body:JSON.stringify({sessionId:'1e9205',location:'index.html:loadGame',message:'map API failed',data:{err:String(e?.message||e)},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{}); return { discovered: [] }; });
+  // #endregion
   const [charData, lookData, walletData, invData, locData, mapData] = await Promise.all([
     GET('/api/character'),
     GET('/api/look'),
     GET('/api/wallet'),
     GET('/api/inventory'),
     GET('/api/data/locations').catch(() => ({ locations: {}, connections: [] })),
-    GET('/api/map/discovered').catch(() => ({ discovered: [] })),
+    mapFetch,
   ]);
 
   locationNamesMap = locData.locations || {};
   connectionsList = locData.connections || [];
   visitedSet = new Set(mapData?.discovered || []);
+  // #region agent log
+  fetch('http://127.0.0.1:7611/ingest/b76c038c-517a-4b96-b04d-519ffd35bf60',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1e9205'},body:JSON.stringify({sessionId:'1e9205',location:'index.html:loadGame',message:'visitedSet after load',data:{visitedSize:visitedSet.size,discovered:Array.from(visitedSet).slice(0,10),lookLocation:lookData?.location},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+  // #endregion
   if (lookData.location) {
     visitedSet.add(lookData.location);
     POST('/api/flag', { flag: lookData.location === 'market_square' ? 'has_seen_market_square' : 'visited_' + lookData.location, value: 1 }).catch(() => {});
@@ -4154,13 +4191,24 @@ function updateInventory(invData) {
   if (!loadoutEl || !el) return;
   const itemDetails = invData?.itemDetails || [];
   const equipment = invData?.equipment || {};
+  const offhandLocked = !!invData?.offhand_locked;
+  const dualWield = !!invData?.dual_wield;
   const idToName = {};
   itemDetails.forEach(it => { idToName[it.id] = it.display_name || it.id; });
   let loadoutHtml = '';
   EQUIPMENT_SLOT_ORDER.forEach(slot => {
-    const itemId = equipment[slot];
     const label = EQUIPMENT_SLOT_LABELS[slot] || slot;
-    loadoutHtml += '<span><strong>' + escapeHtml(label) + ':</strong> ' + escapeHtml(idToName[itemId] || '— none —') + '</span>';
+    let value = '— none —';
+    if (slot === 'weapon_offhand' && offhandLocked) {
+      value = '<span class="inv-offhand-locked" title="Locked by two-handed weapon">— Two-Handed —</span>';
+    } else {
+      const itemId = equipment[slot];
+      value = escapeHtml(idToName[itemId] || '— none —');
+      if (dualWield && slot === 'weapon_offhand' && itemId) {
+        value += ' <span class="inv-dual-wield-ind">⚔ Dual Wield</span>';
+      }
+    }
+    loadoutHtml += '<span><strong>' + escapeHtml(label) + ':</strong> ' + value + '</span>';
   });
   loadoutEl.innerHTML = loadoutHtml;
   el.innerHTML = '';
@@ -4171,8 +4219,20 @@ function updateInventory(invData) {
   itemDetails.forEach(it => {
     const d = document.createElement('div');
     d.className = 'inv-item' + (it.equipped ? ' equipped' : '');
-    const label = (it.display_name || it.id) + (it.qty > 1 ? ' x' + it.qty : '');
-    d.innerHTML = (it.equipped ? '[E] ' : '') + escapeHtml(label);
+    const typeTag = it.item_type ? `<span class="inv-type-tag">${it.item_type}</span>` : '';
+    const affinityPrefix = (() => {
+      if (!it.affinity_marker) return '';
+      const t = it.affinity_tooltip ? ` title="${escapeHtml(it.affinity_tooltip)}"` : '';
+      if (it.affinity_marker === '✦') return `<span class="inv-affinity-marker inv-affinity-bonus"${t}>✦</span> `;
+      if (it.affinity_marker === '↓') return `<span class="inv-affinity-marker inv-affinity-penalty"${t}>↓</span> `;
+      return `<span class="inv-affinity-marker"${t}><span class="inv-affinity-bonus">✦</span><span class="inv-affinity-penalty">↓</span></span> `;
+    })();
+    const label = affinityPrefix + (it.equipped ? '[E] ' : '') + escapeHtml(it.display_name || it.id) + (it.qty > 1 ? ' x' + it.qty : '');
+    const effectLine = it.effect_summary ? `<div class="inv-effect-summary">${escapeHtml(it.effect_summary)}</div>` : '';
+    const valueLine = (it.item_type === 'loot' && it.value_am > 0) ? `<span class="inv-value">${it.value_am} AM</span>` : '';
+    d.innerHTML = typeTag + label + (effectLine || '') + valueLine;
+    const btnRow = document.createElement('div');
+    btnRow.className = 'inv-btn-row';
     if (it.slot) {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -4187,10 +4247,28 @@ function updateInventory(invData) {
           }
           const inv = await GET('/api/inventory');
           updateInventory(inv);
+          refreshSidebar();
         } catch (e) { log('<em>' + escapeHtml(e.message) + '</em>'); }
       };
-      d.appendChild(btn);
+      btnRow.appendChild(btn);
     }
+    if (it.item_type === 'consumable' && it.out_of_combat) {
+      const useBtn = document.createElement('button');
+      useBtn.type = 'button';
+      useBtn.className = 'inv-use-btn';
+      useBtn.textContent = 'Use';
+      useBtn.onclick = async () => {
+        try {
+          const res = await POST('/api/item/use', { item_id: it.id });
+          log(render(res.message || ''));
+          refreshSidebar();
+          const inv = await GET('/api/inventory');
+          updateInventory(inv);
+        } catch (e) { log('<em>' + escapeHtml(e.message) + '</em>'); }
+      };
+      btnRow.appendChild(useBtn);
+    }
+    if (btnRow.children.length) d.appendChild(btnRow);
     el.appendChild(d);
   });
 }
@@ -4864,8 +4942,10 @@ function showCombat(data, isBoss) {
   else overlay.classList.remove('boss-encounter');
   document.getElementById('combat-enemy-name').textContent = data.enemy_name || data.enemy_id || 'Enemy';
   updateCombatBars(data.player_hp, playerMaxHp, data.enemy_hp, data.enemy_hp);
-  updateStatusDisplay(data.statuses ?? {}, data.enemy_statuses ?? {});
-  updateAbilityButton(data.ability_cooldown ?? 0);
+  updateStatusDisplay(data.statuses ?? {}, data.enemy_statuses ?? {}, data.active_buffs);
+  updateCombatActionButtons(data.ability_cooldown ?? 0, false);
+  const panel = document.getElementById('combat-item-panel');
+  if (panel) panel.style.display = 'none';
 }
 
 function updateCombatBars(php, pmax, ehp, emax) {
@@ -4878,10 +4958,14 @@ function updateCombatBars(php, pmax, ehp, emax) {
 
 const STATUS_LABELS = { resolve: 'Resolve', stealth: 'Stealth', iron_stance: 'Iron Stance', burning: 'Burning', staggered: 'Staggered', taunt: 'Taunt', slip_dodge: 'Slip' };
 
-function updateStatusDisplay(statuses, enemyStatuses) {
+function updateStatusDisplay(statuses, enemyStatuses, activeBuffs) {
   const el = document.getElementById('combat-statuses');
   if (!el) return;
   const chips = [];
+  for (const b of (activeBuffs || [])) {
+    const stat = (b.stat || '').replace(/_/g, ' ');
+    chips.push(`<span class="status-chip status-buff">+${b.value} ${stat} (${b.turns_remaining}t)</span>`);
+  }
   for (const [k, v] of Object.entries(statuses || {})) {
     if (v > 0) chips.push(`<span class="status-chip">${STATUS_LABELS[k] || k} (${v})</span>`);
   }
@@ -4904,9 +4988,111 @@ function updateAbilityButton(cooldown) {
   }
 }
 
+function updateCombatActionButtons(cooldown, itemUsed) {
+  updateAbilityButton(cooldown);
+  const useBtn = document.getElementById('btn-use-item');
+  if (useBtn) useBtn.disabled = !!itemUsed;
+}
+
+async function openCombatInventory() {
+  const panel = document.getElementById('combat-item-panel');
+  const useBtn = document.getElementById('btn-use-item');
+  if (!panel || !useBtn) return;
+  if (panel.style.display === 'block') {
+    panel.style.display = 'none';
+    useBtn.disabled = false;
+    return;
+  }
+  try {
+    const inv = await GET('/api/inventory');
+    const usable = (inv.itemDetails || []).filter(it => it.item_type === 'consumable' && it.in_combat && it.qty > 0);
+    panel.innerHTML = '';
+    if (!usable.length) {
+      panel.innerHTML = '<div class="combat-item-empty">No usable items.</div>';
+    } else {
+      usable.forEach(it => {
+        const d = document.createElement('div');
+        d.className = 'combat-item-row';
+        d.innerHTML = `<span>${escapeHtml(it.display_name || it.id)}</span><span class="combat-item-effect">${escapeHtml(it.effect_summary || '')}</span>`;
+        const btn = document.createElement('button');
+        btn.className = 'btn inv-use-btn';
+        btn.textContent = 'Use';
+        btn.onclick = async () => {
+          useBtn.disabled = true;
+          panel.style.display = 'none';
+          try {
+            const res = await POST('/api/item/use', { item_id: it.id });
+            document.getElementById('combat-log').innerHTML = render(res.message || '');
+            updateCombatBars(res.player_hp, playerMaxHp, res.enemy_hp ?? combatState?.enemy_hp, combatState?.enemy_hp_max ?? res.enemy_hp);
+            if (combatState) combatState = { ...combatState, player_hp: res.player_hp, enemy_hp: res.enemy_hp, active_buffs: res.active_buffs };
+            updateStatusDisplay(combatState?.statuses ?? {}, combatState?.enemy_statuses ?? {}, res.active_buffs);
+            if (res.result === 'victory') {
+              combatState = null;
+              updateStatusDisplay({}, {});
+              updateAbilityButton(0);
+              document.getElementById('combat-overlay').classList.remove('open', 'boss-encounter');
+              log(render(res.message));
+              refreshSidebar();
+              const inv = await GET('/api/inventory').catch(() => ({}));
+              updateInventory(inv);
+              const lookData = await GET('/api/look');
+              renderRoom(lookData);
+              startLingerTimer(currentRoomFightable);
+              return;
+            }
+            document.getElementById('btn-ability').disabled = true;
+            const passData = await POST('/api/combat/action', { action: 'pass' });
+            document.getElementById('combat-log').innerHTML = render(passData.message || '');
+            if (passData.result === 'victory' || passData.result === 'fled') {
+              combatState = null;
+              updateStatusDisplay({}, {});
+              updateAbilityButton(0);
+              document.getElementById('combat-overlay').classList.remove('open', 'boss-encounter');
+              log(render(passData.message));
+              refreshSidebar();
+              const lookData = await GET('/api/look');
+              renderRoom(lookData);
+              startLingerTimer(currentRoomFightable);
+            } else if (passData.result === 'death') {
+              combatState = null;
+              updateStatusDisplay({}, {});
+              updateAbilityButton(0);
+              document.getElementById('combat-overlay').classList.remove('open', 'boss-encounter');
+              log(render(passData.message));
+              const [lookData, mapData] = await Promise.all([GET('/api/look'), GET('/api/map/discovered').catch(() => ({ discovered: [] }))]);
+              visitedSet = new Set(mapData?.discovered || []);
+              if (lookData.location) visitedSet.add(lookData.location);
+              renderRoom(lookData);
+              refreshSidebar();
+              startLingerTimer(currentRoomFightable);
+            } else {
+              const enemyMax = passData.enemy_hp_max ?? combatState?.enemy_hp_max ?? passData.enemy_hp;
+              if (combatState) combatState = { ...combatState, ...passData, enemy_hp_max: enemyMax };
+              updateCombatBars(passData.player_hp, playerMaxHp, passData.enemy_hp, enemyMax);
+              updateStatusDisplay(passData.statuses, passData.enemy_statuses, passData.active_buffs);
+              updateCombatActionButtons(passData.ability_cooldown ?? 0, false);
+            }
+          } catch (e) {
+            document.getElementById('combat-log').innerHTML = render('<em>' + escapeHtml(e.message) + '</em>');
+            useBtn.disabled = false;
+          }
+        };
+        d.appendChild(btn);
+        panel.appendChild(d);
+      });
+    }
+    panel.style.display = 'block';
+    useBtn.disabled = true;
+  } catch (e) {
+    document.getElementById('combat-log').innerHTML = render('<em>' + escapeHtml(e.message) + '</em>');
+  }
+}
+
 async function combatAction(action) {
   if (action === 'ability') {
     document.getElementById('btn-ability').disabled = true;
+    const ub = document.getElementById('btn-use-item');
+    if (ub) ub.disabled = true;
   }
   try {
     const data = await POST('/api/combat/action', { action });
@@ -4915,7 +5101,7 @@ async function combatAction(action) {
     if (data.result === 'victory' || data.result === 'fled') {
       combatState = null;
       updateStatusDisplay({}, {});
-      updateAbilityButton(0);
+      updateCombatActionButtons(0, false);
       const co = document.getElementById('combat-overlay');
       co.classList.remove('open', 'boss-encounter');
       log(render(data.message));
@@ -4927,7 +5113,7 @@ async function combatAction(action) {
     } else if (data.result === 'death') {
       combatState = null;
       updateStatusDisplay({}, {});
-      updateAbilityButton(0);
+      updateCombatActionButtons(0, false);
       document.getElementById('combat-overlay').classList.remove('open', 'boss-encounter');
       log(render(data.message));
       const [lookData, mapData] = await Promise.all([
@@ -4943,8 +5129,8 @@ async function combatAction(action) {
       const enemyMax = data.enemy_hp_max ?? combatState?.enemy_hp_max ?? data.enemy_hp;
       if (combatState) combatState = { ...combatState, ...data, enemy_hp_max: enemyMax };
       updateCombatBars(data.player_hp, playerMaxHp, data.enemy_hp, enemyMax);
-      updateStatusDisplay(data.statuses, data.enemy_statuses);
-      updateAbilityButton(data.ability_cooldown ?? 0);
+      updateStatusDisplay(data.statuses, data.enemy_statuses, data.active_buffs);
+      updateCombatActionButtons(data.ability_cooldown ?? 0, false);
     }
   } catch(e) {
     log(`<em>${e.message}</em>`);

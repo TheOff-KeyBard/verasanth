@@ -63,6 +63,98 @@ export function createEmptyEquipmentLoadout() {
   return loadout;
 }
 
+// ── Instinct gear affinities (bonuses/penalties by tag) ──────────────────────
+export const INSTINCT_AFFINITIES = {
+  ironblood: {
+    tag_bonuses: {
+      heavy:       { defense: 2, max_hp: 4 },
+      heavy_armor: { defense: 3, block_value: 1 },
+      two_handed:  { melee_power: 3 },
+    },
+    tag_penalties: {
+      stealth:     { dodge: -2, initiative: -1 },
+      light_blade: { melee_power: -1 },
+      arcane:      { spell_power: -2 },
+    },
+    preferred_slots: ["weapon_main", "chest", "weapon_offhand"],
+    avoid_slots: ["cloak", "charm"],
+  },
+  streetcraft: {
+    tag_bonuses: {
+      light_blade: { crit_chance: 2, initiative: 1 },
+      stealth:     { dodge: 2, initiative: 1 },
+      light_armor: { dodge: 1 },
+      perception:  { perception: 2 },
+    },
+    tag_penalties: {
+      heavy_armor: { dodge: -3, initiative: -2 },
+      heavy:       { dodge: -1, initiative: -1 },
+      two_handed:  { accuracy: -2 },
+    },
+    preferred_slots: ["weapon_main", "weapon_offhand", "cloak", "charm", "feet"],
+    avoid_slots: [],
+  },
+  shadowbound: {
+    tag_bonuses: {
+      light_blade: { crit_chance: 3, crit_damage: 2 },
+      shadow:      { crit_chance: 2, resist_shadow: 2 },
+      stealth:     { dodge: 2 },
+      corruption:  { crit_chance: 1, melee_power: 1 },
+    },
+    tag_penalties: {
+      heavy_armor: { dodge: -4, initiative: -3 },
+      heavy:       { dodge: -2 },
+      arcane:      { accuracy: -1 },
+    },
+    preferred_slots: ["weapon_main", "weapon_offhand", "cloak", "relic"],
+    avoid_slots: [],
+  },
+  ember_touched: {
+    tag_bonuses: {
+      arcane:       { spell_power: 4, crit_chance: 1 },
+      arcane_focus: { spell_power: 3, healing_power: 1 },
+      shadow:       { spell_power: 1, resist_shadow: 1 },
+      perception:   { perception: 1 },
+    },
+    tag_penalties: {
+      heavy_armor:  { spell_power: -3 },
+      heavy:        { spell_power: -2 },
+      two_handed:   { spell_power: -3 },
+    },
+    preferred_slots: ["weapon_main", "weapon_offhand", "ring_1", "ring_2", "relic"],
+    avoid_slots: [],
+  },
+  hearthbound: {
+    tag_bonuses: {
+      arcane_focus: { healing_power: 4, max_hp: 2 },
+      heavy:        { max_hp: 2, defense: 1 },
+      stealth:      { healing_power: 1 },
+    },
+    tag_penalties: {
+      shadow:       { healing_power: -2 },
+      corruption:   { healing_power: -3 },
+      two_handed:   { healing_power: -2 },
+    },
+    preferred_slots: ["weapon_offhand", "charm", "relic"],
+    avoid_slots: [],
+  },
+  warden: {
+    tag_bonuses: {
+      heavy_armor:  { defense: 2, resist_poison: 1, resist_shadow: 1 },
+      heavy:        { defense: 1, block_value: 1 },
+      arcane_focus: { resist_shadow: 2, resist_fire: 1 },
+      perception:   { perception: 2 },
+    },
+    tag_penalties: {
+      light_blade:  { defense: -1 },
+      stealth:      { defense: -1 },
+      corruption:   { resist_shadow: -3, resist_poison: -2 },
+    },
+    preferred_slots: ["weapon_offhand", "chest", "relic"],
+    avoid_slots: [],
+  },
+};
+
 // ── Sewer starter equipment catalog ─────────────────────────────────────────
 function eq(id, name, slot, subType, overrides = {}) {
   const base = {
@@ -81,6 +173,7 @@ function eq(id, name, slot, subType, overrides = {}) {
     stackable: false,
     max_stack: 1,
     equippable: true,
+    instinct_required: null,
     tags: ["sewer"],
     stat_modifiers: createEmptyStatModifiers(),
     on_equip_effects: [],
@@ -101,16 +194,19 @@ export const EQUIPMENT_DATA = {
     lore: "A blade left too long in wet stone.",
   }),
   pipe_shiv: eq("pipe_shiv", "Pipe Shiv", "weapon_main", "dagger", {
+    tags: ["sewer", "light_blade"],
     stat_modifiers: { ...createEmptyStatModifiers(), melee_power: 1 },
     value_am: 8,
     lore: "Sharpened pipe. Improvised.",
   }),
   ash_caked_club: eq("ash_caked_club", "Ash-Caked Club", "weapon_main", "mace", {
+    tags: ["sewer", "heavy"],
     stat_modifiers: { ...createEmptyStatModifiers(), melee_power: 2 },
     value_am: 12,
     lore: "Heavy. The ash never quite comes off.",
   }),
   hooked_knife: eq("hooked_knife", "Hooked Knife", "weapon_main", "dagger", {
+    tags: ["sewer", "light_blade"],
     stat_modifiers: { ...createEmptyStatModifiers(), melee_power: 2, accuracy: 1 },
     value_am: 14,
     lore: "Good for gutting. And other things.",
@@ -121,17 +217,20 @@ export const EQUIPMENT_DATA = {
     lore: "Salvaged from a grate. Keeps things at arm's length.",
   }),
   worn_mace: eq("worn_mace", "Worn Mace", "weapon_main", "mace", {
+    tags: ["sewer", "heavy"],
     stat_modifiers: { ...createEmptyStatModifiers(), melee_power: 3 },
     value_am: 22,
     tier: 2,
     lore: "Heavier than it looks.",
   }),
   sewer_wand: eq("sewer_wand", "Sewer Wand", "weapon_main", "wand", {
+    tags: ["sewer", "arcane"],
     stat_modifiers: { ...createEmptyStatModifiers(), spell_power: 2 },
     value_am: 25,
     lore: "Twisted wood. Still holds a spark.",
   }),
   charred_staff: eq("charred_staff", "Charred Staff", "weapon_main", "staff", {
+    tags: ["sewer", "arcane"],
     stat_modifiers: { ...createEmptyStatModifiers(), spell_power: 3 },
     value_am: 30,
     tier: 2,
@@ -140,21 +239,25 @@ export const EQUIPMENT_DATA = {
 
   // weapon_offhand (4)
   cracked_buckler: eq("cracked_buckler", "Cracked Buckler", "weapon_offhand", "buckler", {
+    tags: ["sewer", "heavy"],
     stat_modifiers: { ...createEmptyStatModifiers(), defense: 1, block_value: 1 },
     value_am: 12,
     lore: "Small. Better than nothing.",
   }),
   scrap_shield: eq("scrap_shield", "Scrap Shield", "weapon_offhand", "shield", {
+    tags: ["sewer", "heavy"],
     stat_modifiers: { ...createEmptyStatModifiers(), defense: 2, block_value: 2 },
     value_am: 20,
     lore: "Pieced together from drain covers.",
   }),
   oil_lantern: eq("oil_lantern", "Oil Lantern", "weapon_offhand", "lantern", {
+    tags: ["sewer", "perception"],
     stat_modifiers: { ...createEmptyStatModifiers(), perception: 2 },
     value_am: 15,
     lore: "Light in the dark. Sometimes that matters.",
   }),
   bone_focus: eq("bone_focus", "Bone Focus", "weapon_offhand", "focus", {
+    tags: ["sewer", "arcane", "arcane_focus"],
     stat_modifiers: { ...createEmptyStatModifiers(), spell_power: 1, healing_power: 1 },
     value_am: 18,
     lore: "Something old. It hums.",
@@ -185,27 +288,32 @@ export const EQUIPMENT_DATA = {
 
   // chest (5)
   patchwork_jerkin: eq("patchwork_jerkin", "Patchwork Jerkin", "chest", "patchwork_armor", {
+    tags: ["sewer", "light_armor"],
     stat_modifiers: { ...createEmptyStatModifiers(), defense: 1 },
     value_am: 12,
     lore: "Stitched from scraps.",
   }),
   mold_stained_vest: eq("mold_stained_vest", "Mold-Stained Vest", "chest", "cloth_armor", {
+    tags: ["sewer", "light_armor"],
     stat_modifiers: { ...createEmptyStatModifiers(), defense: 1, resist_poison: 1 },
     value_am: 14,
     lore: "The mold doesn't spread. You hope.",
   }),
   sewer_leathers: eq("sewer_leathers", "Sewer Leathers", "chest", "leather_armor", {
+    tags: ["sewer", "light_armor"],
     stat_modifiers: { ...createEmptyStatModifiers(), defense: 2 },
     value_am: 20,
     lore: "Treated. Mostly.",
   }),
   riveted_coat: eq("riveted_coat", "Riveted Coat", "chest", "chain_armor", {
+    tags: ["sewer", "heavy_armor"],
     stat_modifiers: { ...createEmptyStatModifiers(), defense: 3, dodge: -1 },
     value_am: 28,
     tier: 2,
     lore: "Heavy. Reliable.",
   }),
   riveted_plate: eq("riveted_plate", "Riveted Plate", "chest", "plate_armor", {
+    tags: ["sewer", "heavy_armor"],
     stat_modifiers: { ...createEmptyStatModifiers(), defense: 4, dodge: -1 },
     value_am: 35,
     tier: 2,
@@ -272,16 +380,19 @@ export const EQUIPMENT_DATA = {
 
   // cloak (3)
   ash_cloak: eq("ash_cloak", "Ash Cloak", "cloak", "cloak", {
+    tags: ["sewer", "stealth"],
     stat_modifiers: { ...createEmptyStatModifiers(), dodge: 1, resist_fire: 1 },
     value_am: 16,
     lore: "Ash-woven. Warm.",
   }),
   drip_cloak: eq("drip_cloak", "Drip-Cloak", "cloak", "cloak", {
+    tags: ["sewer", "stealth"],
     stat_modifiers: { ...createEmptyStatModifiers(), resist_poison: 1 },
     value_am: 12,
     lore: "Waxed. Repels the worst.",
   }),
   faded_mantle: eq("faded_mantle", "Faded Mantle", "cloak", "mantle", {
+    tags: ["sewer", "stealth"],
     stat_modifiers: { ...createEmptyStatModifiers(), defense: 1 },
     value_am: 14,
     lore: "Once fine. Now just serviceable.",
@@ -360,6 +471,7 @@ export const EQUIPMENT_DATA = {
 
   // Corrupted test items (4)
   bloodbound_pipe_shiv: eq("bloodbound_pipe_shiv", "Bloodbound Pipe Shiv", "weapon_main", "dagger", {
+    tags: ["sewer", "light_blade", "corruption"],
     stat_modifiers: { ...createEmptyStatModifiers(), melee_power: 3, crit_chance: 2 },
     value_am: 35,
     quality: "corrupted",
@@ -372,6 +484,7 @@ export const EQUIPMENT_DATA = {
     lore: "It hums when you hold it.",
   }),
   whispering_lantern: eq("whispering_lantern", "Whispering Lantern", "weapon_offhand", "lantern", {
+    tags: ["sewer", "perception", "corruption"],
     stat_modifiers: { ...createEmptyStatModifiers(), perception: 3 },
     value_am: 40,
     quality: "corrupted",
@@ -384,6 +497,7 @@ export const EQUIPMENT_DATA = {
     lore: "The flame never quite goes out.",
   }),
   ash_bitten_cloak: eq("ash_bitten_cloak", "Ash-Bitten Cloak", "cloak", "cloak", {
+    tags: ["sewer", "stealth", "corruption"],
     stat_modifiers: { ...createEmptyStatModifiers(), dodge: 2, resist_fire: 1 },
     value_am: 45,
     quality: "corrupted",
@@ -396,6 +510,7 @@ export const EQUIPMENT_DATA = {
     lore: "Warm. Too warm.",
   }),
   split_iron_charm: eq("split_iron_charm", "Split-Iron Charm", "charm", "charm", {
+    tags: ["sewer", "corruption"],
     stat_modifiers: { ...createEmptyStatModifiers(), defense: 1 },
     value_am: 30,
     quality: "corrupted",
