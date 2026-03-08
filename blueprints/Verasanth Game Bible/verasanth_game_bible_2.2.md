@@ -1,6 +1,6 @@
 # VERASANTH — GAME BIBLE
-**Version:** 2.1
-**Last Updated:** 2026-03-08 (session 2)
+**Version:** 2.2
+**Last Updated:** 2026-03-08 (session 2 + Pip lore)
 **Status:** Living Document — add modules as systems are built
 
 ---
@@ -174,7 +174,7 @@ The city operates through semi-autonomous institutions. Each guild unknowingly p
 | Othorion | Researcher | `crucible` | Yes | Treats the city as data. Becomes uneasy when data stops making sense. |
 | Grommash | Warden/enforcer | `cinder_cells` | Yes | Believes in the ledger. Doesn't know what he's guarding. |
 | The Trader | General merchant | `still_scale` | No | Too calm. Knew what to stock before anyone arrived. |
-| Pip | Othorion's familiar | `crucible` | No | Points at things. Always correct. Never explains. |
+| Pip | Diagnostic fragment of the Mechanism | `crucible` | No | Not a familiar. A mobile resonance marker. Flags containment instability. Othorion does not know what he found. |
 
 ---
 
@@ -264,7 +264,7 @@ Every NPC in Verasanth keeps a record. Not all of them know that is what they ar
 | Othorion | Research notes. Treats city as data. The model shifts when data stops making sense. | "The ledger is data." His records are the most clinical and the most brittle — they break when the city stops following rules. |
 | Seris | Reference objects at her stall. She is looking for something specific and these are adjacent to it. | "The ledger is a key." She is correct about this in a way she does not understand. |
 | The Trader | Knew what to stock before anyone arrived. Map of a city that is not Verasanth but matches its emotional shape. | Has no ledger. Does not need one. |
-| Pip | Points at things. Always correct. Never explains. | Does not record. Reads. |
+| Pip | No record. Reacts. Points at anomalies in the containment field. | Does not record. Reads the mechanism's structural state directly. Cannot explain because it has no linguistic interface. |
 
 **NPC interpretations of the ledger (from memory section):**
 - Grommash: *"The ledger is truth."*
@@ -276,6 +276,30 @@ Every NPC in Verasanth keeps a record. Not all of them know that is what they ar
 **The gaps:** The city does not remember anything tied to the portal, the artifacts, certain deaths, certain NPCs, events that "should not be." These gaps are invisible to everyone except Kelvaris. He never volunteers this. He confirms it only if a player finds a gap and asks directly.
 
 **Design rule for the recording system:** Every guild leader should have a ledger-adjacent object or behavior when their rooms are built. Not all of them will be obvious. The player should be three or four discoveries in before they realize the pattern. The realization — that everyone in Verasanth is keeping a record — should feel like finding out you are inside something rather than observing it from outside.
+
+---
+
+### 2.7 Pip — Diagnostic Fragment
+
+Pip is not a familiar.
+
+Pip is a **diagnostic fragment** of the Mechanism beneath Verasanth — a mobile resonance marker created by the original builders to detect anomalies within the containment structure. Diagnostic fragments were used to identify instability in the containment sigil and guide repairs. Pip is one such fragment that became separated from the system long ago.
+
+**Why Pip points at correct things:** Pip's behavior is a sensory tether to the city's internal logic. It is not predicting. It is flagging locations, objects, or people that are generating containment instability or that the mechanism's underlying systems are currently processing or struggling to suppress. It is a pointer variable given physical form. It points because that is the only output it has.
+
+**Why Pip cannot explain:** It has no linguistic interface. It was never built to communicate — only to indicate. Asking Pip why it pointed at something is like asking a compass to explain north.
+
+**The Othorion connection:** Othorion found Pip near the Crucible and mistook it for a magical anomaly — a familiar, an echo, something arcane. His growing unease in his NPC arc stems from a dawning realization he cannot yet articulate: Pip is not reacting to magic. Pip is reacting to structural integrity failures in the city itself. Othorion's model of the city assumes it is stable. Pip keeps telling him it is not.
+
+**Pip is slightly broken.** Not just orphaned from the system — damaged. It occasionally flags things that have not become anomalies yet, because the containment system is degrading and Pip is reading instability before it manifests visibly. A wall it points at cracks open three days later. A person it tracks becomes significant in ways that weren't apparent when it started tracking them. This makes Pip seem prophetic. It is not. It is a failing diagnostic tool detecting failure in a failing system.
+
+**Pip identifies failures. It cannot repair them.** This is an absolute rule. Pip has no capacity to fix, seal, strengthen, or intervene. It can only indicate. Giving Pip repair capacity would make it a narrative solution — it must remain a narrator, not an actor.
+
+**The Seris escalation:** As Arc 2 develops and Seris's work with the artifacts accelerates containment instability, Pip will begin pointing at Seris herself. Not at the artifacts she holds. At *her*. Players who have been watching Pip will understand the implication before it is stated: Seris is not carrying a system error. She has become one.
+
+**Arc 2 discovery hook:** In the Mechanist's Spine (Sewer Floor 4), a mural or Ghost Echo shows stone carvings of small constructs with long pointing limbs standing beside the original builders — a system of watchers used to monitor the containment sigil during construction. Pip is the only one still functioning. The others are in pieces in the deep sewer, or were deactivated, or have degraded into the stone. The mural does not name them. Players who recognize the shape will understand what they are looking at.
+
+**In-world language:** Do not use "sub-routine," "programming," or computational terms in any NPC dialogue or environmental text. The in-world terms are: *diagnostic fragment*, *resonance marker*, *mechanism sentinel*, *anomaly seeker*. Othorion may eventually arrive at clinical terms of his own. He has not yet.
 
 ---
 
@@ -603,7 +627,7 @@ Seris is not a villain. She is someone who has been working toward a specific go
 5. Marrowin Dask's final note: *"I understand now. I am not leaving. The city needs someone down here."* He is not dead.
 6. The Ashen Sanctuary has no deity. Whatever is in there is older than gods and is not one.
 7. Kelvaris has been at the Shadow Hearth longer than the current city. The ledger goes back centuries.
-8. Pip is always correct. Pip never explains.
+8. Pip is always correct. Pip never explains. Pip is not a familiar — it is a diagnostic fragment of the Mechanism, a mobile resonance marker created by the original builders. When it points, it is flagging containment instability. It cannot explain this because it has no linguistic interface. It is slightly broken — it occasionally flags things that have not become anomalies yet, because the containment system is degrading and Pip is reading instability before it manifests. This makes it seem prophetic. It is not. It is a failing system detecting failure.
 9. Verasanth is a containment sigil — built to imprison something below, not protect people. Vaelith has deduced this. She has not shared it.
 10. The city collects exceptional people. Escape may not be possible by design. Lirael is tracking this.
 11. **Seris does not know the true nature of the corruption source.** She believes the mechanism is an escape system — that the artifacts will open the city and allow exit. The truth is the opposite: activating the mechanism weakens the containment. She will succeed, and in doing so will be the first to understand what she actually accomplished. This is the pivot of Arc 2. Vaelith can suspect Seris is wrong about the mechanism's purpose without knowing the correct answer herself.
@@ -774,6 +798,7 @@ At every vendor: `buy_price > sell_value`. Always. Verify before adding any new 
 | Does Seris know the true nature of the corruption source? | No. She believes the mechanism opens an exit. It weakens containment. She discovers the truth when she succeeds. |
 | Does Kelvaris ever leave the tavern? | Never. He has tried. He always returns. He has stopped trying. |
 | Guild standing threshold for cross-NPC dialogue? | guild_standing ≥ 2 (trusted but not inner circle) |
+| What is Pip? | A diagnostic fragment of the Mechanism — a mobile resonance marker created by the original builders to detect containment anomalies. Not a familiar. Slightly broken. Othorion does not know what he found. |
 | What triggers the first ES drop? | First guild trial completion with any guild leader — 1 ES, teaches the currency in one moment |
 | Are guilds part of the city narrative? | Yes — structural organs of the city. They perform necessary functions. None of them know this. |
 
@@ -784,7 +809,7 @@ At every vendor: `buy_price > sell_value`. Always. Verify before adding any new 
 | Do guild trials have narrative content or are they mechanical gates? | Affects trial design scope and how much writing is needed | Guild trial system |
 | What does Vaelith say to a player who has Seris trust high? | She suspects Seris is wrong about the mechanism without knowing the correct answer herself | Vaelith dialogue expansion |
 | Does the Trader ever acknowledge the ledger? | The Trader knew what to stock before anyone arrived — possible ledger-adjacent behavior | Trader arc, Arc 2 |
-| What is Pip? | Points at things. Always correct. Never explains. This needs a lore answer before Arc 2. | Arc 2, Othorion arc |
+
 
 ---
 

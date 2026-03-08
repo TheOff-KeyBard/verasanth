@@ -10,7 +10,7 @@ const EAST_ROAD_PATCHED = {
 };
 const ASHEN_SANCTUARY_PATCHED = {
   ...WORLD_BASE.ashen_sanctuary,
-  exits: { ...WORLD_BASE.ashen_sanctuary.exits, north: "quiet_sanctum_entrance" },
+  exits: { ...WORLD_BASE.ashen_sanctuary.exits, north: "quiet_sanctum_entrance", east: "crucible" },
 };
 const WEST_ROAD_PATCHED = {
   ...WORLD_BASE.west_road,
@@ -55,13 +55,7 @@ Something at the center of this place has already noted your arrival. It has not
 
 `,
 
-  crucible: `The air changes before you finish stepping through the door. Not the temperature \u2014 though it is warmer \u2014 but the quality of it. Like the air here has been used for something and not quite refreshed.
-
-Pip regards you with one eye. Othorion does not look up.
-
-Something in the room hums once, then stops.
-
-You have the distinct sense that the room has noted your arrival more carefully than either of its occupants.
+  crucible: `Othorion barely looks up. "Careful where you step. The last person who bumped that table caused a resonance cascade." He gestures vaguely toward Pip. "And ignore him. He does that."
 
 `,
 

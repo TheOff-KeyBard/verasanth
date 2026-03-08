@@ -1,6 +1,6 @@
 # VERASANTH — GAME BIBLE
-**Version:** 2.1
-**Last Updated:** 2026-03-08 (session 2)
+**Version:** 2.0
+**Last Updated:** 2026-03-08
 **Status:** Living Document — add modules as systems are built
 
 ---
@@ -139,27 +139,6 @@ Verasanth's jail. Four connected nodes beneath the Market Square. Run by Grommas
 
 ---
 
-### 1.5 The City as a Body — Guild Architecture
-
-The city operates through semi-autonomous institutions. Each guild unknowingly performs a function that maintains Verasanth's stability. This is not metaphor — the city is a living containment system and the guilds are its organs.
-
-| Guild | City Function | Why the City Tolerates Them |
-|-------|--------------|----------------------------|
-| Ashen Archive | Memory | Keeps dangerous knowledge catalogued and contained |
-| Broken Banner | Muscle | Prevents violent collapse; absorbs destructive energy |
-| Quiet Sanctum | Healing | Reduces despair — the city feeds on despair, Sanctum disrupts this |
-| Stone Watch | Skeleton | Maintains structure, seals passages that shouldn't be open |
-| Veil Market | Nerves | Controls black market chaos; keeps shadow economy from becoming visible |
-| Umbral Covenant | Shadow / Subconscious | Deals with corruption so it doesn't spread uncontrolled into the rest of the city |
-
-**Critical design rule:** None of the guild leaders fully understand their function. They believe they lead independent factions with their own goals. The city does not communicate this to them — it simply allows them to exist and reinforces their work passively.
-
-**Who suspects:** Vaelith (containment function) and Rhyla (structural function) are the closest. They have separately noticed the city's tolerance and are beginning to find it unsettling rather than reassuring.
-
-**Arc 2 implication:** When the mechanism weakens, the city's tolerance may shift. Guilds that performed stabilizing functions may find the city no longer supporting them in invisible ways they didn't know they depended on.
-
----
-
 ## PART 2 — CHARACTERS
 
 ### 2.1 NPC Roster — City Veterans
@@ -170,7 +149,7 @@ The city operates through semi-autonomous institutions. Each guild unknowingly p
 | Caelir Dawnforge | Weaponsmith | `atelier` | Yes | Something in the locked chest. The unfinished blade. |
 | Veyra Emberhide | Armorsmith | `mended_hide` | Yes | The wall symbols mean something. She knows. |
 | Thalara Mirebloom | Alchemist/healer | `hollow_jar` | Yes | Someone she knew went into the sewers. They didn't come back. |
-| Seris Vantrel | Artifact curator | `market_square` | Yes | Assembling the mechanism. She believes it opens an exit. It does not. |
+| Seris Vantrel | Artifact curator | `market_square` | Yes | Assembling the mechanism. She knows exactly what she's doing. |
 | Othorion | Researcher | `crucible` | Yes | Treats the city as data. Becomes uneasy when data stops making sense. |
 | Grommash | Warden/enforcer | `cinder_cells` | Yes | Believes in the ledger. Doesn't know what he's guarding. |
 | The Trader | General merchant | `still_scale` | No | Too calm. Knew what to stock before anyone arrived. |
@@ -218,7 +197,6 @@ Six guild leaders. Each runs a faction tied to an instinct and a currency layer.
 5. **NPC reactions to the sewer are non-negotiable.** The artifact retrieval cascade is the pivot of Arc 1.
 6. **Guild leaders have instinct-specific greetings.** Matching instinct gets a different first line — noted, not celebrated.
 7. **Soul Coin rejection is universal among normal vendors.** *"Take that thing out of my shop before someone sees."*
-8. **Guild leaders do not know they are organs of the city.** They believe they lead independent institutions. The city allows them because they perform necessary functions — none of them have fully understood that yet. Vaelith and Rhyla are the closest to suspecting it.
 
 ---
 
@@ -227,55 +205,6 @@ Six guild leaders. Each runs a faction tied to an instinct and a currency layer.
 Not an NPC. A thread. Alive. Somewhere below Level 5. Not a boss, not an enemy. He is what the player is becoming.
 
 **Do not resolve Dask until Arc 2 is designed.**
-
----
-
-### 2.5 Kelvaris and The Ledger
-
-**Kelvaris cannot leave the tavern.** He has tried. Multiple times. He always ends up back inside, even if he walks out. He does not discuss this. It has been long enough that he has stopped trying.
-
-**The Ledger is not a bookkeeping record.** It is the city's memory system for people. Every person who stays at the Shadow Hearth gets recorded. Every death. Every return. Every disappearance. The ledger never runs out of pages.
-
-Kelvaris does not remember writing most of it. The entries are in his handwriting. He did not write them.
-
-**The ledger writes before events happen.** Kelvaris hates those pages. He tears them out. They come back the next day.
-
-**When a name appears in the ledger, that person cannot truly leave Verasanth.** They may walk away. They return. This is not a rule the ledger enforces — it is a fact the ledger knows in advance.
-
-**The player's name is already in the ledger.** From before they arrived. Players who look carefully enough will find it. This is not a bug in the system. This is the system.
-
-**The tavern is the city's intake valve.** Everyone arrives there first. Always. The ledger tracks everyone inside the containment.
-
-**Kelvaris is, functionally, the city's archivist of people.** Vaelith records knowledge. Kelvaris records lives. Neither of them chose this role. The city assigned it.
-
----
-
-### 2.6 The Recording System — NPCs as Ledger Nodes
-
-Every NPC in Verasanth keeps a record. Not all of them know that is what they are doing. These objects already exist in the codebase. They are the distributed ledger — the city's memory dispersed across every person trapped inside it.
-
-| NPC | Their Record | What It Reveals |
-|-----|-------------|----------------|
-| Kelvaris | The Ledger — names, arrivals, deaths, returns. Writes before events. | City memory. Some names appear twice, decades apart, same handwriting. Dask's entry has an impossible date. |
-| Caelir | A count scratched into the assembly table — characters not Common, not Elvish. Number is very large. | Counting something. Has been for a long time. Does not know why he started. |
-| Veyra | A name on leather, turned face-down. Symbols in armor linings — one per piece, each an apology to a different person. | The wall symbols mean something. She knows. She has been making records of debts. |
-| Grommash | The Warden's Ledger at the Post. Names, crimes, sentences. Believes it is truth. | "The ledger is truth." He doesn't know what he's guarding. The Post ledger is a fragment of the same system. |
-| Thalara | Jars labeled RESIDUE — ITERATION 4 and BEFORE. A drawing of the market square from an impossible angle. A journal read so many times it needs no bookmark. | Has been here longer than she appears. The iterations are attempts — at something. The drawing is from a previous iteration. |
-| Othorion | Research notes. Treats city as data. The model shifts when data stops making sense. | "The ledger is data." His records are the most clinical and the most brittle — they break when the city stops following rules. |
-| Seris | Reference objects at her stall. She is looking for something specific and these are adjacent to it. | "The ledger is a key." She is correct about this in a way she does not understand. |
-| The Trader | Knew what to stock before anyone arrived. Map of a city that is not Verasanth but matches its emotional shape. | Has no ledger. Does not need one. |
-| Pip | Points at things. Always correct. Never explains. | Does not record. Reads. |
-
-**NPC interpretations of the ledger (from memory section):**
-- Grommash: *"The ledger is truth."*
-- Othorion: *"The ledger is data."*
-- Thalara: *"The ledger is emotional residue."*
-- Seris: *"The ledger is a key."*
-- Kelvaris: *"The ledger is dangerous."* — and he is the only one who notices the gaps
-
-**The gaps:** The city does not remember anything tied to the portal, the artifacts, certain deaths, certain NPCs, events that "should not be." These gaps are invisible to everyone except Kelvaris. He never volunteers this. He confirms it only if a player finds a gap and asks directly.
-
-**Design rule for the recording system:** Every guild leader should have a ledger-adjacent object or behavior when their rooms are built. Not all of them will be obvious. The player should be three or four discoveries in before they realize the pattern. The realization — that everyone in Verasanth is keeping a record — should feel like finding out you are inside something rather than observing it from outside.
 
 ---
 
@@ -606,7 +535,7 @@ Seris is not a villain. She is someone who has been working toward a specific go
 8. Pip is always correct. Pip never explains.
 9. Verasanth is a containment sigil — built to imprison something below, not protect people. Vaelith has deduced this. She has not shared it.
 10. The city collects exceptional people. Escape may not be possible by design. Lirael is tracking this.
-11. **Seris does not know the true nature of the corruption source.** She believes the mechanism is an escape system — that the artifacts will open the city and allow exit. The truth is the opposite: activating the mechanism weakens the containment. She will succeed, and in doing so will be the first to understand what she actually accomplished. This is the pivot of Arc 2. Vaelith can suspect Seris is wrong about the mechanism's purpose without knowing the correct answer herself.
+11. **Unresolved:** Does Seris (curator/Vantrel) know what she is adjacent to regarding the root corruption source? Decide before expanding Vaelith's dialogue.
 
 ---
 
@@ -767,24 +696,15 @@ At every vendor: `buy_price > sell_value`. Always. Verify before adding any new 
 
 ## APPENDIX — OPEN DECISIONS
 
-### Resolved
-
-| Decision | Resolution |
-|----------|-----------|
-| Does Seris know the true nature of the corruption source? | No. She believes the mechanism opens an exit. It weakens containment. She discovers the truth when she succeeds. |
-| Does Kelvaris ever leave the tavern? | Never. He has tried. He always returns. He has stopped trying. |
-| Guild standing threshold for cross-NPC dialogue? | guild_standing ≥ 2 (trusted but not inner circle) |
-| What triggers the first ES drop? | First guild trial completion with any guild leader — 1 ES, teaches the currency in one moment |
-| Are guilds part of the city narrative? | Yes — structural organs of the city. They perform necessary functions. None of them know this. |
-
-### Unresolved
+Unresolved questions that need answers before the relevant systems are built.
 
 | Decision | Why It Matters | Blocks |
 |----------|---------------|--------|
-| Do guild trials have narrative content or are they mechanical gates? | Affects trial design scope and how much writing is needed | Guild trial system |
-| What does Vaelith say to a player who has Seris trust high? | She suspects Seris is wrong about the mechanism without knowing the correct answer herself | Vaelith dialogue expansion |
-| Does the Trader ever acknowledge the ledger? | The Trader knew what to stock before anyone arrived — possible ledger-adjacent behavior | Trader arc, Arc 2 |
-| What is Pip? | Points at things. Always correct. Never explains. This needs a lore answer before Arc 2. | Arc 2, Othorion arc |
+| Does Seris (Vantrel) know what she is adjacent to regarding the root corruption source? | Affects all Vaelith dialogue and Arc 2 | Vaelith expansion, Arc 2 |
+| At what guild_standing threshold do guild leaders begin cross-referencing each other? | Required before cross-talk expansion | NPC cross-talk prompt |
+| Do guild trials have narrative content or are they mechanical gates? | Affects trial design scope | Guild trial system |
+| What triggers the first ES drop for a player? | Required before ES spend routes | Guild economy |
+| Does Kelvaris ever leave the tavern? | Lore constraint for Arc 2 | Arc 2 design |
 
 ---
 

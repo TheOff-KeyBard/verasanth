@@ -1,36 +1,40 @@
 /**
- * The Crucible — Othorion Naxir's workshop on East Road.
- * @see blueprints/NPCs/cursor_othorion_crucible.md
+ * The Crucible — Ember Quarter Research Annex.
+ * @see cursor_crucible_othorion_pip.md
  */
 
 export const CRUCIBLE_ROOM = {
   name: "The Crucible",
-  district: "Low Quarter",
-  description: "The room announces itself before you reach the door — a faint smell of heated metal and something electrical that has no source you can identify. Inside, every surface is in use. Shelves of specimen jars line the walls at irregular heights, labels in a cramped shorthand that covers both sides of the paper. Two worktables run parallel down the room's length, covered in instruments you recognize in function but not in origin. Measurements are recorded on everything: the tabletops, the walls, the back of the door you just came through. At the far end, a low lamp burns over a desk where a tall figure writes without looking up. A small shape moves near his shoulder — something between a bird and an idea of a bird, its edges slightly imprecise, as if it was made from a concept rather than matter. Pip regards you with one eye that is entirely too knowing for something with no confirmed taxonomy.",
-  exits: { north: "east_road" },
+  district: "Ember Quarter",
+  description: "The Crucible is less a workshop and more a battlefield between ideas. Tables are crowded with half-disassembled artifacts, mechanical fragments, alchemical glassware, and stacks of parchment filled with tight, impatient handwriting. Charcoal diagrams cover the stone walls — containment circles, structural models of the city's foundations, sketches of sewer machinery that no longer exists. In the center of the room stands a heavy iron examination table surrounded by instruments that look part surgical, part arcane. Several items lie under glass domes, each labeled with neat brass tags. A small creature sits on the edge of the table. Pip. The creature tilts its head and raises one small arm and points at a cracked piece of stone mounted in a frame on the far wall. Othorion does not notice. He is busy arguing quietly with a notebook.",
+  exits: { west: "ashen_sanctuary" },
   objects: {
     othorion: {
-      desc: "Othorion Naxir is tall, spare, and entirely contained. His clothing is practical in the specific way of someone who stopped caring about appearance the moment he had more interesting things to think about, and has not revisited the decision since. His hands are ink-stained from the knuckle to the second joint on both hands. He writes with one and takes notes with the other simultaneously, which should not be possible and which he does not acknowledge. When he finally looks at you it is with the particular attention of someone who has been tracking your approach since you entered the Ember Quarter and is now confirming their measurements.",
+      desc: "Othorion — lean, relentless, and currently in the middle of a disagreement with a notebook. He does not look up immediately. When he does, his attention is complete and evaluating, the way a researcher looks at new data. He has the particular stillness of someone who has stopped being surprised by the city itself and is now only surprised by his own models of it being wrong.",
       actions: ["talk", "inspect"],
     },
     pip: {
-      desc: "Pip occupies the space near Othorion's left shoulder with the authority of something that has always been exactly there. It is approximately the size and shape of a small bird — feathered or not, you cannot quite resolve the question when you look directly — and its single visible eye is a dark amber that contains considerably more information than an eye that size should be able to hold. It has been watching you since you came through the door. It watched you on the road. You are relatively certain it watched you before that. Othorion consults it without speaking. It communicates without moving. The arrangement appears to have been working for a very long time.",
-      actions: ["inspect", "look"],
-    },
-    specimen_shelves: {
-      desc: "The jars are labeled in Othorion's shorthand — a dense system of symbols and abbreviations that you can parse in fragments: dates, locations, measurements, and occasionally a single word in plain language that functions as a conclusion. One jar contains a liquid that is the exact color of the sewer water below but moves against gravity when the shelf vibrates. Another holds something solid that casts a shadow in a direction unrelated to the light source. A third is labeled, in plain letters, CONTROL. The jar appears empty. The label has a question mark after it.",
-      actions: ["inspect", "browse"],
-    },
-    worktables: {
-      desc: "Both tables are covered in instruments laid out in working sequences — not organized for storage but for active use, mid-process. On the near table: a series of measurements recorded on paper pinned flat with small stones, each one dated and cross-referenced to a location in a notation system that you gradually realize is a map of the sewer levels. On the far table: something that looks like a compass but points in a direction that is not north, and a device with no obvious purpose whose needle swings toward the door when you enter and has not moved back.",
+      desc: "Pip sits on the edge of the table, watching the room with bright, attentive eyes. When you look at it, Pip raises one small arm and points toward the mounted stone fragment across the room. Othorion glances up briefly. \"Yes, yes, I know,\" he mutters. \"You're very helpful.\" He flips through a notebook. \"Familiar behavior inconsistent with any known arcane taxonomy.\" Pip continues pointing.",
       actions: ["inspect"],
     },
-    wall_measurements: {
-      desc: "Numbers, symbols, and diagrams cover the walls in layers — older measurements partially obscured by newer ones, each pass adding refinement. What you can reconstruct: a long-term study of something that does not behave the way it should. Temperature readings that don't correspond to depth. Resonance measurements that increase rather than decrease with distance from the source. A graph whose trend line Othorion has redrawn three times, each time with the same result, and has underlined once. Below the graph, in plain language: CONSISTENT. THEREFORE: NOT EQUIPMENT ERROR.",
+    examination_table: {
+      desc: "The iron table is scratched and heat-scored from years of experiments. Straps hang from its sides — not for prisoners, but for holding unstable artifacts in place while Othorion works. The surface is covered in chalk notes written directly onto the metal. Several phrases repeat over and over: 'Containment response?' 'Structural resonance?' 'Why does it react to the sewer levels?'",
+      actions: ["inspect"],
+    },
+    wall_diagrams: {
+      desc: "The walls are layered with diagrams drawn over older diagrams. One series shows the sewer system as if it were part of a machine — pipes replaced with channels, chambers labeled as pressure regulators. Another shows the city itself drawn inside a massive circular sigil. Most of the notes beside it read simply: UNKNOWN PURPOSE.",
+      actions: ["inspect"],
+    },
+    artifact_domes: {
+      desc: "Several artifacts sit beneath glass domes with careful brass labels. Each label attempts to classify the item: RELIC — ORIGIN UNKNOWN. RELIC — SEWER STRUCTURAL COMPONENT. ARCANE FOCUS — PROBABLE. One dome has no label at all. Inside is a fragment of blackened metal that seems to absorb the room's light. The empty label beside it reads: Classification pending.",
+      actions: ["inspect"],
+    },
+    othorion_notebook: {
+      desc: "The notebook is filled with careful attempts to classify Pip. Several headings are crossed out. ARCANE FAMILIAR — rejected. ELEMENTAL FRAGMENT — rejected. ANOMALOUS CONSTRUCT — rejected. BOUND SPIRIT — rejected. The newest heading reads: 'Environmental Sensor?' Below it, Othorion has written the same note three times. 'It only reacts when something is wrong.'",
       actions: ["inspect", "read"],
     },
-    lamp: {
-      desc: "A low oil lamp at the far end of the desk, burning with a steady flame that Othorion has not adjusted in some time — the wick is long and the light is amber and slightly too warm for the hour. The lamp has been burning long enough that the glass is faintly smoked at the top. He works by it without noticing it. The papers nearest the lamp are covered in a finer hand than the rest, as if he was writing slowly and thinking between each word.",
+    stone_fragment: {
+      desc: "A cracked piece of stone mounted in a brass frame. Thin lines are carved into the surface — not decorative, but precise. They resemble part of a larger sigil. Several of the carved lines glow faintly. Othorion has written a note beneath the frame. 'Found in sewer floor three.' Below it: 'Pip indicated it immediately.'",
       actions: ["inspect"],
     },
   },

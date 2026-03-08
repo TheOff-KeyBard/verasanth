@@ -44,7 +44,7 @@ export const MAP_DATA = {
       ["south_road", "still_scale"],
       ["east_road", "hollow_jar"],
       ["east_road", "ashen_sanctuary"],
-      ["east_road", "crucible"],
+      ["ashen_sanctuary", "crucible"],
       ["alley", "naxirs_crucible"],
     ],
   },

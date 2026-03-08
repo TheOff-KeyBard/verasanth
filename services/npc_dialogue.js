@@ -54,6 +54,10 @@ function getStaticDialogueCategory(npcId, topic, playerContext) {
   // Pip (othorion)
   if (t === "pip" && npcId === "othorion") return "pip";
 
+  // Working, city (othorion)
+  if (t === "working" && npcId === "othorion") return "working";
+  if (t === "city" && npcId === "othorion") return "city";
+
   // High trust when topic is general (no specific topic match)
   const isGeneralTopic = !t || ["general", "hello", "hi", "greeting"].includes(t);
   if (isGeneralTopic && visits >= 5) {
@@ -511,6 +515,7 @@ FORMATTING RULES:
 
       const topicGuidance = {
         city: `His ground. He lights up fractionally. "Verasanth is not alive. It is becoming. The distinction matters enormously." ${trust >= 4 ? `"It breathes. The ash moves with intention. I have been mapping the pattern for two years."` : ""}`,
+        working: `*He does not look up.* "The containment experiments. The structural models. The city refuses to fit the models I build. I keep building them."`,
         furnace: `"It was here when I arrived. I didn't build it." *He glances at it.* "It occasionally produces colors I cannot replicate. I find this deeply irritating."`,
         trapdoor: `NEVER discuss. If asked: "No." If pressed: "No." If pressed again: *He looks at them.* "The answer is still no. Ask something else."`,
         seris: `"She is assembling a pattern. I wonder if she knows what shape it makes." ${serisArc1Active || serisArc2Active ? `"The artifacts resonate with the city's deeper structure. She believes they open outward. I believe she is mistaken about the direction."` : ""}`,

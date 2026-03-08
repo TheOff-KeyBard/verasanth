@@ -1587,7 +1587,7 @@ if (path === "/api/admin/command" && method === "POST") {
           await setFlag(db, uid, "has_seen_awakening", 1);
         }
       } else if (FIRST_VISIT_INTROS[loc]) {
-        const visitFlag = loc === "market_square" ? "has_seen_market_square" : "visited_" + loc;
+        const visitFlag = loc === "market_square" ? "has_seen_market_square" : loc === "crucible" ? "seen_crucible" : "visited_" + loc;
         const seen = await getFlag(db, uid, visitFlag, 0);
         if (seen === 0 && (SEWER_LEVEL_1.includes(loc) || SEWER_LEVEL_2.includes(loc) || SEWER_LEVEL_3.includes(loc) || SEWER_LEVEL_4.includes(loc) || SEWER_LEVEL_5.includes(loc))) {
           await setFlag(db, uid, "first_sewer_visit", 1);
@@ -1871,7 +1871,7 @@ if (path === "/api/admin/command" && method === "POST") {
           await setFlag(db, uid, "has_seen_awakening", 1);
         }
       } else {
-        const visitFlag = dest === "market_square" ? "has_seen_market_square" : "visited_" + dest;
+        const visitFlag = dest === "market_square" ? "has_seen_market_square" : dest === "crucible" ? "seen_crucible" : "visited_" + dest;
         const hadVisited = await getFlag(db, uid, visitFlag, 0);
         if (FIRST_VISIT_INTROS[dest] && hadVisited === 0) {
           destDescription = FIRST_VISIT_INTROS[dest] + destRoom.description;
@@ -1888,7 +1888,8 @@ if (path === "/api/admin/command" && method === "POST") {
       if (dest === "market_square") {
         await setFlag(db, uid, "has_seen_market_square", 1);
       }
-      await setFlag(db, uid, "visited_" + dest, 1);
+      await setFlag(db, uid, dest === "crucible" ? "seen_crucible" : "visited_" + dest, 1);
+      if (dest === "crucible") await setFlag(db, uid, "visited_crucible", 1);
       if (SEWER_LEVEL_1.includes(dest) || SEWER_LEVEL_2.includes(dest) || SEWER_LEVEL_3.includes(dest) || SEWER_LEVEL_4.includes(dest) || SEWER_LEVEL_5.includes(dest)) {
         await setFlag(db, uid, "first_sewer_visit", 1);
       }
@@ -2339,7 +2340,8 @@ if (path === "/api/admin/command" && method === "POST") {
       if (!found) return json({ success: false, message: "You don't know the way to that place yet." });
 
       await dbRun(db, "UPDATE players SET location=? WHERE user_id=?", [target, uid]);
-      await setFlag(db, uid, target === "market_square" ? "has_seen_market_square" : "visited_" + target, 1);
+      await setFlag(db, uid, target === "market_square" ? "has_seen_market_square" : target === "crucible" ? "seen_crucible" : "visited_" + target, 1);
+      if (target === "crucible") await setFlag(db, uid, "visited_crucible", 1);
 
       const destRoom = WORLD[target];
       let destExits = Object.keys(destRoom.exits || {});
@@ -2473,6 +2475,13 @@ if (path === "/api/admin/command" && method === "POST") {
       const flagName = SEWER_STORY_MARKINGS[row.location]?.[target];
       if (flagName) await setFlag(db, uid, flagName, 1);
       let desc = obj.desc;
+      if (target === "pip" && row.location === "crucible") {
+        const hasCisternArtifact = await getFlag(db, uid, "cistern_artifact_found", 0);
+        desc = hasCisternArtifact
+          ? "Pip sits on the edge of the table. When you enter, it turns. Pip raises one small arm and points. Not at the stone fragment. At you. Othorion glances up. He looks at Pip. Then at you. Then back at Pip. \"...Hm,\" he says. He does not continue working immediately."
+          : "Pip sits on the edge of the table, watching the room with bright, attentive eyes. When you look at it, Pip raises one small arm and points toward the mounted stone fragment across the room. Othorion glances up briefly. \"Yes, yes, I know,\" he mutters. \"You're very helpful.\" He flips through a notebook. \"Familiar behavior inconsistent with any known arcane taxonomy.\" Pip continues pointing.";
+        return json({ target, desc, actions: obj.actions || [] });
+      }
       if (target === "pip" && room?.objects?.pip && PIP_REACTIONS.length > 0) {
         const reaction = PIP_REACTIONS[Math.floor(Math.random() * PIP_REACTIONS.length)];
         desc = `${desc}\n\n${reaction}`;

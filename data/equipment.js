@@ -124,7 +124,7 @@ export const INSTINCT_AFFINITIES = {
     preferred_slots: ["weapon_main", "weapon_offhand", "ring_1", "ring_2", "relic"],
     avoid_slots: [],
   },
-  hearthbound: {
+  hearthborn: {
     tag_bonuses: {
       arcane_focus: { healing_power: 4, max_hp: 2 },
       heavy:        { max_hp: 2, defense: 1 },

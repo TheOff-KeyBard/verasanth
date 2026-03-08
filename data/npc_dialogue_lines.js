@@ -124,12 +124,21 @@ export const NPC_DIALOGUE_LINES = {
       '"My projections were wrong."',
       '"This city refuses prediction."',
     ],
-    pip: [
+        pip: [
+      '*He glances at Pip without interrupting his work.* "Pip has survived things that should have been fatal approximately nineteen times since I arrived. I stopped counting because the data became distracting."',
       '*Pip points toward the sewer entrance.*',
       '*Pip taps the table twice.*',
       '*Pip shrugs slowly.*',
       '*Pip nods once.*',
       '*Pip points at you, then at the ground.*',
+    ],
+    working: [
+      '*He does not look up.* "The containment experiments. The structural models. The city refuses to fit the models I build. I keep building them."',
+      '"Working. The walls, the tabletops, the door. Everything is data. The trend lines are consistent. Therefore: not equipment error."',
+    ],
+    city: [
+      '"Verasanth is not alive. It is becoming. The distinction matters enormously."',
+      '"The city hums. The sewer hums differently. The measurements do not match any model I have. That is why I am still here."',
     ],
   },
   warden: {
