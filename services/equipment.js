@@ -32,6 +32,14 @@ export function isValidEquipmentSlot(slot) {
 export { createEmptyEquipmentLoadout };
 
 /**
+ * Derive numeric level from character (class_stage). Matches combat/stats logic.
+ */
+export function getCharacterLevel(character) {
+  // class_stage 0 = level 1, stage 1 = level 2, etc.
+  return Math.max(1, 1 + (Number(character?.class_stage ?? 0)));
+}
+
+/**
  * Check if character can equip item into slot.
  * @param {object} character - Character row (for level/instinct checks)
  * @param {object} item - Item def from EQUIPMENT_DATA or legacy mapping
@@ -47,8 +55,8 @@ export async function canEquipItem(character, item, slot, opts = {}) {
   if (!effectiveSlot) return { ok: false, message: "Not equippable." };
   if (effectiveSlot !== slot) return { ok: false, message: `Item belongs in ${effectiveSlot}, not ${slot}.` };
   const levelReq = (itemDef?.level_requirement ?? 1) || 1;
-  const charLevel = character?.class_stage ?? character?.xp ?? 0;
-  if (charLevel < levelReq) return { ok: false, message: `Requires level ${levelReq}.` };
+  const charLevel = getCharacterLevel(character);
+  if (charLevel < levelReq) return { ok: false, message: `Requires level ${levelReq}. You are level ${charLevel}.` };
   const charInstinct = (character?.instinct || "").toLowerCase();
   const reqInstinct = (itemDef?.instinct_required || "").toLowerCase();
   if (reqInstinct && charInstinct !== reqInstinct) {

@@ -5,6 +5,7 @@
 export const SEWER_NODES = {
   drain_entrance: {
     name: "The Drain Entrance",
+    district: "The Undercity",
     description: "The smell hits before the dark does. Ash, standing water, old iron. The ladder behind you is the last clean thing for a while. Ahead, two passages. Both are equally uninviting. The east one is louder.",
     exits: { up: "sewer_entrance", east: "overflow_channel", north: "workers_alcove" },
     objects: {
@@ -16,6 +17,7 @@ export const SEWER_NODES = {
   },
   overflow_channel: {
     name: "The Overflow Channel",
+    district: "The Undercity",
     description: "A channel running with slow black water down the center. The ceiling is low enough that you feel it without touching it. Something moves in the water but it is not the current — the current is not strong enough to move what is moving.",
     exits: { west: "drain_entrance", east: "broken_pipe_room", south: "vermin_nest" },
     objects: {
@@ -27,6 +29,7 @@ export const SEWER_NODES = {
   },
   broken_pipe_room: {
     name: "The Broken Pipe Room",
+    district: "The Undercity",
     description: "The pipes here have given up the pretense of carrying anything useful. Steam pushes through the cracks in irregular bursts — too irregular to feel safe ignoring. The crawlers like the warmth. So do the cracks.",
     exits: { west: "overflow_channel" },
     objects: {
@@ -38,6 +41,7 @@ export const SEWER_NODES = {
   },
   vermin_nest: {
     name: "The Vermin Nest",
+    district: "The Undercity",
     description: "The rats have been here long enough to make an architecture of it. Ash and bone and debris shaped into something that functions as a home. The largest ones don't run. They've decided they live here and you are the intruder.",
     exits: { north: "overflow_channel", east: "workers_alcove", west: "rusted_gate" },
     objects: {
@@ -49,6 +53,7 @@ export const SEWER_NODES = {
   },
   workers_alcove: {
     name: "The Workers Alcove",
+    district: "The Undercity",
     description: "Someone worked here. The workbench is old but the arrangement of what's left on it is deliberate — tools sorted by size, a cup that used to hold something, a mark on the wall counting something that was worth counting. They stopped counting at a number you don't find reassuring.",
     exits: { west: "vermin_nest", south: "drain_entrance" },
     objects: {
@@ -60,6 +65,7 @@ export const SEWER_NODES = {
   },
   rusted_gate: {
     name: "The Rusted Gate",
+    district: "The Undercity",
     description: "The gate is iron, old enough that the rust is structural rather than damage. Beyond it, the air changes — less filth, more age. Something large has been using the space in front of the gate as a territory marker for a long time. The marks are fresh.",
     exits: { west: "vermin_nest", deeper: "fungal_bloom_chamber" },
     objects: {
@@ -71,6 +77,7 @@ export const SEWER_NODES = {
   },
   fungal_bloom_chamber: {
     name: "The Fungal Bloom Chamber",
+    district: "The Undercity",
     description: "The fungi here produce their own light — pale blue-green, steady, sourceless. It is the most beautiful thing in the sewer. The spores it releases are not beautiful. They taste like metal and they stay in the back of the throat. Move through. Don't breathe deep.",
     exits: { up: "rusted_gate", east: "echoing_hall", north: "collapsed_passage" },
     objects: {
@@ -82,6 +89,7 @@ export const SEWER_NODES = {
   },
   collapsed_passage: {
     name: "The Collapsed Passage",
+    district: "The Undercity",
     description: "The ceiling came down here at some point. What is left is navigable if you don't mind the weight of the stone above and the sounds it makes when you put weight on the floor. The channel stalkers like collapsed spaces. Something about the angles suits them.",
     exits: { south: "fungal_bloom_chamber", east: "old_maintenance_room" },
     objects: {
@@ -93,6 +101,7 @@ export const SEWER_NODES = {
   },
   old_maintenance_room: {
     name: "The Old Maintenance Room",
+    district: "The Undercity",
     description: "Someone maintained this tunnel. The equipment is old enough that the design language is unfamiliar — not broken, just from a different era of thinking about what these systems needed. The maintenance log uses a notation Caelir would recognize. You find this out later.",
     exits: { west: "collapsed_passage" },
     objects: {
@@ -104,6 +113,7 @@ export const SEWER_NODES = {
   },
   echoing_hall: {
     name: "The Echoing Hall",
+    district: "The Undercity",
     description: "The hall amplifies sound and returns it wrong — your footstep comes back from the far wall a half-second late and from a slightly different direction. After a few minutes you stop trusting your ears entirely. The channel stalkers have lived here long enough to use this.",
     exits: { west: "fungal_bloom_chamber", east: "spore_garden", north: "old_maintenance_room" },
     objects: {
@@ -115,6 +125,7 @@ export const SEWER_NODES = {
   },
   spore_garden: {
     name: "The Spore Garden",
+    district: "The Undercity",
     description: "The garden should not exist. There is no light source sufficient to explain what has grown here — fungi in a dozen varieties, some you recognize from Thalara's jars, some you have never seen labeled. The spore cloud is thick enough to be visible as a layer in the air. The old inscription on the far wall reads: GREW WITHOUT PERMISSION. You are not certain this is a complaint.",
     exits: { west: "echoing_hall", south: "cracked_aqueduct" },
     objects: {
@@ -126,6 +137,7 @@ export const SEWER_NODES = {
   },
   cracked_aqueduct: {
     name: "The Cracked Aqueduct",
+    district: "The Undercity",
     description: "The aqueduct is older than everything above it. The stonework is finer, the engineering more deliberate. Water still flows through the cracks — slow, dark, and warm. Below, the sound of much more water. The inscription above the descent reads: WHAT YOU FIND BELOW IS WHAT THE CITY DOES NOT DISCUSS. You have been warned.",
     exits: { north: "spore_garden", down: "flooded_hall" },
     objects: {
@@ -137,6 +149,7 @@ export const SEWER_NODES = {
   },
   flooded_hall: {
     name: "The Flooded Hall",
+    district: "The Undercity",
     description: "The water stands still from wall to wall — knee-deep, warm, and dark. It reflects the torchlight perfectly until something moves beneath it. The drowned thralls do not announce themselves. They simply rise from whatever the water has been hiding and orient toward you with the patience of things that are not in any hurry.",
     exits: { up: "cracked_aqueduct", east: "drowned_archive", south: "submerged_tunnel" },
     objects: {
@@ -148,6 +161,7 @@ export const SEWER_NODES = {
   },
   drowned_archive: {
     name: "The Drowned Archive",
+    district: "The Undercity",
     description: "Shelves of stone holding documents wrapped in something that kept them mostly intact despite the water. The flood records go back further than the current city. Among them, a page with a name Thalara would recognize — Descent 7, no return date. You don't know whose name it is yet. Thalara will.",
     exits: { west: "flooded_hall" },
     objects: {
@@ -159,6 +173,7 @@ export const SEWER_NODES = {
   },
   submerged_tunnel: {
     name: "The Submerged Tunnel",
+    district: "The Undercity",
     description: "The tunnel dips below water level for a stretch. You can go through fast — and take what latches onto you — or slow, and feel them before they reach you. Neither option is comfortable. The leeches have been in this water long enough that they are the water, functionally.",
     exits: { north: "flooded_hall", south: "broken_pump_room" },
     objects: {
@@ -170,6 +185,7 @@ export const SEWER_NODES = {
   },
   broken_pump_room: {
     name: "The Broken Pump Room",
+    district: "The Undercity",
     description: "The pump that was supposed to manage water levels down here has been broken long enough that the water has found its own opinion about where it wants to be. It is rising. Slowly, but with the patience of something that has been rising for years and is close to where it wants to go.",
     exits: { north: "submerged_tunnel", east: "drowned_vault" },
     objects: {
@@ -181,6 +197,7 @@ export const SEWER_NODES = {
   },
   drowned_vault: {
     name: "The Drowned Vault",
+    district: "The Undercity",
     description: "The vault sits on a raised platform above the water level — deliberately, precisely. Whatever was stored here was stored to survive flooding. The artifact on the platform has been here long enough that the stone around it has changed color slightly. When you pick it up, something in the room changes. You are not certain what. You are certain something noticed.",
     exits: { west: "broken_pump_room", north: "sluice_gate" },
     objects: {
@@ -193,6 +210,7 @@ export const SEWER_NODES = {
   },
   sluice_gate: {
     name: "The Sluice Gate",
+    district: "The Undercity",
     description: "The gate controls the flow between levels. The mechanism is ancient. The water has learned to go around it.",
     exits: { south: "drowned_vault", down: "gear_hall" },
     objects: {
@@ -203,6 +221,7 @@ export const SEWER_NODES = {
   },
   gear_hall: {
     name: "The Gear Hall",
+    district: "The Undercity",
     description: "The gears are still moving. They have been moving without maintenance for longer than the city above. The mechanism they are part of is not obvious from this position. Whatever they drive is somewhere below.",
     exits: { up: "sluice_gate", east: "steam_vent_corridor", south: "iron_walkway" },
     objects: {
@@ -214,6 +233,7 @@ export const SEWER_NODES = {
   },
   steam_vent_corridor: {
     name: "The Steam Vent Corridor",
+    district: "The Undercity",
     description: "The vents activate in a pattern. You watch two cycles before committing to the corridor. The heat wraiths form when the vents are active and come apart when they're not. The window between cycles is exactly wide enough.",
     exits: { west: "gear_hall", east: "broken_regulator_chamber" },
     objects: {
@@ -225,6 +245,7 @@ export const SEWER_NODES = {
   },
   broken_regulator_chamber: {
     name: "The Broken Regulator Chamber",
+    district: "The Undercity",
     description: "The control node for the underworks water system. It was not built to fight. It was built to regulate. The distinction stopped mattering when whatever corrupted it decided the regulation was finished.",
     exits: { west: "steam_vent_corridor" },
     objects: {
@@ -236,6 +257,7 @@ export const SEWER_NODES = {
   },
   iron_walkway: {
     name: "The Iron Walkway",
+    district: "The Undercity",
     description: "The walkway is single-file. Whatever is below is not visible — the drop goes further than your torch reaches. The old safety chains are still bolted in. Most of them. The rust golem patrols this section with the patience of something that has been doing it for a very long time and has never once thought about why.",
     exits: { north: "gear_hall", south: "heart_pump" },
     objects: {
@@ -248,6 +270,7 @@ export const SEWER_NODES = {
   },
   heart_pump: {
     name: "The Heart Pump",
+    district: "The Undercity",
     description: "The thumping you felt two rooms back originates here. A mechanism the size of the room, moving in a cycle so regular it has become the rhythm of this floor. It has been running since before the city above was built in its current form. Whatever it pumps has not been traced. Othorion has theories. He has not confirmed them.",
     exits: { north: "iron_walkway", east: "pressure_valve_shaft" },
     objects: {
@@ -259,6 +282,7 @@ export const SEWER_NODES = {
   },
   pressure_valve_shaft: {
     name: "The Pressure Valve Shaft",
+    district: "The Undercity",
     description: "The shaft descends into the cathedral. The air from below is different — older, colder. The next level does not announce itself. It simply waits.",
     exits: { west: "heart_pump", down: "ash_pillar_hall" },
     objects: {
@@ -269,6 +293,7 @@ export const SEWER_NODES = {
   },
   ash_pillar_hall: {
     name: "The Ash Pillar Hall",
+    district: "The Undercity",
     description: "The scale of this room should not be possible at this depth. The pillars of ash-grey stone reach a ceiling you cannot see. The acolytes stand between them, chanting in a language that predates every language in the city above. They were here before you arrived. They will continue after you leave. This is not reassuring.",
     exits: { up: "pressure_valve_shaft", east: "whispering_chamber", south: "rune_lit_corridor" },
     objects: {
@@ -280,6 +305,7 @@ export const SEWER_NODES = {
   },
   whispering_chamber: {
     name: "The Whispering Chamber",
+    district: "The Undercity",
     description: "The walls whisper. Not metaphorically — a sound that carries specific syllables in a specific order, repeated, emanating from the stone itself. The cathedral wraiths move through the walls as if the whispers opened a door for them. The whispers make you uncertain about what you are doing and whether you decided to do it.",
     exits: { west: "ash_pillar_hall" },
     objects: {
@@ -291,6 +317,7 @@ export const SEWER_NODES = {
   },
   rune_lit_corridor: {
     name: "The Rune-Lit Corridor",
+    district: "The Undercity",
     description: "The full sequence is here, assembled from everything the sewer has been trying to tell you since Floor 2. Whether you have been paying attention determines what this room costs you.",
     exits: { north: "ash_pillar_hall", south: "cathedral_floor" },
     objects: {
@@ -302,6 +329,7 @@ export const SEWER_NODES = {
   },
   cathedral_floor: {
     name: "The Cathedral Floor",
+    district: "The Undercity",
     description: "The cathedral floor is worn by the passage of things that have walked it for longer than the city above has existed. The sump guardians hold positions that have not changed. They guard the approach to the pit and the approach to the chamber with equal patience. They have always done this.",
     exits: { north: "rune_lit_corridor", east: "ash_heart_chamber", south: "sump_pit" },
     objects: {
@@ -313,6 +341,7 @@ export const SEWER_NODES = {
   },
   ash_heart_chamber: {
     name: "The Ash Heart Chamber",
+    district: "The Undercity",
     description: "The chamber is the source. Every pattern you have seen on every floor of this sewer traces back to this room. The artifact on the central platform has been waiting. Whether it was waiting for you specifically is a question the city does not answer directly.",
     exits: { west: "cathedral_floor" },
     objects: {
@@ -326,6 +355,7 @@ export const SEWER_NODES = {
   },
   sump_pit: {
     name: "The Sump Pit",
+    district: "The Undercity",
     description: "The pit breathes. Not metaphorically. A slow exhale rises through the grate every four seconds — warm, dry, and smelling of something that has been below for longer than the word 'below' has existed. The inscription on the near wall: THE KEY DOES NOT OPEN UPWARD. Below the inscription, smaller, recent: M. DASK — I UNDERSTAND NOW.",
     exits: { north: "cathedral_floor" },
     objects: {

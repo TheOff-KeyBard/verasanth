@@ -26,8 +26,8 @@ import { handleQuestDialogue, recordEnemyKill, checkQuestProgressForItem, assign
 import { QUEST_BY_ID } from "./data/quests.js";
 import { rotateSewerCondition } from "./services/sewer_rotation.js";
 import { LEGACY_SLOT_MAP, EQUIPMENT_SLOTS, EQUIPMENT_DATA, INSTINCT_AFFINITIES } from "./data/equipment.js";
-import { getEquipmentSlot, resolveLegacySlot, isValidEquipmentSlot, canEquipItem, equipItem, unequipItem, getEquippedItemMap, getAffinityHint } from "./services/equipment.js";
-import { aggregateEquipmentStats, applyInstinctAffinities } from "./services/equipment_stats.js";
+import { getEquipmentSlot, resolveLegacySlot, isValidEquipmentSlot, canEquipItem, equipItem, unequipItem, getEquippedItemMap, getAffinityHint, getCharacterLevel } from "./services/equipment.js";
+import { aggregateEquipmentStats, applyInstinctAffinities, getItemEffectiveStats } from "./services/equipment_stats.js";
 
 // ─────────────────────────────────────────────────────────────
 // GAME DATA (remaining in index)
@@ -77,7 +77,49 @@ const ROAMER_DEFS = {
 function getRoomNeighbors(locationId) {
   const room = WORLD[locationId];
   if (!room?.exits) return [];
-  return Object.values(room.exits);
+  return Object.values(room.exits).map((v) => (typeof v === "string" ? v : v?.target));
+}
+
+/** Landmark aliases for quick-travel (POST /api/go). */
+const LANDMARKS = {
+  market: "market_square", tavern: "tavern", inn: "tavern",
+  sanctuary: "ashen_sanctuary", apothecary: "atelier", shop: "atelier",
+  crucible: "crucible", naxirs: "naxirs_crucible",
+  sewer: "sewer_entrance", down: "sewer_entrance",
+};
+
+/** Rooms you "enter" (building, shop, dungeon) vs "travel" (street, passage). */
+const ENTER_TARGETS = new Set([
+  "tavern", "atelier", "mended_hide", "still_scale", "hollow_jar", "ashen_sanctuary",
+  "naxirs_crucible", "crucible", "backroom", "sewer_entrance", "cinder_cells_entrance",
+  "cinder_cells_hall", "cinder_cells_block", "cinder_cells_pit", "drain_entrance",
+]);
+
+/** One-sentence travel narration by exit type. */
+function getTravelNarration(fromRoom, toRoom, exitType) {
+  if (exitType === "enter") {
+    return `You step inside. ${(toRoom?.entry_line || "").trim()}`.trim() || "You step inside.";
+  }
+  const narrations = [
+    `You move through the ${fromRoom?.district || "city"}.`,
+    "The street shifts around you.",
+    "You walk on.",
+    "The way ahead opens.",
+  ];
+  const idx = (fromRoom?.name?.length || 0) % narrations.length;
+  return narrations[idx];
+}
+
+/** Convert exit_map to typed exits for API response. */
+function normalizeExits(exitMap) {
+  if (!exitMap || typeof exitMap !== "object") return [];
+  return Object.entries(exitMap).map(([direction, target]) => {
+    const targetId = typeof target === "string" ? target : target?.target;
+    if (!targetId) return null;
+    const type = ENTER_TARGETS.has(targetId) ? "enter" : "travel";
+    const label = WORLD[targetId]?.name || targetId;
+    return { target: targetId, direction, type, label };
+  }).filter(Boolean);
 }
 
 // Phase 3: Environmental hazards — sewer_hazards table (sewer_conditions is for rotation)
@@ -1608,9 +1650,11 @@ if (path === "/api/admin/command" && method === "POST") {
         }
       }
 
+      const typedExits = normalizeExits(exit_map);
       const locPayload = {
-        location: loc, name: room.name, description,
-        exits, exit_map,
+        location: loc, name: room.name, district: room.district || "", description,
+        exits: typedExits,
+        exit_map,  // keep for backward compat
         objects: Object.keys(room.objects || {}),
         items: [],  // room items seeded statically for now
         npcs: npcsHere,
@@ -1712,20 +1756,27 @@ if (path === "/api/admin/command" && method === "POST") {
       }
 
       const room = WORLD[row.location];
+      let directionUsed = direction;
       let dest = room?.exits?.[direction];
-      if (row.location === "market_square" && direction === "down") dest = "sewer_entrance";
-      if (row.location === "cinder_cells_block" && direction === "deeper" && (row.crime_heat ?? 0) < 11) {
+      if (body.target) {
+        const exitMap = { ...(room?.exits || {}) };
+        if (row.location === "market_square") exitMap.down = "sewer_entrance";
+        directionUsed = Object.entries(exitMap).find(([, t]) => t === body.target)?.[0];
+        dest = directionUsed ? exitMap[directionUsed] : null;
+      }
+      if (row.location === "market_square" && directionUsed === "down") dest = "sewer_entrance";
+      if (row.location === "cinder_cells_block" && directionUsed === "deeper" && (row.crime_heat ?? 0) < 11) {
         dest = null;
       }
       // Floor gates: block deeper/down if player lacks required boss flag
       const gate = FLOOR_GATES[row.location];
-      if (gate && direction === gate.exit_dir && gate.requires_flag) {
+      if (gate && directionUsed === gate.exit_dir && gate.requires_flag) {
         const hasFlag = await getFlag(db, uid, gate.requires_flag, 0);
         if (!hasFlag) dest = null;
       }
       const blocked = await getBlockedRoutes(db);
       if (dest && blocked.includes(dest)) return err("The passage is impassable. The noticeboard warned of this.", 400);
-      if (!dest) return err(`You can't go ${direction} from here.`);
+      if (!dest) return err(`You can't go ${directionUsed || direction || "there"} from here.`);
       if (!WORLD[dest]) return err("That path leads nowhere.");
 
       await dbRun(db, "UPDATE players SET location=? WHERE user_id=?", [dest, uid]);
@@ -1770,6 +1821,9 @@ if (path === "/api/admin/command" && method === "POST") {
           destDescription = FIRST_VISIT_INTROS[dest] + destRoom.description;
         }
       }
+      const exitType = ENTER_TARGETS.has(dest) ? "enter" : "travel";
+      const narration = getTravelNarration(room, destRoom, exitType);
+      destDescription = `*${narration}*\n\n${destDescription}`;
 
       // Depth flag (sewer floors 2–5)
       if (SEWER_LEVEL_2.includes(dest) || SEWER_LEVEL_3.includes(dest) || SEWER_LEVEL_4.includes(dest) || SEWER_LEVEL_5.includes(dest)) {
@@ -2148,8 +2202,8 @@ if (path === "/api/admin/command" && method === "POST") {
       }
 
       const movePayload = {
-        location: dest, name: destRoom.name, description: destDescription,
-        exits: destExits,
+        location: dest, name: destRoom.name, district: destRoom.district || "", description: destDescription,
+        exits: normalizeExits(destExitMap),
         exit_map: destExitMap,
         objects: Object.keys(destRoom.objects || {}),
         items: [], npcs: npcsHere, ambient,
@@ -2161,6 +2215,93 @@ if (path === "/api/admin/command" && method === "POST") {
       if (destRoom.pvpve) movePayload.pvpve = destRoom.pvpve;
       if (pvpveWarning) movePayload.pvpve_warning = pvpveWarning;
       return json(movePayload);
+    }
+
+    // ── POST: Go (landmark quick-travel) ──
+    if (path === "/api/go" && method === "POST") {
+      const { landmark } = body;
+      if (!landmark || typeof landmark !== "string") return err("landmark required.", 400);
+      const target = LANDMARKS[landmark.trim().toLowerCase()];
+      if (!target) return err("Unknown landmark.", 400);
+
+      let row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (OLD_SEWER_LOCATIONS.has(row.location)) {
+        await dbRun(db, "UPDATE players SET location=? WHERE user_id=?", ["drain_entrance", uid]);
+        row = await getPlayerSheet(db, uid);
+      }
+      const inCombat = await dbGet(db, "SELECT 1 FROM combat_state WHERE user_id=?", [uid]);
+      if (inCombat) return err("You're in combat. Flee first.", 400);
+
+      const flagRows = await dbAll(db, "SELECT flag FROM player_flags WHERE user_id=? AND (flag LIKE 'visited_%' OR flag='has_seen_market_square')", [uid]);
+      const discovered = new Set();
+      for (const r of flagRows) {
+        if (r.flag === "has_seen_market_square") discovered.add("market_square");
+        else if (r.flag.startsWith("visited_")) discovered.add(r.flag.slice(9));
+      }
+      if (!discovered.has(target)) return json({ success: false, message: "You don't know the way to that place yet." });
+
+      const blocked = await getBlockedRoutes(db);
+      const start = row.location;
+      if (start === target) {
+        const room = WORLD[target];
+        const exitMap = { ...(room?.exits || {}) };
+        if (target === "market_square") exitMap.down = "sewer_entrance";
+        const typedExits = normalizeExits(exitMap);
+        return json({ success: true, path: [target], message: `${"You're already there."}`, location: target, name: room?.name, district: room?.district || "", description: room?.description, exits: typedExits, exit_map: exitMap, objects: Object.keys(room?.objects || {}), items: [], npcs: [], fightable: FIGHTABLE_LOCATIONS.has(target), death_drops_present: false });
+      }
+
+      const queue = [{ loc: start, path: [start] }];
+      const visited = new Set([start]);
+      let found = null;
+      while (queue.length > 0) {
+        const { loc, path } = queue.shift();
+        let exitMap = { ...(WORLD[loc]?.exits || {}) };
+        if (loc === "market_square") exitMap.down = "sewer_entrance";
+        const gate = FLOOR_GATES[loc];
+        if (gate?.requires_flag) {
+          const hasFlag = await getFlag(db, uid, gate.requires_flag, 0);
+          if (!hasFlag) delete exitMap[gate.exit_dir];
+        }
+        for (const val of Object.values(exitMap)) {
+          const dest = typeof val === "string" ? val : val?.target;
+          if (!dest || blocked.includes(dest) || visited.has(dest) || !WORLD[dest]) continue;
+          const newPath = [...path, dest];
+          if (dest === target) {
+            found = newPath;
+            break;
+          }
+          visited.add(dest);
+          queue.push({ loc: dest, path: newPath });
+        }
+        if (found) break;
+      }
+      if (!found) return json({ success: false, message: "You don't know the way to that place yet." });
+
+      await dbRun(db, "UPDATE players SET location=? WHERE user_id=?", [target, uid]);
+      await setFlag(db, uid, target === "market_square" ? "has_seen_market_square" : "visited_" + target, 1);
+
+      const destRoom = WORLD[target];
+      let destExits = Object.keys(destRoom.exits || {});
+      let destExitMap = { ...(destRoom.exits || {}) };
+      if (target === "market_square") { destExits = [...destExits, "down"]; destExitMap.down = "sewer_entrance"; }
+      const destGate = FLOOR_GATES[target];
+      if (destGate?.requires_flag) {
+        const hasFlag = await getFlag(db, uid, destGate.requires_flag, 0);
+        if (!hasFlag) { destExits = destExits.filter(e => e !== destGate.exit_dir); delete destExitMap[destGate.exit_dir]; }
+      }
+      const destBlocked = await getBlockedRoutes(db);
+      for (const e of [...destExits]) {
+        if (destBlocked.includes(destExitMap[e])) { destExits = destExits.filter(x => x !== e); delete destExitMap[e]; }
+      }
+      const npcsHere = Object.entries(NPC_LOCATIONS).filter(([, l]) => l === target).map(([id]) => id);
+      if (target === "cinder_cells_hall" && (row.crime_heat ?? 0) >= 4 && !npcsHere.includes("warden")) npcsHere.push("warden");
+      const deathDrops = await getUnclaimedDropsAtLocation(db, target);
+      let destDescription = destRoom.description;
+      if (deathDrops.length > 0) destDescription += "\n\nSomething glints near the drain. Ash Marks — someone left them here quickly.";
+      const destTypedExits = normalizeExits(destExitMap);
+      const roomName = destRoom.name || target;
+      return json({ success: true, path: found, message: `You make your way to ${roomName}.`, location: target, name: roomName, district: destRoom.district || "", description: destDescription, exits: destTypedExits, exit_map: destExitMap, objects: Object.keys(destRoom.objects || {}), items: [], npcs: npcsHere, fightable: FIGHTABLE_LOCATIONS.has(target), death_drops_present: deathDrops.length > 0 });
     }
 
     // ── POST: Linger (idle encounter check) ──
@@ -3587,6 +3728,37 @@ if (path === "/api/combat/state" && method === "GET") {
       });
     }
 
+    // ── GET: Stats (aggregated equipment + affinity) ──
+    if (path === "/api/stats" && method === "GET") {
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const equipment = await getEquippedItemMap(db, dbAll, uid);
+      const baseStats = aggregateEquipmentStats(equipment);
+      const instinct = (row.instinct || "").toLowerCase();
+      const stats = applyInstinctAffinities(baseStats, equipment, instinct);
+      const characterLevel = getCharacterLevel(row);
+      return json({ ...stats, character_level: characterLevel, instinct: row.instinct || "" });
+    }
+
+    // ── GET: Equipped (full item details per slot) ──
+    if (path === "/api/equipped" && method === "GET") {
+      const equipment = await getEquippedItemMap(db, dbAll, uid);
+      const invRows = await dbAll(db, "SELECT item, display_name FROM inventory WHERE user_id=?", [uid]);
+      const displayNames = Object.fromEntries(invRows.map((r) => [r.item, r.display_name || r.item]));
+      const result = {};
+      for (const [slot, itemId] of Object.entries(equipment)) {
+        if (!itemId) continue;
+        const def = EQUIPMENT_DATA[itemId];
+        const statMods = def ? getItemEffectiveStats(def) : {};
+        result[slot] = {
+          item_id: itemId,
+          name: displayNames[itemId] || def?.name || itemId,
+          stat_modifiers: statMods,
+        };
+      }
+      return json(result);
+    }
+
     // ── GET: Inventory ──
     if (path === "/api/inventory" && method === "GET") {
       const rows = await dbAll(db, "SELECT item,qty,display_name,tier,equipped FROM inventory WHERE user_id=? ORDER BY item", [uid]);
@@ -3609,6 +3781,7 @@ if (path === "/api/combat/state" && method === "GET") {
         const effect = itemDef?.effect;
         const eqDef = EQUIPMENT_DATA[r.item];
         const affinity = slot && instinct && eqDef ? getAffinityHint(eqDef, instinct) : null;
+        const statMods = eqDef ? getItemEffectiveStats(eqDef) : null;
         return {
           id: r.item,
           display_name: r.display_name || r.item,
@@ -3623,6 +3796,8 @@ if (path === "/api/combat/state" && method === "GET") {
           value_am: itemDef?.value ?? 0,
           affinity_marker: affinity?.marker ?? null,
           affinity_tooltip: affinity?.tooltip ?? null,
+          affinity_details: affinity ? { hasBonuses: affinity.hasBonuses, hasPenalties: affinity.hasPenalties, bonusStats: affinity.bonusStats, penaltyStats: affinity.penaltyStats } : null,
+          stat_modifiers: statMods && Object.keys(statMods).length ? statMods : null,
         };
       });
       const offhandLocked = !!(await getFlag(db, uid, "offhand_locked", 0));

@@ -241,6 +241,34 @@
     border-color: #a22;
     color: #e66;
   }
+  .travel-btn {
+    min-width: 7rem;
+    letter-spacing: 0.03em;
+  }
+  #go-section {
+    margin-top: 0.6rem;
+  }
+  .go-input {
+    width: 100%;
+    max-width: 20rem;
+    padding: 0.4rem 0.6rem;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.9rem;
+  }
+  .go-input::placeholder {
+    color: var(--text-dim);
+  }
+  .enter-btn {
+    border-color: var(--ember-dim);
+    color: var(--text-dim);
+  }
+  .enter-btn:hover {
+    border-color: var(--ember);
+    color: var(--ember-glow);
+  }
 
   .btn.npc-btn {
     border-color: var(--ember-dim);
@@ -327,6 +355,17 @@
   .map-node.danger {
     stroke-width: 1.5;
   }
+  .map-node.node-newly-discovered {
+    animation: nodeReveal 0.7s ease-out;
+  }
+  @keyframes nodeReveal {
+    0% { filter: drop-shadow(0 0 12px var(--ember)); opacity: 0.6; }
+    100% { filter: none; opacity: 1; }
+  }
+  .map-link-discovered {
+    stroke: var(--border-warm);
+    opacity: 0.9;
+  }
   #location-label {
     font-size: 0.8rem;
     color: var(--ember);
@@ -361,6 +400,49 @@
   .map-legend-item.current {
     color: var(--ember);
     font-weight: 600;
+  }
+  .map-district-label {
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 2px;
+  }
+  .map-legend-sample {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 2px;
+    vertical-align: middle;
+    border-radius: 50%;
+    background: var(--border-warm);
+    border: 1px solid var(--border);
+  }
+  .map-legend-sample.node-hub {
+    width: 10px;
+    height: 10px;
+  }
+  .map-legend-sample.node-shop {
+    border-radius: 1px;
+  }
+  .map-legend-sample.node-inn,
+  .map-legend-sample.node-sanctuary {
+    border-radius: 2px;
+  }
+  .map-legend-sample.node-dungeon_entrance {
+    border-radius: 1px;
+    transform: rotate(45deg);
+  }
+  .map-legend-sample.current {
+    background: var(--ember);
+    border-color: #fff;
+  }
+  .map-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 12px;
   }
 
   .section-label {
@@ -895,6 +977,114 @@
   .inv-affinity-bonus { color: var(--ember-glow); }
   .inv-affinity-penalty { color: var(--amber-muted, #8a7a5a); }
   .inv-effect-summary { font-size: 0.75rem; color: var(--text-dim); margin-top: 2px; }
+
+  /* ── Item compare overlay ───────────────────────────────────────── */
+  #item-compare-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #item-compare-box {
+    background: var(--bg2);
+    border: 1px solid var(--border-warm);
+    border-radius: 6px;
+    padding: 1.5rem;
+    width: min(520px, 92vw);
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  #item-compare-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+  #item-compare-header button {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 1.2rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 2px 6px;
+  }
+  #compare-title {
+    font-size: 1rem;
+    font-weight: bold;
+    color: var(--ember);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  #compare-columns {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  #compare-arrow {
+    color: var(--text-dim);
+    font-size: 1.2rem;
+    align-self: center;
+  }
+  .compare-col-label {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.3rem;
+  }
+  .compare-item-name {
+    font-size: 0.9rem;
+    color: var(--text);
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+  }
+  .compare-stat-row {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+  }
+  .compare-stat-row .stat-val {
+    color: var(--text);
+  }
+  #compare-deltas {
+    border-top: 1px solid var(--border-warm);
+    padding-top: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  .compare-section-label {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.4rem;
+  }
+  .delta-row {
+    font-size: 0.85rem;
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+  }
+  .delta-positive { color: #6abf69; }
+  .delta-negative { color: #c46a6a; }
+  .delta-neutral  { color: var(--text-dim); }
+  #compare-affinity-hint {
+    font-size: 0.8rem;
+    color: var(--ember);
+    margin-bottom: 0.75rem;
+    min-height: 1rem;
+  }
+  #compare-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+  }
   .inv-btn-row { margin-top: 4px; }
   .inv-use-btn { font-size: 0.7rem; margin-left: 6px; padding: 1px 6px; cursor: pointer; }
   .combat-item-panel { margin-top: 8px; padding: 8px; background: var(--bg2); border-radius: 4px; border: 1px solid var(--border); }
@@ -2349,6 +2539,7 @@
       </div>
       <div id="location-label">Unknown Location</div>
       <div id="map-subtitle">Unknown Region</div>
+      <div id="map-district-label" class="map-district-label" style="display:none"></div>
       <div id="map-legend" class="map-legend"></div>
     </div>
   </div>
@@ -2370,9 +2561,17 @@
       <div id="room-name">—</div>
       <div id="room-desc"></div>
 
-      <div id="exits-section" style="display:none">
-        <div class="section-label">Exits</div>
-        <div class="button-row" id="exits-row"></div>
+      <div id="travel-section" style="display:none">
+        <div class="section-label">Travel</div>
+        <div class="button-row" id="travel-row"></div>
+      </div>
+      <div id="enter-section" style="display:none">
+        <div class="section-label">Enter</div>
+        <div class="button-row" id="enter-row"></div>
+      </div>
+
+      <div id="go-section" style="display:none">
+        <input type="text" id="go-input" class="go-input" placeholder="Go to... (market, tavern, sanctuary)" autocomplete="off" />
       </div>
 
       <div id="objects-section" style="display:none">
@@ -2411,6 +2610,7 @@
       </div>
       <div class="stat-row"><span>Stage</span><span class="stat-val" id="stat-stage">—</span></div>
       <div class="stat-row"><span>XP</span><span class="stat-val" id="stat-xp">—</span></div>
+      <div class="stat-row"><span>Level</span><span class="stat-val" id="stat-level">—</span></div>
     </div>
 
     <div id="wallet-panel">
@@ -2634,6 +2834,44 @@
       </div>
     </div>
     <button id="noticeboard-close" onclick="closeNoticeboard()">Leave</button>
+  </div>
+</div>
+
+<!-- ── Item Compare Overlay ──────────────────────────────────────── -->
+<div id="item-compare-overlay" style="display:none">
+  <div id="item-compare-box">
+    <div id="item-compare-header">
+      <span id="compare-title">Compare</span>
+      <button onclick="closeItemCompare()">✕</button>
+    </div>
+
+    <div id="compare-columns">
+      <div id="compare-current">
+        <div class="compare-col-label">Equipped</div>
+        <div id="compare-current-name" class="compare-item-name">—</div>
+        <div id="compare-current-stats"></div>
+      </div>
+      <div id="compare-arrow">→</div>
+      <div id="compare-candidate">
+        <div class="compare-col-label">New</div>
+        <div id="compare-candidate-name" class="compare-item-name"></div>
+        <div id="compare-candidate-stats"></div>
+      </div>
+    </div>
+
+    <div id="compare-deltas">
+      <div class="compare-section-label">Net change</div>
+      <div id="compare-delta-list"></div>
+    </div>
+
+    <div id="compare-affinity-hint"></div>
+
+    <div id="compare-actions">
+      <button id="compare-equip-btn" class="btn" onclick="confirmEquipFromCompare()">
+        Equip
+      </button>
+      <button class="btn" onclick="closeItemCompare()">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -4078,6 +4316,8 @@ function updateCharPanel(c) {
   document.getElementById('char-title').textContent  = c.instinct || '';
   document.getElementById('stat-stage').textContent  = c.class_stage ?? '—';
   document.getElementById('stat-xp').textContent     = c.xp ?? '—';
+  const charLevel = Math.max(1, 1 + (Number(c.class_stage ?? 0)));
+  document.getElementById('stat-level').textContent = charLevel;
 
   const hp    = c.current_hp || 0;
   const maxHp = playerMaxHp = (c.max_hp || 10);
@@ -4185,6 +4425,148 @@ const EQUIPMENT_SLOT_LABELS = {
 };
 const EQUIPMENT_SLOT_ORDER = ['weapon_main','weapon_offhand','head','chest','hands','legs','feet','cloak','ring_1','ring_2','charm','relic'];
 
+function formatEquipmentSlotName(slot) {
+  return EQUIPMENT_SLOT_LABELS[slot] || (slot ? slot.replace(/_/g, ' ') : '');
+}
+
+function formatStatName(key) {
+  const names = {
+    melee_power: 'Melee Power', spell_power: 'Spell Power', healing_power: 'Healing Power',
+    defense: 'Defense', dodge: 'Dodge', block_value: 'Block', accuracy: 'Accuracy',
+    crit_chance: 'Crit Chance', crit_damage: 'Crit Damage', max_hp: 'Max HP',
+    max_stamina: 'Max Stamina', initiative: 'Initiative', perception: 'Perception',
+    carry_capacity: 'Carry Capacity', ranged_power: 'Ranged Power',
+    resist_poison: 'Poison Resist', resist_bleed: 'Bleed Resist',
+    resist_fire: 'Fire Resist', resist_shadow: 'Shadow Resist',
+  };
+  return names[key] || key;
+}
+
+let compareItemId = null;
+let compareItemData = null;
+
+async function openItemCompare(item) {
+  compareItemId = item.id;
+  compareItemData = item;
+
+  const overlay = document.getElementById('item-compare-overlay');
+  overlay.style.display = 'flex';
+
+  document.getElementById('compare-candidate-name').textContent = item.display_name || item.id;
+  document.getElementById('compare-title').textContent =
+    'Compare — ' + formatEquipmentSlotName(item.slot);
+
+  const [currentStats, equipped] = await Promise.all([
+    GET('/api/stats'),
+    GET('/api/equipped'),
+  ]);
+
+  const currentItem = equipped[item.slot] || null;
+  document.getElementById('compare-current-name').textContent =
+    currentItem ? currentItem.name : '— empty —';
+
+  renderCompareStats('compare-current-stats', currentItem);
+  renderCompareStats('compare-candidate-stats', {
+    stat_modifiers: item.stat_modifiers || {},
+    name: item.display_name || item.id,
+  });
+  renderCompareDeltas(currentItem, item, currentStats);
+  renderCompareAffinity(item);
+}
+
+function renderCompareStats(elementId, item) {
+  const el = document.getElementById(elementId);
+  el.innerHTML = '';
+  if (!item) {
+    el.innerHTML = '<div class="compare-stat-row">No item</div>';
+    return;
+  }
+  const mods = item.stat_modifiers || {};
+  const shown = Object.entries(mods).filter(([k, v]) => v !== 0);
+
+  if (!shown.length) {
+    el.innerHTML = '<div class="compare-stat-row delta-neutral">No stat bonuses</div>';
+    return;
+  }
+
+  for (const [stat, val] of shown) {
+    const row = document.createElement('div');
+    row.className = 'compare-stat-row';
+    row.innerHTML = '<span>' + escapeHtml(formatStatName(stat)) + '</span>' +
+      '<span class="stat-val">' + (val > 0 ? '+' : '') + val + '</span>';
+    el.appendChild(row);
+  }
+}
+
+function renderCompareDeltas(currentItem, candidateItem, currentStats) {
+  const el = document.getElementById('compare-delta-list');
+  el.innerHTML = '';
+
+  const currentMods = currentItem?.stat_modifiers || {};
+  const candidateMods = candidateItem?.stat_modifiers || {};
+
+  const allKeys = new Set([...Object.keys(currentMods), ...Object.keys(candidateMods)]);
+
+  let hasAnyDelta = false;
+  for (const key of allKeys) {
+    const curr = currentMods[key] || 0;
+    const cand = candidateMods[key] || 0;
+    const delta = cand - curr;
+    if (delta === 0) continue;
+
+    hasAnyDelta = true;
+    const row = document.createElement('div');
+    row.className = 'delta-row ' + (delta > 0 ? 'delta-positive' : 'delta-negative');
+    row.innerHTML = '<span>' + escapeHtml(formatStatName(key)) + '</span>' +
+      '<span>' + (delta > 0 ? '+' : '') + delta + '</span>';
+    el.appendChild(row);
+  }
+
+  if (!hasAnyDelta) {
+    el.innerHTML = '<div class="delta-row delta-neutral">No stat change</div>';
+  }
+}
+
+function renderCompareAffinity(item) {
+  const el = document.getElementById('compare-affinity-hint');
+  el.innerHTML = '';
+  const aff = item.affinity_details;
+  if (!aff || (!aff.hasBonuses && !aff.hasPenalties)) return;
+
+  const parts = [];
+  if (aff.hasBonuses && aff.bonusStats) {
+    const bonusList = Object.entries(aff.bonusStats)
+      .map(([s, v]) => '+' + v + ' ' + formatStatName(s)).join(', ');
+    parts.push('✦ ' + bonusList);
+  }
+  if (aff.hasPenalties && aff.penaltyStats) {
+    const penaltyList = Object.entries(aff.penaltyStats)
+      .map(([s, v]) => v + ' ' + formatStatName(s)).join(', ');
+    parts.push('↓ ' + penaltyList);
+  }
+  el.textContent = parts.join('  ');
+}
+
+async function confirmEquipFromCompare() {
+  if (!compareItemId) return;
+  try {
+    await POST('/api/inventory/equip', { item: compareItemId });
+    closeItemCompare();
+    const inv = await GET('/api/inventory');
+    updateInventory(inv);
+    refreshSidebar();
+  } catch (e) {
+    document.getElementById('compare-affinity-hint').textContent = e.message;
+  }
+}
+
+function closeItemCompare() {
+  const overlay = document.getElementById('item-compare-overlay');
+  if (overlay) overlay.style.display = 'none';
+  compareItemId = null;
+  compareItemData = null;
+}
+
 function updateInventory(invData) {
   const loadoutEl = document.getElementById('inv-loadout');
   const el = document.getElementById('inv-list');
@@ -4237,17 +4619,17 @@ function updateInventory(invData) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'inv-equip-btn';
-      btn.textContent = it.equipped ? 'Unequip' : 'Equip';
+      btn.textContent = it.equipped ? 'Unequip' : 'Compare & Equip';
       btn.onclick = async () => {
         try {
           if (it.equipped) {
             await POST('/api/inventory/unequip', { slot: it.slot });
+            const inv = await GET('/api/inventory');
+            updateInventory(inv);
+            refreshSidebar();
           } else {
-            await POST('/api/inventory/equip', { item: it.id });
+            openItemCompare(it);
           }
-          const inv = await GET('/api/inventory');
-          updateInventory(inv);
-          refreshSidebar();
         } catch (e) { log('<em>' + escapeHtml(e.message) + '</em>'); }
       };
       btnRow.appendChild(btn);
@@ -4297,31 +4679,76 @@ function renderRoom(data) {
   document.getElementById('room-name').textContent = data.name || '—';
   renderHazardWarning(data.hazard || null);
   document.getElementById('room-desc').innerHTML   = render(data.description || '');
-  document.getElementById('footer-loc').textContent = data.location || '';
-  document.getElementById('header-sub').textContent = data.location || '';
+  const district = data.district || '';
+  const locationText = district ? (data.name || '—') + ' — ' + district : (data.name || data.location || '—');
+  document.getElementById('footer-loc').textContent = locationText;
+  document.getElementById('header-sub').textContent = locationText;
 
-  // Exits (named destinations; dangerous get ⚠ and red border)
-  const exitsRow = document.getElementById('exits-row');
-  exitsRow.innerHTML = '';
+  const DIRECTION_ARROWS = { north: '↑', south: '↓', east: '→', west: '←', up: '↑', down: '↓', deeper: '↓', back: '←', out: '→', southeast: '↘' };
   const exits = data.exits || [];
   const exitMap = data.exit_map || {};
-  if (exits.length) {
+
+  const travelRow = document.getElementById('travel-row');
+  const enterRow = document.getElementById('enter-row');
+  travelRow.innerHTML = '';
+  enterRow.innerHTML = '';
+
+  if (exits.length && exits.every(e => typeof e === 'string')) {
     exits.forEach(dir => {
       const dest = exitMap[dir];
       const name = (locationNamesMap[dest] || LOCATION_NAMES[dest] || dest || dir).trim();
       const dangerous = dest && DANGEROUS_LOCATIONS.has(dest);
       const b = document.createElement('button');
-      b.className = 'btn exit-btn' + (dangerous ? ' exit-btn--danger' : '');
+      b.className = 'btn exit-btn travel-btn' + (dangerous ? ' exit-btn--danger' : '');
       b.textContent = name + (dangerous ? ' ⚠' : '');
-      b.onclick = () => doMove(dir);
-      exitsRow.appendChild(b);
+      b.onclick = () => doMove(dest ? { target: dest } : { direction: dir });
+      travelRow.appendChild(b);
     });
-    document.getElementById('exits-section').style.display = '';
+    document.getElementById('travel-section').style.display = '';
+    document.getElementById('enter-section').style.display = 'none';
   } else {
-    document.getElementById('exits-section').style.display = 'none';
+    const travelExits = exits.filter(e => e && e.type === 'travel');
+    const enterExits = exits.filter(e => e && e.type === 'enter');
+    travelExits.forEach(exit => {
+      const b = document.createElement('button');
+      b.className = 'btn exit-btn travel-btn';
+      const arrow = exit.direction ? (DIRECTION_ARROWS[exit.direction] || '') : '';
+      b.textContent = (arrow ? arrow + ' ' : '') + (exit.label || exit.target);
+      const dest = exit.target;
+      const dangerous = dest && DANGEROUS_LOCATIONS.has(dest);
+      if (dangerous) { b.className += ' exit-btn--danger'; b.textContent += ' ⚠'; }
+      b.onclick = () => doMove({ target: dest });
+      travelRow.appendChild(b);
+    });
+    enterExits.forEach(exit => {
+      const b = document.createElement('button');
+      b.className = 'btn exit-btn enter-btn';
+      b.textContent = exit.label || exit.target;
+      const dest = exit.target;
+      const dangerous = dest && DANGEROUS_LOCATIONS.has(dest);
+      if (dangerous) { b.className += ' exit-btn--danger'; b.textContent += ' ⚠'; }
+      b.onclick = () => doMove({ target: dest });
+      enterRow.appendChild(b);
+    });
+    document.getElementById('travel-section').style.display = travelExits.length ? '' : 'none';
+    document.getElementById('enter-section').style.display = enterExits.length ? '' : 'none';
   }
 
-  if (window.updateSidebarMap) window.updateSidebarMap(data.location, visitedSet, { ...LOCATION_NAMES, ...locationNamesMap });
+  const goSection = document.getElementById('go-section');
+  if (goSection) goSection.style.display = data.location ? '' : 'none';
+
+  const goInput = document.getElementById('go-input');
+  if (goInput && !goInput.dataset.goBound) {
+    goInput.dataset.goBound = '1';
+    goInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        doGo(goInput.value);
+      }
+    });
+  }
+
+  if (window.updateSidebarMap) window.updateSidebarMap(data.location, visitedSet, { ...LOCATION_NAMES, ...locationNamesMap }, data.district);
   currentGameLocation = data.location || '';
   currentRoomFightable = data.fightable ?? false;
 
@@ -4431,9 +4858,34 @@ async function doSearchArea() {
 }
 
 // ── Movement ─────────────────────────────────────────────────────
-async function doMove(dir) {
+async function doGo(landmark) {
+  const trimmed = (landmark || '').trim();
+  if (!trimmed) return;
   try {
-    const data = await POST('/api/move', { direction: dir });
+    const data = await POST('/api/go', { landmark: trimmed });
+    if (!data.success) {
+      log(`<em>${data.message || "You don't know the way to that place yet."}</em>`);
+      return;
+    }
+    visitedSet.add(data.location);
+    renderRoom(data);
+    startLingerTimer(data.fightable);
+    log(`<em>${data.message || ''}</em>`);
+    refreshSidebar();
+    window.dispatchEvent(new CustomEvent('player-moved', { detail: { location: data.location } }));
+    const goInput = document.getElementById('go-input');
+    if (goInput) goInput.value = '';
+  } catch (e) {
+    log(`<em>${e.message || 'Failed to travel.'}</em>`);
+  }
+}
+
+async function doMove(dirOrTarget) {
+  try {
+    const body = typeof dirOrTarget === 'object' && dirOrTarget?.target != null
+      ? { target: dirOrTarget.target }
+      : { direction: typeof dirOrTarget === 'object' ? dirOrTarget?.direction : dirOrTarget };
+    const data = await POST('/api/move', body);
     const visitFlag = data.location === 'market_square' ? 'has_seen_market_square' : 'visited_' + data.location;
     await POST('/api/flag', { flag: visitFlag, value: 1 }).catch(() => {});
     visitedSet.add(data.location);
@@ -5368,6 +5820,11 @@ async function updateQuests() {
 // ── Keyboard shortcuts ───────────────────────────────────────────
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
+    const compareOverlay = document.getElementById('item-compare-overlay');
+    if (compareOverlay && compareOverlay.style.display === 'flex') {
+      closeItemCompare();
+      return;
+    }
     closeDialogue();
     closeBoard();
     closeBountyBoard();

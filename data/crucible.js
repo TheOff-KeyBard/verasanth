@@ -5,6 +5,7 @@
 
 export const CRUCIBLE_ROOM = {
   name: "The Crucible",
+  district: "Low Quarter",
   description: "The room announces itself before you reach the door — a faint smell of heated metal and something electrical that has no source you can identify. Inside, every surface is in use. Shelves of specimen jars line the walls at irregular heights, labels in a cramped shorthand that covers both sides of the paper. Two worktables run parallel down the room's length, covered in instruments you recognize in function but not in origin. Measurements are recorded on everything: the tabletops, the walls, the back of the door you just came through. At the far end, a low lamp burns over a desk where a tall figure writes without looking up. A small shape moves near his shoulder — something between a bird and an idea of a bird, its edges slightly imprecise, as if it was made from a concept rather than matter. Pip regards you with one eye that is entirely too knowing for something with no confirmed taxonomy.",
   exits: { north: "east_road" },
   objects: {
