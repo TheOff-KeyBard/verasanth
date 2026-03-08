@@ -11,6 +11,7 @@ import { COMBAT_DATA, FIGHTABLE_LOCATIONS, ENCOUNTER_CHANCES, ENCOUNTER_CUES, SC
 import { RACES } from "./data/races.js";
 import { INSTINCTS } from "./data/instincts.js";
 import { LEVEL_5_UPGRADES } from "./data/upgrades.js";
+import { STATUS_EFFECTS } from "./data/status_effects.js";
 import { NPC_LOCATIONS, NPC_NAMES, NPC_TOPICS, BARTENDER_FEE } from "./data/npcs.js";
 import { SERIS_NOTICES, FLAVOR_NOTICES, ANONYMOUS_NOTICES, IMPOSSIBLE_TEMPLATES, BOARD_NPC_REACTIONS } from "./data/board.js";
 import { SERIS_INTEREST_ITEMS, getSellValue, displayNameToKey, TIER_BASE_VALUES } from "./data/seris.js";
@@ -119,17 +120,25 @@ function getRoomNeighbors(locationId) {
 
 /** Landmark aliases for quick-travel (POST /api/go). */
 const LANDMARKS = {
-  market: "market_square", tavern: "tavern", inn: "tavern",
-  sanctuary: "ashen_sanctuary", apothecary: "atelier", shop: "atelier",
-  crucible: "crucible", naxirs: "naxirs_crucible",
-  sewer: "sewer_entrance", down: "sewer_entrance",
+  market: "market_square", square: "market_square",
+  tavern: "tavern", inn: "tavern",
+  forge: "atelier", atelier: "atelier",
+  armor: "mended_hide", shop: "still_scale", scale: "still_scale",
+  apothecary: "hollow_jar", jar: "hollow_jar",
+  sanctuary: "ashen_sanctuary", crucible: "crucible",
+  archive: "ashen_archive_entrance", watch: "stone_watch_gate",
+  banner: "broken_banner_gate", sanctum: "quiet_sanctum_entrance",
+  veil: "veil_market_surface", covenant: "umbral_covenant_descent",
+  sewer: "sewer_entrance",
 };
 
 /** Rooms you "enter" (building, shop, dungeon) vs "travel" (street, passage). */
 const ENTER_TARGETS = new Set([
-  "tavern", "atelier", "mended_hide", "still_scale", "hollow_jar", "ashen_sanctuary",
-  "naxirs_crucible", "crucible", "backroom", "sewer_entrance", "cinder_cells_entrance",
-  "cinder_cells_hall", "cinder_cells_block", "cinder_cells_pit", "drain_entrance",
+  "tavern", "atelier", "mended_hide", "still_scale", "hollow_jar",
+  "ashen_sanctuary", "crucible", "backroom",
+  "ashen_archive_hall", "stone_watch_hall", "broken_banner_yard",
+  "quiet_sanctum_entrance", "veil_market_hidden", "umbral_covenant_hall",
+  "sewer_entrance",
 ]);
 
 /** One-sentence travel narration by exit type. */
@@ -153,7 +162,8 @@ function normalizeExits(exitMap) {
   return Object.entries(exitMap).map(([direction, target]) => {
     const targetId = typeof target === "string" ? target : target?.target;
     if (!targetId) return null;
-    const type = ENTER_TARGETS.has(targetId) ? "enter" : "travel";
+    let type = ENTER_TARGETS.has(targetId) ? "enter" : "travel";
+    if (direction === "in" || direction === "out") type = "enter";
     const label = WORLD[targetId]?.name || targetId;
     return { target: targetId, direction, type, label };
   }).filter(Boolean);
@@ -2283,7 +2293,7 @@ if (path === "/api/admin/command" && method === "POST") {
       const { landmark } = body;
       if (!landmark || typeof landmark !== "string") return err("landmark required.", 400);
       const target = LANDMARKS[landmark.trim().toLowerCase()];
-      if (!target) return err("Unknown landmark.", 400);
+      if (!target) return json({ success: false, message: "You don't know a place called that." });
 
       let row = await getPlayerSheet(db, uid);
       if (!row) return err("No character.", 404);
@@ -2300,7 +2310,7 @@ if (path === "/api/admin/command" && method === "POST") {
         if (r.flag === "has_seen_market_square") discovered.add("market_square");
         else if (r.flag.startsWith("visited_")) discovered.add(r.flag.slice(9));
       }
-      if (!discovered.has(target)) return json({ success: false, message: "You don't know the way to that place yet." });
+      if (!discovered.has(target)) return json({ success: false, message: "You haven't found that place yet." });
 
       const blocked = await getBlockedRoutes(db);
       const start = row.location;
@@ -2337,7 +2347,7 @@ if (path === "/api/admin/command" && method === "POST") {
         }
         if (found) break;
       }
-      if (!found) return json({ success: false, message: "You don't know the way to that place yet." });
+      if (!found) return json({ success: false, message: "You haven't found that place yet." });
 
       await dbRun(db, "UPDATE players SET location=? WHERE user_id=?", [target, uid]);
       await setFlag(db, uid, target === "market_square" ? "has_seen_market_square" : target === "crucible" ? "seen_crucible" : "visited_" + target, 1);
@@ -3283,10 +3293,16 @@ if (path === "/api/combat/state" && method === "GET") {
       if (level5Upgrade?.id === "quiet_prayer" && turnCount > 0 && turnCount % 3 === 0) {
         const healAmt = Math.max(1, Math.floor((state.player_hp_max ?? 20) * (level5Upgrade.heal_percent ?? 0.08)));
         playerHp = Math.min(playerHp + healAmt, state.player_hp_max);
-        const negStatuses = ["armor_break", "bleed", "poison", "burn", "weakened", "blind", "stun"];
-        const toRemove = negStatuses.find((s) => (state.statuses?.[s] ?? 0) > 0);
-        if (toRemove && (level5Upgrade.remove_statuses ?? 0) > 0) {
-          delete state.statuses[toRemove];
+        const negTypes = ["bleed", "poison", "fire_touch"];
+        const effects = state.status_effects ?? [];
+        const idx = effects.findIndex((e) => e.type && negTypes.includes(e.type));
+        if (idx >= 0 && (level5Upgrade.remove_statuses ?? 0) > 0) {
+          effects.splice(idx, 1);
+        } else {
+          const abEffects = state.armor_break_effects ?? [];
+          if (abEffects.length > 0 && (level5Upgrade.remove_statuses ?? 0) > 0) {
+            abEffects.splice(0, 1);
+          }
         }
       }
       if (level5Upgrade?.id === "battle_hardened") {
@@ -3347,7 +3363,18 @@ if (path === "/api/combat/state" && method === "GET") {
         playerHp = Math.min(playerHp + attack.heal, state.player_hp_max);
       } else {
         const guardMod = getTraitDamageModifier(enemy, state);
-        const playerDmg = Math.floor((attack.dmg ?? 0) * guardMod);
+        let playerDmg = Math.floor((attack.dmg ?? 0) * guardMod);
+
+        // empowered: +40% damage, 5% HP cost, expires after 2 uses
+        if (state.statuses?.empowered && (state.statuses.empowered.uses_remaining ?? 0) > 0 && playerDmg > 0) {
+          const empowered = state.statuses.empowered;
+          playerDmg = Math.floor(playerDmg * (1 + (empowered.effect_value ?? 0.40)));
+          const hpCost = Math.max(1, Math.floor((state.player_hp_max ?? 20) * (empowered.hp_cost_per_use ?? 0.05)));
+          playerHp = Math.max(1, playerHp - hpCost);
+          empowered.uses_remaining -= 1;
+          if (empowered.uses_remaining <= 0) delete state.statuses.empowered;
+        }
+
         enemyHp = Math.max(0, enemyHp - playerDmg);
       }
 
@@ -3377,6 +3404,15 @@ if (path === "/api/combat/state" && method === "GET") {
             state.statuses = state.statuses || {};
             state.statuses.shield = { duration: dur, value: attack.status_value };
           }
+        } else if (status === "empowered") {
+          const def = STATUS_EFFECTS?.empowered ?? {};
+          state.statuses = state.statuses || {};
+          state.statuses.empowered = {
+            duration: dur,
+            uses_remaining: def.uses_remaining ?? 2,
+            effect_value: def.effect_value ?? 0.40,
+            hp_cost_per_use: def.hp_cost_per_use ?? 0.05,
+          };
         } else {
           state.statuses = state.statuses || {};
           state.statuses[status] = attack.status_value != null ? { duration: dur, value: attack.status_value } : dur;

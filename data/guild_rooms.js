@@ -6,6 +6,7 @@
 export const GUILD_ROOMS = {
   ember_quarter_south: {
     name: "Ember Quarter — South End",
+    district: "Ember Quarter",
     description: "The southern end of the Ember Quarter, where the district narrows between older buildings. The architecture here is darker than the road above — the stonework denser, the windows higher and narrower. Ash drifts in the air with a deliberateness that has nothing to do with wind. At the far end of the lane, a structure rises above the roofline like the skeleton of something that refused to fall. The Archive. Its doors are visible from here. The warmth it radiates reaches you before you can read the runes on the entrance.",
     exits: { north: "east_road", south: "ashen_archive_entrance", east: "crucible" },
     objects: {
@@ -17,6 +18,7 @@ export const GUILD_ROOMS = {
 
   ashen_archive_entrance: {
     name: "The Ashen Archive — Entrance",
+    district: "Ember Quarter",
     description: "The Archive rises from the Ember Quarter like the blackened skeleton of a cathedral that refused to collapse. Dark volcanic stone veined with red glass windows that glow without any visible flame. Ash drifts from the upper towers on a wind that exists only here. The massive entrance doors are carved with spiral runes — fire becoming ash becoming something the rune-carver ran out of language for. The air radiates unnatural warmth. A concealed spiral stair behind a scorched stone relief leads into the Archive's lower halls.",
     exits: { north: "ember_quarter_south", down: "ashen_archive_hall" },
     objects: {
@@ -28,6 +30,7 @@ export const GUILD_ROOMS = {
 
   ashen_archive_hall: {
     name: "The Ashen Archive — Ember Hall",
+    district: "Ember Quarter",
     description: "The heart of the Archive. A vast circular chamber where ash particles float through shafts of ember-light without settling. A suspended iron brazier holds a flame that has apparently never gone out and never grown. Shelves curve along the walls between sealed vault doors. Scholars move through the room with the careful economy of people who have learned what happens when they don't. The air is warm, dry, and tastes faintly of old paper and hot metal. Vaelith Xyrelle works at a long stone table near the brazier, reading something she turns face-down as you approach.",
     exits: { up: "ashen_archive_entrance" },
     objects: {
@@ -40,6 +43,7 @@ export const GUILD_ROOMS = {
 
   threshold_road: {
     name: "Threshold Road — Eastern Approach",
+    district: "Threshold District",
     description: "The road that cuts northeast from the main district toward the Watch fortress. The cobblestones here are larger and more deliberate than elsewhere — built to carry heavy loads, heavy armor, heavy things that needed moving without questions. Stone towers are visible ahead, banners hanging still in air that should be moving them. The road is empty in the way of places under active surveillance. Whatever patrols this stretch has already seen you.",
     exits: { southeast: "north_road", north: "stone_watch_gate" },
     objects: {
@@ -51,6 +55,7 @@ export const GUILD_ROOMS = {
 
   stone_watch_gate: {
     name: "The Stone Watch — Gate",
+    district: "Threshold District",
     description: "Built directly into Verasanth's outer defensive wall. Massive iron gates, held at sixty degrees open — not from negligence, from policy. Stone towers fly the Watch banner. The building is less a guild hall and more the thing preventing the city from learning what it would do without it. The guards at the gate look at you the way professionals look at things that have not yet been categorized.",
     exits: { south: "threshold_road", in: "stone_watch_hall" },
     objects: {
@@ -62,6 +67,7 @@ export const GUILD_ROOMS = {
 
   stone_watch_hall: {
     name: "The Stone Watch — Shield Hall",
+    district: "Threshold District",
     description: "Long stone corridors. Footsteps somewhere else in the fortress, always. The smell of oil and polished metal. Wardens rotate through in pairs exchanging shorthand you lack the context for. The Shield Hall has formation marks worn into the stone — centuries of refinement in where to stand, how to hold a line. Rhyla Thornshield reviews patrol reports at a standing desk. She finishes the line she is reading before she looks up.",
     exits: { out: "stone_watch_gate" },
     objects: {
@@ -74,6 +80,7 @@ export const GUILD_ROOMS = {
 
   broken_banner_gate: {
     name: "The Broken Banner — Gate",
+    district: "Pale Rise",
     description: "A former military fortress in Pale Rise, built into the hillside. Thick stone walls. Old battle standards hang from the ramparts — many torn, many burned. At the entrance, a massive banner split cleanly down the middle. Not age. Something cut this in one stroke. Garruk kept both halves and hung them here. The training courtyard beyond is never quiet.",
     exits: { south: "west_road", in: "broken_banner_yard" },
     objects: {
@@ -85,6 +92,7 @@ export const GUILD_ROOMS = {
 
   broken_banner_yard: {
     name: "The Broken Banner — Training Yard",
+    district: "Pale Rise",
     description: "A massive open arena — weapon racks, training dummies worked past their original shape, sparring circles ground into stone. The air smells of sweat and iron and forge smoke from the workshop at the east end. Recruits run drills under veterans who correct with one word. Nothing here is for show. Garruk Stonehide stands at the edge of the main sparring circle watching a bout with the patience of someone who already knows how it ends.",
     exits: { out: "broken_banner_gate" },
     objects: {
@@ -97,6 +105,7 @@ export const GUILD_ROOMS = {
 
   quiet_sanctum_entrance: {
     name: "The Quiet Sanctum",
+    district: "Ember Quarter",
     description: "The Sanctum sits beside the Ashen Sanctuary like a smaller temple grown from the same stone. Warm lantern light from tall arched windows. The air smells of herbs, incense, and clean linen. Visitors lower their voices without deciding to. The room is never empty but the noise people make here is absorbed rather than reflected. Brother Halden Marr moves between those present with the unhurried attention of someone who has learned that presence is itself a form of treatment. He notices you before you speak.",
     exits: { south: "ashen_sanctuary" },
     objects: {
@@ -109,6 +118,7 @@ export const GUILD_ROOMS = {
 
   veil_market_surface: {
     name: "The Veil Market — Surface",
+    district: "Low Quarter",
     description: "From the street it looks like a cluster of Low Quarter stalls — spices, cloth, trinkets, nothing worth a second look. You would walk past it. That is the point. Between two stalls, a gap in the wall narrows to a passage. At the end, a heavy curtain. Behind it, stairs going down. You would not have found this without knowing where to look. That is also the point.",
     exits: { north: "south_road", down: "veil_market_hidden" },
     objects: {
@@ -120,6 +130,7 @@ export const GUILD_ROOMS = {
 
   veil_market_hidden: {
     name: "The Veil Market — The Hidden Bazaar",
+    district: "Low Quarter",
     description: "Lanterns in narrow corridors below the Low Quarter. Conversations in whispers. Shadows move along the walls as figures slip between exits that are not exits until someone shows you how they work. The smell of spices, smoke, and things that did not arrive through any official channel. Lirael Quickstep is at a table at the back of the room with nothing on it, watching you arrive with the attention of someone who knew you were coming before you did.",
     exits: { up: "veil_market_surface" },
     objects: {
@@ -132,6 +143,7 @@ export const GUILD_ROOMS = {
 
   umbral_covenant_descent: {
     name: "The Umbral Covenant — Descent",
+    district: "Pale Rise",
     description: "No surface structure. Access through a stairway beneath Pale Rise that most people walk past without seeing. Descending feels like entering another place — not dramatic, just a change in the air partway down, and after the change you understand that the air above was doing something for you that air does not normally do, and now it has stopped. The walls transition from cut stone to something older and less cut. Violet light from below. The feeling of being watched, which Covenant members will tell you is correct.",
     exits: { up: "west_road", down: "umbral_covenant_hall" },
     objects: {
@@ -143,6 +155,7 @@ export const GUILD_ROOMS = {
 
   umbral_covenant_hall: {
     name: "The Umbral Covenant — The Gloom Hall",
+    district: "Pale Rise",
     description: "Carved directly into the bedrock beneath the city. Halls lit by voidcrystals in faint violet. Shadows stretch unnaturally — longer than the light sources would produce, bending at wrong angles. Some corridors seem longer than they should be. Something is watching you. Serix Vaunt stands in the center of the Gloom Hall as if placed there, waiting without impatience for however long it took.",
     exits: { up: "umbral_covenant_descent" },
     objects: {

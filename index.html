@@ -262,12 +262,12 @@
     color: var(--text-dim);
   }
   .enter-btn {
-    border-color: var(--ember-dim);
+    border-color: var(--border-warm, #4a3a2a);
     color: var(--text-dim);
   }
   .enter-btn:hover {
     border-color: var(--ember);
-    color: var(--ember-glow);
+    color: var(--text);
   }
 
   .btn.npc-btn {
@@ -332,22 +332,12 @@
   .map-node {
     fill: var(--bg);
     stroke: var(--border-warm);
-    stroke-width: 1;
+    stroke-width: 1.5;
+    cursor: default;
     transition: all 0.25s ease;
-  }
-  .map-node.discovered {
-    opacity: 1;
-  }
-  .map-node.undiscovered {
-    opacity: 0.15;
   }
   .map-node.adjacent {
     stroke: var(--ember);
-  }
-  .map-node.current {
-    fill: var(--ember);
-    stroke: #fff;
-    filter: drop-shadow(0 0 5px var(--ember));
   }
   .map-node.safe {
     stroke-width: 1.5;
@@ -357,6 +347,35 @@
   }
   .map-node.node-newly-discovered {
     animation: nodeReveal 0.7s ease-out;
+  }
+  .map-node.node-hub { fill: var(--ember, #c0622a); stroke: #e08040; }
+  .map-node.node-street { fill: #3a3028; stroke: #6b5a4a; }
+  .map-node.node-shop { fill: #2a3040; stroke: #5a6a80; }
+  .map-node.node-inn { fill: #2d3828; stroke: #5a7850; }
+  .map-node.node-sanctuary { fill: #2a2840; stroke: #6a6090; }
+  .map-node.node-guild { fill: #302830; stroke: #7a5a70; }
+  .map-node.node-research { fill: #2a3030; stroke: #506060; }
+  .map-node.node-dungeon_entrance { fill: #3a2020; stroke: #8a4040; }
+  .map-node.node-safe { fill: #2d3828; stroke: #4a6040; }
+  .map-node.node-danger { fill: #3a2020; stroke: #7a3030; }
+  .map-node.current {
+    fill: var(--ember, #c0622a) !important;
+    stroke: var(--ember, #c0622a) !important;
+    stroke-width: 2.5 !important;
+    filter: drop-shadow(0 0 4px rgba(192,98,42,0.7));
+  }
+  .map-node.discovered { opacity: 1; }
+  .map-node.undiscovered { opacity: 0.2; stroke-dasharray: 3,2; }
+  .map-link { stroke: #4a3a2a; stroke-width: 1; opacity: 0.4; }
+  .map-link-discovered { stroke: #6b5040; opacity: 0.7; }
+  #map-district-label {
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    text-align: center;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-top: 0.25rem;
+    min-height: 1em;
   }
   @keyframes nodeReveal {
     0% { filter: drop-shadow(0 0 12px var(--ember)); opacity: 0.6; }
@@ -381,16 +400,12 @@
     letter-spacing: 1px;
   }
   .map-legend {
-    margin-top: 10px;
-    padding-top: 8px;
-    border-top: 1px solid var(--border);
-    font-size: 0.7rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.8rem;
+    font-size: 0.68rem;
     color: var(--text-dim);
-    max-height: 120px;
-    overflow-y: auto;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2px 12px;
+    margin-top: 0.4rem;
   }
   .map-legend-item {
     white-space: nowrap;
@@ -438,12 +453,12 @@
     background: var(--ember);
     border-color: #fff;
   }
-  .map-legend {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0 12px;
-  }
+  #map-legend .node-hub { fill: var(--ember, #c0622a); stroke: #e08040; }
+  #map-legend .node-street { fill: #3a3028; stroke: #6b5a4a; }
+  #map-legend .node-shop { fill: #2a3040; stroke: #5a6a80; }
+  #map-legend .node-guild { fill: #302830; stroke: #7a5a70; }
+  #map-legend .node-dungeon_entrance { fill: #3a2020; stroke: #8a4040; }
+  #map-legend .node-current { fill: var(--ember, #c0622a); stroke: var(--ember, #c0622a); }
 
   .section-label {
     font-family: var(--font-title);
@@ -2647,7 +2662,7 @@
       </div>
 
       <div id="go-section" style="display:none">
-        <input type="text" id="go-input" class="go-input" placeholder="Go to... (market, tavern, sanctuary)" autocomplete="off" />
+        <input type="text" id="go-input" class="go-input" placeholder="Go to... (tavern, market, archive...)" autocomplete="off" />
       </div>
 
       <div id="objects-section" style="display:none">
@@ -4777,7 +4792,7 @@ function renderRoom(data) {
   document.getElementById('footer-loc').textContent = locationText;
   document.getElementById('header-sub').textContent = locationText;
 
-  const DIRECTION_ARROWS = { north: '↑', south: '↓', east: '→', west: '←', up: '↑', down: '↓', deeper: '↓', back: '←', out: '→', southeast: '↘', northwest: '↖', in: '→' };
+  const DIRECTION_ARROWS = { north: '↑', south: '↓', east: '→', west: '←', up: '↑', down: '↓', deeper: '↓', back: '←', out: '→', northwest: '↖', northeast: '↗', southwest: '↙', southeast: '↘', in: '→' };
   const exits = data.exits || [];
   const exitMap = data.exit_map || {};
 

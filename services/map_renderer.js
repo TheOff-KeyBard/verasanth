@@ -37,7 +37,7 @@ export function shouldRenderNode(nodeId, currentRoomId, discoveredLocations, adj
 }
 
 /** Radius by node_type: hub largest, inn/sanctuary medium, street/safe/danger default. */
-const NODE_RADIUS = { hub: 9, inn: 6, sanctuary: 6, street: 5, shop: 5, safe: 5, danger: 5, dungeon_entrance: 5 };
+const NODE_RADIUS = { hub: 9, inn: 6, sanctuary: 6, street: 5, shop: 5, guild: 5, research: 5, safe: 5, danger: 5, dungeon_entrance: 5 };
 
 export function buildNodeClass(nodeMeta, isCurrent, isDiscovered, isAdjacent) {
   const parts = ["map-node"];
@@ -64,7 +64,7 @@ function createNodeElement(meta, cls, label, nodeId = "") {
     el.appendChild(title);
   };
 
-  if (type === "shop") {
+  if (["shop", "guild", "research"].includes(type)) {
     const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
     const s = radius * 1.4;
     rect.setAttribute("x", meta.x - s / 2);
@@ -187,11 +187,12 @@ export function updateSidebarMap(currentRoomId, discoveredLocations, locationNam
   const legendEl = document.getElementById("map-legend");
   if (legendEl) {
     legendEl.innerHTML = `
-      <span class="map-legend-sample node-hub"></span> Hub
-      <span class="map-legend-sample node-street"></span> Street
-      <span class="map-legend-sample node-shop"></span> Shop
-      <span class="map-legend-sample node-dungeon_entrance"></span> Dungeon
-      <span class="map-legend-sample map-node current"></span> You
+      <span><svg width="10" height="10" style="vertical-align:middle"><circle cx="5" cy="5" r="5" class="node-hub"/></svg> Hub</span>
+      <span><svg width="10" height="10" style="vertical-align:middle"><circle cx="5" cy="5" r="4" class="node-street"/></svg> Street</span>
+      <span><svg width="10" height="10" style="vertical-align:middle"><rect x="1" y="1" width="8" height="8" class="node-shop"/></svg> Shop</span>
+      <span><svg width="10" height="10" style="vertical-align:middle"><rect x="1" y="1" width="8" height="8" class="node-guild"/></svg> Guild</span>
+      <span><svg width="12" height="12" style="vertical-align:middle"><rect x="2" y="2" width="8" height="8" transform="rotate(45 6 6)" class="node-dungeon_entrance"/></svg> Sewer</span>
+      <span><svg width="10" height="10" style="vertical-align:middle"><circle cx="5" cy="5" r="4" class="node-current node-discovered"/></svg> You</span>
     `;
   }
 }
