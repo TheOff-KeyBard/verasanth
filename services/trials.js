@@ -21,26 +21,6 @@ export function getGuildLocation(guild) {
   return GUILD_LOCATIONS[guild];
 }
 
-export function getTrialActions(guild, state) {
-  switch (guild) {
-    case "vaelith":
-      return ["stand_on_sigil", "attack_leak", "leave_sigil"];
-    case "garruk":
-      return ["fight", "hold", "flee"];
-    case "halden":
-      return ["advance", "tend_flame", "fight_shadow", "retreat"];
-    case "rhyla":
-      return ["attack_construct", "move_to_pillar", "hold_position", "flee"];
-    case "lirael": {
-      const actions = ["move_to_stall_a", "move_to_stall_b", "move_to_stall_c", "retrieve_item", "wait"];
-      if ((state?.items_retrieved ?? 0) >= 3) actions.push("move_to_exit");
-      return actions;
-    }
-    default:
-      return [];
-  }
-}
-
 export function getInitialTrialState(guild, playerHp, playerHpMax, instinct) {
   switch (guild) {
     case "vaelith":

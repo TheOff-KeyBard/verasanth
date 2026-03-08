@@ -46,10 +46,67 @@ const COMBAT_BUFF_FLAGS = [
   "buff_edge_hone_combats_remaining", "buff_balanced_grip_combats_remaining", "buff_heavy_draw_combats_remaining",
   "buff_strap_tighten_combats_remaining", "buff_weight_redist_combats_remaining", "buff_shield_brace_combats_remaining",
   "buff_ember_tonic_combats_remaining", "buff_deep_lung_combats_remaining",
+  "buff_scout_accuracy_remaining", "buff_scout_resistance_remaining",
 ];
 
-async function decrementCombatBuffs(db, uid) {
+// Ember Shard services — see cursor_es_spend_routes.md
+const GUILD_VAULT_POOLS = {
+  vaelith: [
+    { id: "archive_sigil_band", name: "Archive Sigil Band", tier: 3 },
+    { id: "ember_scholar_robes", name: "Ember Scholar Robes", tier: 3 },
+    { id: "containment_seal", name: "Containment Seal", tier: 3 },
+  ],
+  garruk: [
+    { id: "banner_vanguard_mail", name: "Banner Vanguard Mail", tier: 3 },
+    { id: "ironblood_bracer", name: "Ironblood Bracer", tier: 3 },
+    { id: "pressure_buckler", name: "Pressure Buckler", tier: 3 },
+  ],
+  halden: [
+    { id: "sanctum_warden_wrap", name: "Sanctum Warden Wrap", tier: 3 },
+    { id: "hearthborn_pendant", name: "Hearthborn Pendant", tier: 3 },
+    { id: "flame_keeper_hood", name: "Flame Keeper Hood", tier: 3 },
+  ],
+  lirael: [
+    { id: "veil_runner_coat", name: "Veil Runner Coat", tier: 3 },
+    { id: "market_cipher_ring", name: "Market Cipher Ring", tier: 3 },
+    { id: "street_ghost_boots", name: "Street Ghost Boots", tier: 3 },
+  ],
+  rhyla: [
+    { id: "watch_plate_shoulders", name: "Watch Plate Shoulders", tier: 3 },
+    { id: "foundation_greaves", name: "Foundation Greaves", tier: 3 },
+    { id: "sentinel_shield", name: "Sentinel Shield", tier: 3 },
+  ],
+  serix: [
+    { id: "covenant_shroud", name: "Covenant Shroud", tier: 3 },
+    { id: "shadow_threaded_wrap", name: "Shadow-Threaded Wrap", tier: 3 },
+    { id: "void_touched_ring", name: "Void-Touched Ring", tier: 3 },
+  ],
+};
+
+const STRUCTURAL_ANALYSIS_SEQUENCE = [
+  "drowned_archive",
+  "submerged_tunnel",
+  "ash_heart_chamber",
+];
+
+const ES_NPC_LOCATIONS = {
+  vaelith: "ashen_archive_hall",
+  garruk: "broken_banner_yard",
+  halden: "quiet_sanctum_entrance",
+  lirael: "veil_market_hidden",
+  serix: "umbral_covenant_hall",
+  rhyla: "stone_watch_hall",
+  othorion: "crucible",
+  seris: "market_square",
+  curator: "still_scale",
+};
+
+const SCOUT_BUFF_FLAGS = ["buff_scout_accuracy_remaining", "buff_scout_resistance_remaining"];
+
+async function decrementCombatBuffs(db, uid, location) {
+  const inSewer = location && SEWER_LOCATIONS.has(location);
   for (const flag of COMBAT_BUFF_FLAGS) {
+    if (!inSewer && SCOUT_BUFF_FLAGS.includes(flag)) continue;
     const v = await getFlag(db, uid, flag, 0);
     if (v > 1) await setFlag(db, uid, flag, v - 1);
     else if (v === 1) await dbRun(db, "DELETE FROM player_flags WHERE user_id=? AND flag=?", [uid, flag.toLowerCase()]);
@@ -83,6 +140,10 @@ const OLD_SEWER_LOCATIONS = new Set([
   "sewer_upper", "sewer_den", "sewer_channel", "sewer_deep", "sewer_gate",
   "sewer_mid_flooded", "sewer_mid_barracks", "sewer_mid_cistern", "sewer_mid_drain",
   "sewer_deep_threshold", "sewer_deep_vault", "sewer_deep_foundation"
+]);
+
+const SEWER_LOCATIONS = new Set([
+  ...SEWER_LEVEL_1, ...SEWER_LEVEL_2, ...SEWER_LEVEL_3, ...SEWER_LEVEL_4, ...SEWER_LEVEL_5
 ]);
 
 // Phase 3: Roaming monsters — patrol routes use actual location IDs
@@ -1714,7 +1775,7 @@ if (path === "/api/admin/command" && method === "POST") {
               auto_triggered: true,
               roamer: true,
             };
-            await decrementCombatBuffs(db, uid);
+            await decrementCombatBuffs(db, uid, loc);
             await dbRun(db,
               "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
               [uid, JSON.stringify(state)]);
@@ -1801,7 +1862,7 @@ if (path === "/api/admin/command" && method === "POST") {
               auto_triggered: true,
               roamer: true,
             };
-            await decrementCombatBuffs(db, uid);
+            await decrementCombatBuffs(db, uid, row.location);
             await dbRun(db,
               "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
               [uid, JSON.stringify(state)]);
@@ -2029,7 +2090,7 @@ if (path === "/api/admin/command" && method === "POST") {
                 boss_id: telegraphRow.boss_id,
                 boss_reward: def.reward,
               };
-              await decrementCombatBuffs(db, uid);
+              await decrementCombatBuffs(db, uid, dest);
               await dbRun(db,
                 "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
                 [uid, JSON.stringify(state)]);
@@ -2101,7 +2162,7 @@ if (path === "/api/admin/command" && method === "POST") {
                 active_buffs: [],
                 auto_triggered: true,
               };
-              await decrementCombatBuffs(db, uid);
+              await decrementCombatBuffs(db, uid, dest);
               await dbRun(db,
                 "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
                 [uid, JSON.stringify(state)]);
@@ -2155,9 +2216,9 @@ if (path === "/api/admin/command" && method === "POST") {
             status_effects: [],
             trait_state: {},
             armor_break_effects: [],
-            auto_triggered: true,
+                auto_triggered: true,
           };
-          await decrementCombatBuffs(db, uid);
+          await decrementCombatBuffs(db, uid, dest);
           await dbRun(db,
             "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
             [uid, JSON.stringify(state)]);
@@ -2259,7 +2320,7 @@ if (path === "/api/admin/command" && method === "POST") {
               armor_break_effects: [],
               auto_triggered: true,
             };
-            await decrementCombatBuffs(db, uid);
+            await decrementCombatBuffs(db, uid, dest);
             await dbRun(db,
               "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
               [uid, JSON.stringify(state)]);
@@ -2458,7 +2519,7 @@ if (path === "/api/admin/command" && method === "POST") {
         active_buffs: [],
         auto_triggered: true,
       };
-      await decrementCombatBuffs(db, uid);
+      await decrementCombatBuffs(db, uid, row.location);
       await dbRun(db,
         "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
         [uid, JSON.stringify(state)]);
@@ -2756,6 +2817,7 @@ if (path === "/api/admin/command" && method === "POST") {
         playerContext.seris_arc2_active = serisArc2Active;
       }
       if (npc === "othorion") {
+        playerContext.pip_present = true;
         playerContext.othorion_visits = othorionVisits;
         playerContext.othorion_trust = othorionTrust;
         playerContext.othorion_arc1_complete = othorionArc1Complete;
@@ -2774,9 +2836,65 @@ if (path === "/api/admin/command" && method === "POST") {
         playerContext.strength = row.strength;
       }
 
+      const guildToNpc = { vaelith: "vaelith", garruk: "garruk", halden: "halden", lirael: "lirael", rhyla: "rhyla" };
+      let canOfferTrial = false;
+      if (guildToNpc[npc]) {
+        const standing = await getFlag(db, uid, `guild_standing_${npc}`, 0);
+        const classStage = row?.class_stage ?? 0;
+        const trialActive = await getFlag(db, uid, "trial_active", 0);
+        const guildLoc = GUILD_LOCATIONS[npc];
+        canOfferTrial = standing === 0 && classStage >= 5 && trialActive === 0 && row?.location === guildLoc;
+      }
+
+      const es = row?.ember_shards ?? 0;
+      const esNpcLoc = ES_NPC_LOCATIONS[npc];
+      const atNpc = esNpcLoc && row?.location === esNpcLoc;
+      const esServices = [];
+      if (atNpc && es >= 1) {
+        if (npc === "vaelith") {
+          const standing = guildStandingVaelith ?? 0;
+          const upgrades = JSON.parse(row?.upgrades || "{}");
+          const hasLevel5 = !!upgrades?.level_5;
+          const currentUpgrade = upgrades?.level_5;
+          const instinct = (row?.instinct || "").toLowerCase();
+          const alternatives = instinct ? Object.values(LEVEL_5_UPGRADES).filter((u) => u.instinct === instinct && u.id !== currentUpgrade).map((u) => ({ id: u.id, name: u.display_name })) : [];
+          const available = standing >= 1 && hasLevel5 && es >= 2 && alternatives.length > 0;
+          esServices.push({ service_id: "resonance_tuning", name: "Resonance Tuning", cost: 2, description: "Respec your Level 5 upgrade.", available, reason: !standing ? "The Archive is not open to you yet." : !hasLevel5 ? "You haven't chosen a Level 5 upgrade yet." : alternatives.length === 0 ? "No other upgrades to switch to." : es < 2 ? "Not enough Ember Shards." : null, alternatives });
+        }
+        if (["vaelith", "garruk", "halden", "lirael", "rhyla", "serix"].includes(npc)) {
+          const standing = await getFlag(db, uid, `guild_standing_${npc}`, 0);
+          const available = standing >= 2 && es >= 2;
+          esServices.push({ service_id: "guild_vault", name: "Guild Vault", cost: 2, description: "One Tier 3 item from the guild vault.", available, reason: standing < 2 ? "The vault is not open to you yet." : es < 2 ? "Not enough Ember Shards." : null });
+        }
+        if (npc === "rhyla") {
+          const standing = guildStandingRhyla ?? 0;
+          const available = standing >= 1 && es >= 1;
+          esServices.push({ service_id: "sewer_scout", name: "Sewer Scout Contract", cost: 1, description: "+2 accuracy, +1 sewer resistance for 10 sewer combats.", available, reason: standing < 1 ? "The Watch has no contract for you yet." : es < 1 ? "Not enough Ember Shards." : null });
+        }
+        if (npc === "curator") {
+          const invRows = await dbAll(db, "SELECT item FROM inventory WHERE user_id=?", [uid]);
+          const flagsRows = await dbAll(db, "SELECT flag FROM player_flags WHERE user_id=? AND flag LIKE 'lore_revealed_%'", [uid]);
+          const revealed = new Set(flagsRows.map((r) => r.flag.replace("lore_revealed_", "")));
+          const items = [];
+          for (const r of invRows) {
+            const def = LOOT_ITEMS[r.item];
+            if (def && ["loot_relic", "loot_artifact"].includes(def.category) && !revealed.has(r.item)) {
+              items.push({ id: r.item, name: def.name });
+            }
+          }
+          const available = es >= 1 && items.length > 0;
+          esServices.push({ service_id: "hidden_lore", name: "Hidden Lore", cost: 1, description: "Reveal hidden lore on a relic or artifact.", available, reason: es < 1 ? "Not enough Ember Shards." : items.length === 0 ? "No unrevealed relics or artifacts in your inventory." : null, items });
+        }
+        if (npc === "othorion") {
+          const analysisCount = await getFlag(db, uid, "structural_analyses_purchased", 0);
+          const available = analysisCount < STRUCTURAL_ANALYSIS_SEQUENCE.length && es >= 1;
+          esServices.push({ service_id: "structural_analysis", name: "Structural Analysis", cost: 1, description: "Reveal one hidden sewer room on your map.", available, reason: analysisCount >= STRUCTURAL_ANALYSIS_SEQUENCE.length ? "Othorion has mapped everything he can reach." : es < 1 ? "Not enough Ember Shards." : null });
+        }
+      }
+
       const questResult = await handleQuestDialogue(db, dbGet, dbAll, dbRun, uid, npc, topic, playerContext, getFlag, setFlag);
       if (questResult) {
-        return json({ response: questResult.response });
+        return json({ response: questResult.response, can_offer_trial: canOfferTrial, es_services: esServices });
       }
 
       const response = await getNPCResponse(env, npc, topic, playerContext);
@@ -2809,16 +2927,7 @@ if (path === "/api/admin/command" && method === "POST") {
 
       await assignNextQuestIfAvailable(db, dbGet, dbAll, dbRun, uid, npc, getFlag);
 
-      const guildToNpc = { vaelith: "vaelith", garruk: "garruk", halden: "halden", lirael: "lirael", rhyla: "rhyla" };
-      let canOfferTrial = false;
-      if (guildToNpc[npc]) {
-        const standing = await getFlag(db, uid, `guild_standing_${npc}`, 0);
-        const classStage = row?.class_stage ?? 0;
-        const trialActive = await getFlag(db, uid, "trial_active", 0);
-        const guildLoc = GUILD_LOCATIONS[npc];
-        canOfferTrial = standing === 0 && classStage >= 5 && trialActive === 0 && row?.location === guildLoc;
-      }
-      return json({ response, can_offer_trial: canOfferTrial });
+      return json({ response, can_offer_trial: canOfferTrial, es_services: esServices });
     }
 
     // ── GET: NPC topics ──
@@ -3222,6 +3331,106 @@ if (path === "/api/admin/command" && method === "POST") {
       return json({ active: true, state, actions, statusBar });
     }
 
+    // ── POST: ES Service (Ember Shard spend) ──
+    if (path === "/api/es_service" && method === "POST") {
+      const { service_id, npc_id, new_upgrade_id, item_id } = body || {};
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const npcLoc = ES_NPC_LOCATIONS[npc_id];
+      if (!npcLoc || row.location !== npcLoc) return err("You need to speak with them in person.");
+      const es = (row.ember_shards ?? 0);
+      const cost = { resonance_tuning: 2, guild_vault: 2, sewer_scout: 1, hidden_lore: 1, structural_analysis: 1 }[service_id];
+      if (!cost || es < cost) return err("You don't have enough Ember Shards for that.");
+
+      if (service_id === "resonance_tuning") {
+        if (npc_id !== "vaelith") return err("That service is not available here.");
+        const standing = await getFlag(db, uid, "guild_standing_vaelith", 0);
+        if (standing < 1) return err("The Archive is not open to you yet.");
+        const upgrade = LEVEL_5_UPGRADES[new_upgrade_id];
+        if (!upgrade) return err("Unknown upgrade.");
+        const instinct = (row.instinct || "").toLowerCase();
+        if (upgrade.instinct !== instinct) return err("That upgrade doesn't match your instinct.");
+        const upgrades = JSON.parse(row.upgrades || "{}");
+        if (!upgrades.level_5) return err("You haven't chosen a Level 5 upgrade yet.");
+        if (upgrades.level_5 === new_upgrade_id) return err("You already have that upgrade.");
+        await dbRun(db, "UPDATE characters SET ember_shards=ember_shards-2 WHERE user_id=?", [uid]);
+        upgrades.level_5 = new_upgrade_id;
+        await dbRun(db, "UPDATE characters SET upgrades=? WHERE user_id=?", [JSON.stringify(upgrades), uid]);
+        const newEs = es - 2;
+        return json({ ok: true, message: `Vaelith adjusts the resonance record without looking up.\n\nThe Archive does not forget what you were. Only what you are changes.\n\nYour upgrade has been respecced.`, new_es_balance: newEs });
+      }
+
+      if (service_id === "guild_vault") {
+        const pool = GUILD_VAULT_POOLS[npc_id];
+        if (!pool) return err("No vault found.");
+        const standing = await getFlag(db, uid, `guild_standing_${npc_id}`, 0);
+        if (standing < 2) return err("The vault is not open to you yet.");
+        const invRows = await dbAll(db, "SELECT item FROM inventory WHERE user_id=?", [uid]);
+        const owned = new Set(invRows.map((r) => r.item));
+        const available = pool.filter((i) => !owned.has(i.id));
+        if (available.length === 0) return json({ ok: false, message: "You already have everything the vault holds." });
+        const item = available[Math.floor(Math.random() * available.length)];
+        await dbRun(db, "UPDATE characters SET ember_shards=ember_shards-2 WHERE user_id=?", [uid]);
+        await dbRun(db, "INSERT INTO inventory(user_id,item,qty) VALUES(?,?,1) ON CONFLICT(user_id,item) DO UPDATE SET qty=qty+1", [uid, item.id]);
+        const messages = {
+          vaelith: "The Archive keeps what it finds useful. So do I.",
+          garruk: "Banner gear doesn't leave the yard without being earned. You've earned it.",
+          halden: "The Sanctum holds this in trust. It was always meant for someone.",
+          lirael: "Everything in the vault was acquired. Don't ask how.",
+          rhyla: "Watch equipment. Take care of it.",
+          serix: "The Covenant's vault remembers everyone who opens it.",
+        };
+        return json({ ok: true, message: messages[npc_id] || "Done.", new_es_balance: es - 2, item_awarded: item.id });
+      }
+
+      if (service_id === "sewer_scout") {
+        if (npc_id !== "rhyla") return err("That service is not available here.");
+        const standing = await getFlag(db, uid, "guild_standing_rhyla", 0);
+        if (standing < 1) return err("The Watch has no contract for you yet.");
+        await dbRun(db, "UPDATE characters SET ember_shards=ember_shards-1 WHERE user_id=?", [uid]);
+        await setFlag(db, uid, "buff_scout_accuracy_remaining", 10);
+        await setFlag(db, uid, "buff_scout_resistance_remaining", 10);
+        return json({ ok: true, message: `Rhyla marks something on the patrol board.\n\n"Watch scouts cleared that route yesterday. You'll have better sight lines."\n\nScout contract active — 10 sewer combats.`, new_es_balance: es - 1 });
+      }
+
+      if (service_id === "hidden_lore") {
+        if (npc_id !== "seris" && npc_id !== "curator") return err("That service is not available here.");
+        if (!item_id) return err("Which item?");
+        const invRow = await dbGet(db, "SELECT qty FROM inventory WHERE user_id=? AND item=?", [uid, item_id]);
+        if (!invRow || invRow.qty < 1) return err("You don't have that item.");
+        const item = LOOT_ITEMS[item_id];
+        if (!item || !["loot_relic", "loot_artifact"].includes(item.category)) {
+          return err("Seris studies the item. \"This doesn't need revealing. It already knows what it is.\"");
+        }
+        const alreadyRevealed = await getFlag(db, uid, `lore_revealed_${item_id}`, 0);
+        if (alreadyRevealed) return json({ ok: false, message: "You already know what this is." });
+        await dbRun(db, "UPDATE characters SET ember_shards=ember_shards-1 WHERE user_id=?", [uid]);
+        await setFlag(db, uid, `lore_revealed_${item_id}`, 1);
+        return json({ ok: true, message: item.lore || "Seris has nothing to add.", new_es_balance: es - 1 });
+      }
+
+      if (service_id === "structural_analysis") {
+        if (npc_id !== "othorion") return err("That service is not available here.");
+        const analysisCount = await getFlag(db, uid, "structural_analyses_purchased", 0);
+        const sequence = STRUCTURAL_ANALYSIS_SEQUENCE;
+        if (analysisCount >= sequence.length) {
+          return json({ ok: false, message: "Othorion spreads his hands. \"I've mapped everything I can reach from the surface. The rest you'll have to find yourself.\"" });
+        }
+        const targetRoom = sequence[analysisCount];
+        await dbRun(db, "UPDATE characters SET ember_shards=ember_shards-1 WHERE user_id=?", [uid]);
+        await setFlag(db, uid, `visited_${targetRoom}`, 1);
+        await setFlag(db, uid, "structural_analyses_purchased", analysisCount + 1);
+        const messages = {
+          drowned_archive: `Othorion traces a line on the diagram.\n\n"There's a large reservoir chamber here — I've been measuring the acoustic resonance from above for months. The dimensions are wrong for a drainage system."\n\nPip raises one small arm and points at the diagram. Othorion does not notice.\n\nThe drowned archive is now marked on your map.`,
+          submerged_tunnel: `Othorion taps the paper.\n\n"The foundation stress patterns suggest a passage transition here — older architecture, different construction entirely. I cannot account for it structurally."\n\nHe has been trying to account for it for a long time.\n\nThe submerged tunnel is now marked on your map.`,
+          ash_heart_chamber: `Othorion is quiet for a moment before he speaks.\n\n"There is a room at this depth. I know it is there because the city behaves differently above it."\n\nHe does not say what the city does differently.\n\nPip points at the mark on the diagram. Then at you. Othorion watches Pip for a long time.\n\nThe ash heart chamber is now marked on your map.`,
+        };
+        return json({ ok: true, message: messages[targetRoom] || `The ${targetRoom} is now marked on your map.`, new_es_balance: es - 1 });
+      }
+
+      return err("Unknown service.");
+    }
+
 // ── GET: Combat State ──
 if (path === "/api/combat/state" && method === "GET") {
   const csRow = await dbGet(db, "SELECT state_json FROM combat_state WHERE user_id=?", [uid]);
@@ -3275,12 +3484,12 @@ if (path === "/api/combat/state" && method === "GET") {
         enemy_id: enemy.id, enemy_name: enemy.name,
         enemy_hp: enemy.hp, enemy_hp_max: enemy.hp,
         player_hp: hp.current, player_hp_max: hp.max,
-        ability_cooldown: 0, ability_used: false, npc_ability_used: false, statuses: {}, enemy_statuses: {}, player_statuses: {}, turn: 1, turn_count: 1, round: 1, location: row.location,
+        ability_cooldown: 0, ability_used: false, npc_ability_used: false, statuses: {}, enemy_statuses: {}, player_statuses: {}, turn: 1, turn_count: 1, round: 1,         location: row.location,
         weapon_die: weaponDie, armor_reduction: armorReduction, shield_bonus: shieldBonus,
         enemy_staggered: false, status_effects: [], trait_state: {},
         armor_break_effects: [], active_buffs: [],
       };
-      await decrementCombatBuffs(db, uid);
+      await decrementCombatBuffs(db, uid, row.location);
       await dbRun(db, "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
         [uid, JSON.stringify(state)]);
       return json({ ...state, message: `*${enemy.name} emerges from the dark.*\n\n${enemy.desc || ""}` });
@@ -3361,6 +3570,13 @@ if (path === "/api/combat/state" && method === "GET") {
       if (shieldBrace > 0) activeBonuses.block = (activeBonuses.block || 0) + 2;
       const emberTonic = await getFlag(db, uid, "buff_ember_tonic_combats_remaining", 0);
       if (emberTonic > 0) activeBonuses.spell_power = (activeBonuses.spell_power || 0) + 1;
+
+      const combatLoc = state.location || "";
+      const inSewer = SEWER_LOCATIONS.has(combatLoc);
+      const scoutAccuracy = await getFlag(db, uid, "buff_scout_accuracy_remaining", 0);
+      const scoutResistance = await getFlag(db, uid, "buff_scout_resistance_remaining", 0);
+      if (inSewer && scoutAccuracy > 0) activeBonuses.accuracy = (activeBonuses.accuracy || 0) + 2;
+      if (inSewer && scoutResistance > 0) state.scout_resistance_active = true;
 
       // 1. Tick status effects (bleed/poison/fire_touch)
       const statusDmg = tickStatusEffects(state);
@@ -3602,11 +3818,11 @@ if (path === "/api/combat/state" && method === "GET") {
       state.statuses = tickStatuses(state.statuses);
       state.enemy_statuses = tickStatuses(state.enemy_statuses);
 
+      if (state.scout_resistance_active) enemyDmg = Math.max(0, enemyDmg - 1);
       playerHp = Math.max(0, playerHp - enemyDmg);
 
       // Iron Walkway fall_risk: knocked back in combat → fall damage 15, DEX check to catch chain
       let fallRiskMsg = "";
-      const combatLoc = state.location || "";
       if (combatLoc === "iron_walkway" && enemyHit && enemyDmg >= 8) {
         const dexMod = statMod(row.dexterity);
         const dexRoll = rollDie(20) + dexMod;

@@ -159,6 +159,25 @@ export const ITEM_DATA = {
       message: 'Your grip tightens. Every strike feels intent.' },
   },
   resonant_scrap:        { name: 'Resonant Scrap',        value: 35,  item_type: 'loot' },
+  // Guild vault items (Tier 3)
+  archive_sigil_band:    { name: 'Archive Sigil Band',    value: 80,  item_type: 'equipment' },
+  ember_scholar_robes:   { name: 'Ember Scholar Robes',   value: 80,  item_type: 'equipment' },
+  containment_seal:      { name: 'Containment Seal',      value: 80,  item_type: 'equipment' },
+  banner_vanguard_mail:   { name: 'Banner Vanguard Mail',  value: 80,  item_type: 'equipment' },
+  ironblood_bracer:      { name: 'Ironblood Bracer',      value: 80,  item_type: 'equipment' },
+  pressure_buckler:      { name: 'Pressure Buckler',      value: 80,  item_type: 'equipment' },
+  sanctum_warden_wrap:   { name: 'Sanctum Warden Wrap',   value: 80,  item_type: 'equipment' },
+  hearthborn_pendant:    { name: 'Hearthborn Pendant',    value: 80,  item_type: 'equipment' },
+  flame_keeper_hood:     { name: 'Flame Keeper Hood',     value: 80,  item_type: 'equipment' },
+  veil_runner_coat:      { name: 'Veil Runner Coat',      value: 80,  item_type: 'equipment' },
+  market_cipher_ring:    { name: 'Market Cipher Ring',    value: 80,  item_type: 'equipment' },
+  street_ghost_boots:    { name: 'Street Ghost Boots',    value: 80,  item_type: 'equipment' },
+  watch_plate_shoulders: { name: 'Watch Plate Shoulders', value: 80,  item_type: 'equipment' },
+  foundation_greaves:    { name: 'Foundation Greaves',   value: 80,  item_type: 'equipment' },
+  sentinel_shield:       { name: 'Sentinel Shield',      value: 80,  item_type: 'equipment' },
+  covenant_shroud:       { name: 'Covenant Shroud',       value: 80,  item_type: 'equipment' },
+  shadow_threaded_wrap:   { name: 'Shadow-Threaded Wrap', value: 80,  item_type: 'equipment' },
+  void_touched_ring:     { name: 'Void-Touched Ring',     value: 80,  item_type: 'equipment' },
 };
 
 export function rollLoot(enemyId) {

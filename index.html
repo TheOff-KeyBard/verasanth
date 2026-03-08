@@ -1372,6 +1372,44 @@
 
   .trade-confirm-actions { display: flex; gap: 10px; margin-top: 12px; }
 
+  /* ── ES Services ───────────────────────────────────────────────── */
+  .es-services-section { margin: 0.75rem 0; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+  .es-services-title { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.5rem; }
+  .es-service-item { margin-bottom: 0.5rem; }
+  .es-btn { border-color: var(--ember, #c0622a); color: var(--text); }
+  .es-btn:hover:not(:disabled) { border-color: var(--ember-glow, #e08040); color: var(--ember-glow, #e08040); }
+  .es-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .es-cost { font-size: 0.8em; color: var(--ember, #c0622a); margin-left: 0.4rem; }
+  .es-desc { font-size: 0.78rem; color: var(--text-dim); margin-top: 0.15rem; padding-left: 0.2rem; }
+
+  #es-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(5,2,2,0.88);
+    z-index: 115;
+    justify-content: center;
+    align-items: center;
+  }
+  #es-modal-overlay.open { display: flex; }
+  #es-modal-box {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    width: min(420px, 90vw);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 0 30px rgba(0,0,0,0.8);
+  }
+  #es-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+  #es-modal-title { font-family: var(--font-title); font-size: 1rem; color: var(--ember-glow); }
+  #es-modal-close { background: none; border: none; color: var(--text-dim); font-size: 1.2rem; cursor: pointer; }
+  #es-modal-list { padding: 16px 20px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 8px; }
+  .es-modal-item { background: transparent; border: 1px solid var(--border-warm); color: var(--ash-light); padding: 8px 14px; cursor: pointer; font-size: 0.9rem; text-align: left; }
+  .es-modal-item:hover { border-color: var(--ember); color: var(--ember-glow); background: rgba(196,98,42,0.06); }
+  #es-modal-confirm { padding: 16px 20px; border-top: 1px solid var(--border); }
+  .es-modal-actions { display: flex; gap: 10px; margin-top: 12px; }
+
   /* ── Combat overlay ────────────────────────────────────────────── */
   #combat-overlay {
     display: none;
@@ -2893,6 +2931,24 @@
     <div id="trial-status-bar"></div>
     <div id="trial-log"></div>
     <div id="trial-actions"></div>
+  </div>
+</div>
+
+<!-- ── ES Service Modal (Resonance Tuning / Hidden Lore) ─────────── -->
+<div id="es-modal-overlay" style="display:none">
+  <div id="es-modal-box">
+    <div id="es-modal-header">
+      <span id="es-modal-title"></span>
+      <button id="es-modal-close" onclick="closeESModal()">✕</button>
+    </div>
+    <div id="es-modal-list"></div>
+    <div id="es-modal-confirm" style="display:none;">
+      <p id="es-modal-confirm-msg"></p>
+      <div class="es-modal-actions">
+        <button class="btn" id="es-modal-confirm-btn">Confirm</button>
+        <button class="btn" onclick="cancelESModalConfirm()">Cancel</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -5279,7 +5335,7 @@ async function openDialogue(npcId) {
     npcTopics[npcId] = topicsData?.topics || [];
     const flags = flagsData && typeof flagsData === 'object' ? flagsData : {};
     showDialogueResponse(talkData.response);
-    renderTopics(npcId, flags, { canOfferTrial: talkData.can_offer_trial });
+    renderTopics(npcId, flags, { canOfferTrial: talkData.can_offer_trial, esServices: talkData.es_services || [] });
     renderSellPanel(npcId);
   } catch(e) {
     document.getElementById('dialogue-response').innerHTML = render(e.message);
@@ -5381,6 +5437,33 @@ function renderTopics(npcId, flags = {}, opts = {}) {
     trialBtn.onclick = () => { closeDialogue(); startTrial(npcId); };
     wrap.appendChild(trialBtn);
   }
+  const esServices = opts.esServices || [];
+  if (esServices.length > 0) {
+    const esSection = document.createElement('div');
+    esSection.className = 'es-services-section';
+    esSection.innerHTML = '<div class="es-services-title">Ember Shard Services</div>';
+    esServices.forEach(function(svc) {
+      const item = document.createElement('div');
+      item.className = 'es-service-item';
+      const btn = document.createElement('button');
+      btn.className = 'btn es-btn' + (svc.available ? '' : ' disabled');
+      btn.disabled = !svc.available;
+      btn.innerHTML = svc.name + ' <span class="es-cost">[' + svc.cost + ' ES]</span>';
+      btn.title = svc.reason || svc.description;
+      btn.onclick = function() {
+        if (svc.service_id === 'resonance_tuning') openResonanceTuningModal(npcId, svc);
+        else if (svc.service_id === 'hidden_lore') openHiddenLoreModal(npcId, svc);
+        else useESService(svc.service_id, npcId);
+      };
+      item.appendChild(btn);
+      const desc = document.createElement('div');
+      desc.className = 'es-desc';
+      desc.textContent = svc.description || '';
+      item.appendChild(desc);
+      esSection.appendChild(item);
+    });
+    wrap.appendChild(esSection);
+  }
   const vendor = VENDOR_NPCS[npcId];
 
   if (vendor) {
@@ -5432,6 +5515,93 @@ function renderTopics(npcId, flags = {}, opts = {}) {
 function closeDialogue() {
   document.getElementById('dialogue-overlay').classList.remove('open');
   currentNPC = '';
+}
+
+// ── ES Services ───────────────────────────────────────────────────
+async function useESService(service_id, npcId, extra = {}) {
+  try {
+    const body = { service_id, npc_id: npcId, ...extra };
+    const data = await POST('/api/es_service', body);
+    if (data.ok) {
+      log('<em>' + (data.message || '').replace(/\n/g, '<br>') + '</em>');
+      await refreshSidebar();
+      if (data.new_es_balance != null) updateWalletES(data.new_es_balance);
+      closeESModal();
+      const talkData = await POST('/api/talk', { npc: npcId, topic: '' });
+      renderTopics(npcId, {}, { canOfferTrial: talkData.can_offer_trial, esServices: talkData.es_services || [] });
+    } else {
+      log('<em>' + escapeHtml(data.message || 'Failed') + '</em>');
+    }
+  } catch (e) {
+    log('<em>' + escapeHtml(e.message || 'Service failed') + '</em>');
+  }
+}
+
+function updateWalletES(es) {
+  const cs = document.getElementById('cs-ember');
+  const w = document.getElementById('w-ember');
+  if (cs) cs.textContent = es;
+  if (w) w.textContent = es;
+}
+
+function openResonanceTuningModal(npcId, svc) {
+  const overlay = document.getElementById('es-modal-overlay');
+  const content = document.getElementById('es-modal-list');
+  const title = document.getElementById('es-modal-title');
+  if (!overlay || !content || !title) return;
+  title.textContent = 'Resonance Tuning — Choose Upgrade';
+  content.innerHTML = '<span class="spinner"></span>';
+  overlay.classList.add('open');
+  (async () => {
+    try {
+      const char = await GET('/api/character');
+      const instinct = (char?.instinct || '').toLowerCase();
+      const upgrades = JSON.parse(char?.upgrades || '{}');
+      const current = upgrades?.level_5 || '';
+      const choices = Object.values(window.LEVEL_5_UPGRADES || {}).filter(u => u.instinct === instinct && u.id !== current);
+      content.innerHTML = '';
+      if (choices.length === 0) {
+        content.innerHTML = '<p class="text-dim">No other upgrades available for your instinct.</p>';
+        return;
+      }
+      choices.forEach(u => {
+        const btn = document.createElement('button');
+        btn.className = 'btn es-btn';
+        btn.textContent = u.display_name || u.id;
+        btn.onclick = () => useESService('resonance_tuning', npcId, { new_upgrade_id: u.id });
+        content.appendChild(btn);
+      });
+    } catch (e) {
+      content.innerHTML = '<p class="err">' + escapeHtml(e.message || 'Failed to load') + '</p>';
+    }
+  })();
+}
+
+function openHiddenLoreModal(npcId, svc) {
+  const overlay = document.getElementById('es-modal-overlay');
+  const content = document.getElementById('es-modal-list');
+  const title = document.getElementById('es-modal-title');
+  if (!overlay || !content || !title) return;
+  title.textContent = 'Hidden Lore — Choose Item';
+  content.innerHTML = '';
+  const items = svc?.items || [];
+  if (items.length === 0) {
+    content.innerHTML = '<p class="text-dim">No unrevealed relics or artifacts in your inventory.</p>';
+  } else {
+    items.forEach(it => {
+      const btn = document.createElement('button');
+      btn.className = 'btn es-btn';
+      btn.textContent = it.name || it.id;
+      btn.onclick = () => useESService('hidden_lore', npcId, { item_id: it.id });
+      content.appendChild(btn);
+    });
+  }
+  overlay.classList.add('open');
+}
+
+function closeESModal() {
+  const overlay = document.getElementById('es-modal-overlay');
+  if (overlay) overlay.classList.remove('open');
 }
 
 // ── Trade ─────────────────────────────────────────────────────────
