@@ -1476,6 +1476,47 @@
     flex-wrap: wrap;
   }
 
+  /* ── Trial overlay ─────────────────────────────────────────────── */
+  #trial-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(5,2,2,0.88);
+    z-index: 100;
+    justify-content: center;
+    align-items: center;
+  }
+  #trial-overlay.open { display: flex; }
+  #trial-box {
+    background: var(--bg2);
+    border: 1px solid var(--border-warm);
+    width: min(540px, 92vw);
+    padding: 28px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.9);
+  }
+  #trial-status-bar {
+    font-size: 0.85rem;
+    color: var(--ember-glow);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  #trial-log {
+    font-size: 0.9rem;
+    color: var(--text-dim);
+    min-height: 80px;
+    margin-bottom: 20px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+  }
+  #trial-log em { color: var(--ash-light); }
+  #trial-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  #trial-actions .btn { font-size: 0.9rem; }
+
   /* ── Auth screen ───────────────────────────────────────────────── */
   #auth-screen {
     position: fixed;
@@ -2846,6 +2887,15 @@
   </div>
 </div>
 
+<!-- ── Trial Overlay ────────────────────────────────────────────── -->
+<div id="trial-overlay">
+  <div id="trial-box">
+    <div id="trial-status-bar"></div>
+    <div id="trial-log"></div>
+    <div id="trial-actions"></div>
+  </div>
+</div>
+
 <!-- ── Upgrade Choice Overlay ───────────────────────────────────── -->
 <div id="upgrade-overlay" style="display:none">
   <div id="upgrade-box">
@@ -4160,6 +4210,8 @@ async function loadGame() {
     const cs = await GET('/api/combat/state').catch(() => null);
     if (cs) showCombat(cs);
   }
+  const ts = await GET('/api/trial/state').catch(() => ({ active: false }));
+  if (ts.active) showTrial(ts.state, ts.actions, ts.statusBar, ts.intro || '');
 }
 
 // ── Chat panel (Phase 3 + 4: global + local) ───────────────────────
@@ -5227,7 +5279,7 @@ async function openDialogue(npcId) {
     npcTopics[npcId] = topicsData?.topics || [];
     const flags = flagsData && typeof flagsData === 'object' ? flagsData : {};
     showDialogueResponse(talkData.response);
-    renderTopics(npcId, flags);
+    renderTopics(npcId, flags, { canOfferTrial: talkData.can_offer_trial });
     renderSellPanel(npcId);
   } catch(e) {
     document.getElementById('dialogue-response').innerHTML = render(e.message);
@@ -5319,9 +5371,16 @@ function normalizeTopicKey(t) {
   return s.replace(/\s+/g, '_').replace(/^_+|_+$/g, '');
 }
 
-function renderTopics(npcId, flags = {}) {
+function renderTopics(npcId, flags = {}, opts = {}) {
   const wrap = document.getElementById('dialogue-topics');
   wrap.innerHTML = '';
+  if (opts.canOfferTrial) {
+    const trialBtn = document.createElement('button');
+    trialBtn.className = 'topic-btn';
+    trialBtn.textContent = 'Begin Trial';
+    trialBtn.onclick = () => { closeDialogue(); startTrial(npcId); };
+    wrap.appendChild(trialBtn);
+  }
   const vendor = VENDOR_NPCS[npcId];
 
   if (vendor) {
@@ -5509,6 +5568,109 @@ function showCombat(data, isBoss) {
   updateCombatActionButtons(data.ability_cooldown ?? 0, false, data.ability_used ?? false);
   const panel = document.getElementById('combat-item-panel');
   if (panel) panel.style.display = 'none';
+}
+
+const TRIAL_ACTION_LABELS = {
+  stand_on_sigil: 'Step onto Sigil', attack_leak: 'Attack Leak', leave_sigil: 'Leave Sigil',
+  fight: 'Fight', hold: 'Hold Position', flee: 'Abandon Trial',
+  advance: 'Advance', tend_flame: 'Tend Flame', fight_shadow: 'Dispel Shadow', retreat: 'Retreat',
+  attack_construct: 'Attack Construct', move_to_pillar: 'Move to Pillar', hold_position: 'Hold Position',
+  move_to_stall_a: 'Move to Stall A', move_to_stall_b: 'Move to Stall B', move_to_stall_c: 'Move to Stall C',
+  retrieve_item: 'Retrieve Item', move_to_exit: 'Move to Exit', wait: 'Wait',
+};
+
+function showTrial(state, actions, statusBar, intro) {
+  const overlay = document.getElementById('trial-overlay');
+  const statusEl = document.getElementById('trial-status-bar');
+  const logEl = document.getElementById('trial-log');
+  const actionsEl = document.getElementById('trial-actions');
+  if (!overlay || !statusEl || !logEl || !actionsEl) return;
+  overlay.classList.add('open');
+  statusEl.textContent = statusBar || '';
+  logEl.innerHTML = intro ? '<p>' + intro.replace(/\n/g, '<br>') + '</p>' : '';
+  actionsEl.innerHTML = '';
+  (actions || []).forEach(function(a) {
+    const btn = document.createElement('button');
+    btn.className = 'btn';
+    btn.textContent = TRIAL_ACTION_LABELS[a] || a;
+    btn.onclick = function() { doTrialAction(a); };
+    actionsEl.appendChild(btn);
+  });
+  trialState = state;
+  trialActions = actions;
+}
+
+let trialState = null;
+let trialActions = [];
+
+async function startTrial(npcId) {
+  const guild = npcId;
+  try {
+    const data = await POST('/api/trial/start', { guild });
+    if (!data.ok) {
+      log(data.message || 'Could not start trial.');
+      return;
+    }
+    const statusBar = getTrialStatusBarFromState(data.state);
+    showTrial(data.state, data.actions, statusBar, data.intro || '');
+  } catch (e) {
+    log('<em>' + (e.message || 'Failed to start trial.') + '</em>');
+  }
+}
+
+function getTrialStatusBarFromState(state) {
+  if (!state) return '';
+  switch (state.trial_type) {
+    case 'containment': return 'Sigil Stability: ' + (state.sigil_stability ?? 100) + '% | Leaks Defeated: ' + (state.leaks_defeated ?? 0) + '/3';
+    case 'pressure_valve': return 'Round: ' + ((state.rounds_survived ?? 0) + 1) + '/10 | HP: ' + (state.player_hp ?? 0) + '/' + (state.player_hp_max ?? 20);
+    case 'the_feeding': return 'Flame: ' + (state.flame_energy ?? 100) + '% | Progress: ' + (state.distance_traveled ?? 0) + '/8';
+    case 'foundation_support': return 'Construct HP: ' + (state.construct_hp ?? 60) + '/' + (state.construct_hp_max ?? 60) + ' | HP: ' + (state.player_hp ?? 0) + '/' + (state.player_hp_max ?? 20) + ' | Tremor in: ' + (state.tremor_countdown ?? 3) + ' turns';
+    case 'asset_retrieval': return 'Items: ' + (state.items_retrieved ?? 0) + '/3 | Alert: ' + (state.watcher_alert ?? 0) + '%';
+    default: return '';
+  }
+}
+
+async function doTrialAction(action) {
+  try {
+    const data = await POST('/api/trial/action', { action });
+    const statusBar = getTrialStatusBarFromState(data.state);
+    const logEl = document.getElementById('trial-log');
+    if (logEl) {
+      const p = document.createElement('p');
+      p.innerHTML = (data.message || '').replace(/\n/g, '<br>');
+      logEl.appendChild(p);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+    trialState = data.state;
+    trialActions = data.actions || [];
+    const actionsEl = document.getElementById('trial-actions');
+    if (actionsEl) {
+      actionsEl.innerHTML = '';
+      trialActions.forEach(function(a) {
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.textContent = TRIAL_ACTION_LABELS[a] || a;
+        btn.onclick = function() { doTrialAction(a); };
+        actionsEl.appendChild(btn);
+      });
+    }
+    const statusEl = document.getElementById('trial-status-bar');
+    if (statusEl) statusEl.textContent = statusBar;
+    if (data.result === 'complete' || data.result === 'failed') {
+      const overlay = document.getElementById('trial-overlay');
+      if (overlay) overlay.classList.remove('open');
+      trialState = null;
+      trialActions = [];
+      if (data.result === 'complete') {
+        log('<em>Guild trial complete. +1 Ember Shard.</em>');
+        await loadGame();
+      } else {
+        log('<em>' + (data.message || 'Trial failed.') + '</em>');
+      }
+    }
+  } catch (e) {
+    log('<em>' + (e.message || 'Action failed.') + '</em>');
+  }
 }
 
 function updateCombatBars(php, pmax, ehp, emax) {

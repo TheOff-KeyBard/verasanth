@@ -32,6 +32,7 @@ import { rotateSewerCondition } from "./services/sewer_rotation.js";
 import { LEGACY_SLOT_MAP, EQUIPMENT_SLOTS, EQUIPMENT_DATA, INSTINCT_AFFINITIES } from "./data/equipment.js";
 import { getEquipmentSlot, resolveLegacySlot, isValidEquipmentSlot, canEquipItem, equipItem, unequipItem, getEquippedItemMap, getAffinityHint, getCharacterLevel } from "./services/equipment.js";
 import { aggregateEquipmentStats, applyInstinctAffinities, getItemEffectiveStats } from "./services/equipment_stats.js";
+import { GUILD_LOCATIONS, getInitialTrialState, getTrialIntro, getTrialActions, handleTrialAction, getTrialStatusBar, ACTION_LABELS } from "./services/trials.js";
 
 // ─────────────────────────────────────────────────────────────
 // ECONOMY HELPERS
@@ -130,6 +131,16 @@ const LANDMARKS = {
   banner: "broken_banner_gate", sanctum: "quiet_sanctum_entrance",
   veil: "veil_market_surface", covenant: "umbral_covenant_descent",
   sewer: "sewer_entrance",
+};
+
+/** Guild leader NPC id -> location for trial initiation. */
+const GUILD_LEADER_LOCATIONS = {
+  vaelith: "ashen_archive_hall",
+  garruk: "broken_banner_yard",
+  halden: "quiet_sanctum_entrance",
+  lirael: "veil_market_hidden",
+  serix: "umbral_covenant_hall",
+  rhyla: "stone_watch_hall",
 };
 
 /** Rooms you "enter" (building, shop, dungeon) vs "travel" (street, passage). */
@@ -764,6 +775,9 @@ async function initDb(db) {
     item TEXT NOT NULL, qty INTEGER DEFAULT 1,
     PRIMARY KEY(user_id, item))`);
   await dbRun(db, `CREATE TABLE IF NOT EXISTS combat_state (
+    user_id INTEGER PRIMARY KEY REFERENCES players(user_id),
+    state_json TEXT NOT NULL)`);
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS trial_state (
     user_id INTEGER PRIMARY KEY REFERENCES players(user_id),
     state_json TEXT NOT NULL)`);
   await dbRun(db, `CREATE TABLE IF NOT EXISTS predator_tracking (
@@ -2795,7 +2809,16 @@ if (path === "/api/admin/command" && method === "POST") {
 
       await assignNextQuestIfAvailable(db, dbGet, dbAll, dbRun, uid, npc, getFlag);
 
-      return json({ response });
+      const guildToNpc = { vaelith: "vaelith", garruk: "garruk", halden: "halden", lirael: "lirael", rhyla: "rhyla" };
+      let canOfferTrial = false;
+      if (guildToNpc[npc]) {
+        const standing = await getFlag(db, uid, `guild_standing_${npc}`, 0);
+        const classStage = row?.class_stage ?? 0;
+        const trialActive = await getFlag(db, uid, "trial_active", 0);
+        const guildLoc = GUILD_LOCATIONS[npc];
+        canOfferTrial = standing === 0 && classStage >= 5 && trialActive === 0 && row?.location === guildLoc;
+      }
+      return json({ response, can_offer_trial: canOfferTrial });
     }
 
     // ── GET: NPC topics ──
@@ -3128,6 +3151,75 @@ if (path === "/api/admin/command" && method === "POST") {
       }
 
       return json({ response, hp_gained: hpGained });
+    }
+
+    // ── Trial: Start ──
+    if (path === "/api/trial/start" && method === "POST") {
+      const { guild } = body || {};
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const loc = GUILD_LOCATIONS[guild];
+      if (!loc || row.location !== loc) return err("You must be at the guild to begin.");
+      const classStage = row.class_stage ?? 0;
+      if (classStage < 5) return err("You must reach class stage 5 first.");
+      const standing = await getFlag(db, uid, `guild_standing_${guild}`, 0);
+      if (standing !== 0) return err("You have already completed this trial.");
+      const trialActive = await getFlag(db, uid, "trial_active", 0);
+      if (trialActive) return err("A trial is already active.");
+      const inCombat = await dbGet(db, "SELECT 1 FROM combat_state WHERE user_id=?", [uid]);
+      if (inCombat) return err("You cannot start a trial while in combat.");
+      if (guild === "serix") return err("Serix watches you. She says nothing. She is not ready for you yet.");
+
+      const hp = await getPlayerHp(db, uid, row);
+      const state = getInitialTrialState(guild, hp.current, hp.max, row.instinct || "");
+      if (!state) return err("Unknown guild.");
+
+      await setFlag(db, uid, "trial_active", 1);
+      await dbRun(db, "INSERT INTO trial_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
+        [uid, JSON.stringify(state)]);
+
+      const intro = getTrialIntro(guild);
+      const actions = getTrialActions(guild, state);
+      return json({ ok: true, intro, actions, state });
+    }
+
+    // ── Trial: Action ──
+    if (path === "/api/trial/action" && method === "POST") {
+      const { action } = body || {};
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const tsRow = await dbGet(db, "SELECT state_json FROM trial_state WHERE user_id=?", [uid]);
+      if (!tsRow) return err("No active trial.");
+
+      const state = JSON.parse(tsRow.state_json);
+      const character = { strength: row.strength, instinct: row.instinct };
+      const out = handleTrialAction(state, action, character, row.instinct || "");
+
+      if (out.result === "complete") {
+        await dbRun(db, "DELETE FROM trial_state WHERE user_id=?", [uid]);
+        await setFlag(db, uid, "trial_active", 0);
+        await setFlag(db, uid, `guild_standing_${state.guild}`, 1);
+        await setFlag(db, uid, "level5_unlocked", 1);
+        await dbRun(db, "UPDATE characters SET ember_shards = ember_shards + 1 WHERE user_id=?", [uid]);
+        return json({ result: "complete", message: out.message, state: out.state, actions: [] });
+      }
+      if (out.result === "failed") {
+        await dbRun(db, "DELETE FROM trial_state WHERE user_id=?", [uid]);
+        await setFlag(db, uid, "trial_active", 0);
+        return json({ result: "failed", message: out.message, state: out.state, actions: [] });
+      }
+      await dbRun(db, "UPDATE trial_state SET state_json=? WHERE user_id=?", [JSON.stringify(out.state), uid]);
+      return json({ result: "ongoing", message: out.message, state: out.state, actions: out.actions });
+    }
+
+    // ── Trial: State ──
+    if (path === "/api/trial/state" && method === "GET") {
+      const tsRow = await dbGet(db, "SELECT state_json FROM trial_state WHERE user_id=?", [uid]);
+      if (!tsRow) return json({ active: false });
+      const state = JSON.parse(tsRow.state_json);
+      const actions = getTrialActions(state.guild, state);
+      const statusBar = getTrialStatusBar(state);
+      return json({ active: true, state, actions, statusBar });
     }
 
 // ── GET: Combat State ──
