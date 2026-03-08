@@ -2285,6 +2285,7 @@
   <div id="left-tabs" class="left-tabs">
     <button type="button" id="sheet-panel-tab" class="sheet-panel-tab" aria-label="Open character sheet"><span class="sheet-sigil">ᚢ</span> Character</button>
     <button type="button" id="map-panel-tab" class="sheet-panel-tab" aria-label="Open map">Map</button>
+    <button type="button" id="inv-panel-tab" class="sheet-panel-tab" aria-label="Open inventory">Inventory</button>
   </div>
   <div id="sheet-panel-overlay" class="sheet-panel-overlay" style="display:none;"></div>
   <div id="sheet-panel" class="sheet-panel" style="display:none;">
@@ -2314,6 +2315,14 @@
       </div>
       <div id="location-label">Unknown Location</div>
       <div id="map-subtitle">Unknown Region</div>
+    </div>
+  </div>
+  <div id="inv-panel-slide" class="sheet-panel inv-panel-slide" style="display:none;">
+    <div class="sheet-panel-inner">
+      <h2 class="sheet-panel-title">Carried</h2>
+      <div class="sheet-panel-divider"></div>
+      <div id="inv-loadout" class="inv-loadout"></div>
+      <div id="inv-list"></div>
     </div>
   </div>
   <div id="header">
@@ -2414,12 +2423,6 @@
     <div id="quest-panel">
       <div id="quest-title">Tasks</div>
       <div id="quest-list"></div>
-    </div>
-
-    <div id="inv-panel">
-      <div id="inv-title">Carried</div>
-      <div id="inv-loadout" class="inv-loadout"></div>
-      <div id="inv-list"></div>
     </div>
   </div>
 
@@ -3574,28 +3577,42 @@ async function init() {
   };
   const panelTab = document.getElementById('sheet-panel-tab');
   const mapPanelTab = document.getElementById('map-panel-tab');
+  const invPanelTab = document.getElementById('inv-panel-tab');
   const panel = document.getElementById('sheet-panel');
   const mapPanel = document.getElementById('map-panel');
+  const invPanel = document.getElementById('inv-panel-slide');
   const panelOverlay = document.getElementById('sheet-panel-overlay');
   function closeAllPanels() {
     panel.style.display = 'none';
     mapPanel.style.display = 'none';
+    if (invPanel) invPanel.style.display = 'none';
     panelOverlay.style.display = 'none';
   }
   function openPanel() {
     mapPanel.style.display = 'none';
+    if (invPanel) invPanel.style.display = 'none';
     panel.style.display = 'block';
     panelOverlay.style.display = 'block';
     refreshSheetPanel();
   }
   function openMapPanel() {
     panel.style.display = 'none';
+    if (invPanel) invPanel.style.display = 'none';
     mapPanel.style.display = 'block';
     panelOverlay.style.display = 'block';
     if (window.updateSidebarMap) window.updateSidebarMap(currentGameLocation, visitedSet, { ...LOCATION_NAMES, ...locationNamesMap });
   }
+  async function openInvPanel() {
+    panel.style.display = 'none';
+    mapPanel.style.display = 'none';
+    invPanel.style.display = 'block';
+    panelOverlay.style.display = 'block';
+    const inv = await GET('/api/inventory').catch(() => ({ itemDetails: [], equipment: {} }));
+    updateInventory(inv);
+  }
   panelTab.onclick = () => { if (panel.style.display === 'none') openPanel(); else closeAllPanels(); };
   mapPanelTab.onclick = () => { if (mapPanel.style.display === 'none') openMapPanel(); else closeAllPanels(); };
+  invPanelTab.onclick = () => { if (invPanel.style.display === 'none') openInvPanel(); else closeAllPanels(); };
   panelOverlay.onclick = closeAllPanels;
   document.querySelectorAll('.sheet-panel-tab-btn').forEach(btn => {
     btn.onclick = () => {
