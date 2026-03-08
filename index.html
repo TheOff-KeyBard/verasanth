@@ -1716,11 +1716,23 @@
   .btn-enter-verasanth:hover { background: var(--ember-glow); color: var(--bg); }
 
   /* ── Collapsible sheet panel (Screen 3) ─────────────────────────── */
-  .sheet-panel-tab {
+  .left-tabs {
     position: fixed;
     left: 0;
     top: 50%;
     transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 50;
+  }
+  .left-tabs .sheet-panel-tab {
+    position: relative;
+    left: auto;
+    top: auto;
+    transform: none;
+  }
+  .sheet-panel-tab {
     writing-mode: vertical-rl;
     text-orientation: mixed;
     padding: 12px 8px;
@@ -1733,7 +1745,6 @@
     font-size: 0.8rem;
     letter-spacing: 0.1em;
     cursor: pointer;
-    z-index: 50;
   }
   .sheet-panel-tab:hover { background: var(--bg3); }
   .sheet-panel-overlay {
@@ -2271,7 +2282,10 @@
 
 <!-- ── Main App (Screen 3) ────────────────────────────────────────── -->
 <div id="app" style="display:none;">
-  <button type="button" id="sheet-panel-tab" class="sheet-panel-tab" aria-label="Open character sheet"><span class="sheet-sigil">ᚢ</span> Character</button>
+  <div id="left-tabs" class="left-tabs">
+    <button type="button" id="sheet-panel-tab" class="sheet-panel-tab" aria-label="Open character sheet"><span class="sheet-sigil">ᚢ</span> Character</button>
+    <button type="button" id="map-panel-tab" class="sheet-panel-tab" aria-label="Open map">Map</button>
+  </div>
   <div id="sheet-panel-overlay" class="sheet-panel-overlay" style="display:none;"></div>
   <div id="sheet-panel" class="sheet-panel" style="display:none;">
     <div class="sheet-panel-inner">
@@ -2289,6 +2303,17 @@
       <div id="panel-tab-stats" class="sheet-panel-content" style="display:none;"></div>
       <div id="panel-tab-inventory" class="sheet-panel-content" style="display:none;"></div>
       <div id="panel-tab-progression" class="sheet-panel-content" style="display:none;"></div>
+    </div>
+  </div>
+  <div id="map-panel" class="sheet-panel map-panel" style="display:none;">
+    <div class="sheet-panel-inner">
+      <h2 class="sheet-panel-title">Map</h2>
+      <div class="sheet-panel-divider"></div>
+      <div id="map-container">
+        <svg id="dynamic-map" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div id="location-label">Unknown Location</div>
+      <div id="map-subtitle">Unknown Region</div>
     </div>
   </div>
   <div id="header">
@@ -2343,15 +2368,6 @@
       <div class="stat-row"><span>Stage</span><span class="stat-val" id="stat-stage">—</span></div>
       <div class="stat-row"><span>XP</span><span class="stat-val" id="stat-xp">—</span></div>
     </div>
-
-    <section class="sidebar-section" id="map-section">
-      <h3 class="section-title">Map</h3>
-      <div id="map-container">
-        <svg id="dynamic-map" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet"></svg>
-      </div>
-      <div id="location-label">Unknown Location</div>
-      <div id="map-subtitle">Unknown Region</div>
-    </section>
 
     <div id="wallet-panel">
       <div class="currency-row"><span>Ash Marks</span><span class="currency-val" id="w-ash">0</span></div>
@@ -3557,19 +3573,30 @@ async function init() {
     }, 3000);
   };
   const panelTab = document.getElementById('sheet-panel-tab');
+  const mapPanelTab = document.getElementById('map-panel-tab');
   const panel = document.getElementById('sheet-panel');
+  const mapPanel = document.getElementById('map-panel');
   const panelOverlay = document.getElementById('sheet-panel-overlay');
+  function closeAllPanels() {
+    panel.style.display = 'none';
+    mapPanel.style.display = 'none';
+    panelOverlay.style.display = 'none';
+  }
   function openPanel() {
+    mapPanel.style.display = 'none';
     panel.style.display = 'block';
     panelOverlay.style.display = 'block';
     refreshSheetPanel();
   }
-  function closePanel() {
+  function openMapPanel() {
     panel.style.display = 'none';
-    panelOverlay.style.display = 'none';
+    mapPanel.style.display = 'block';
+    panelOverlay.style.display = 'block';
+    if (window.updateSidebarMap) window.updateSidebarMap(currentGameLocation, visitedSet, { ...LOCATION_NAMES, ...locationNamesMap });
   }
-  panelTab.onclick = () => { if (panel.style.display === 'none') openPanel(); else closePanel(); };
-  panelOverlay.onclick = closePanel;
+  panelTab.onclick = () => { if (panel.style.display === 'none') openPanel(); else closeAllPanels(); };
+  mapPanelTab.onclick = () => { if (mapPanel.style.display === 'none') openMapPanel(); else closeAllPanels(); };
+  panelOverlay.onclick = closeAllPanels;
   document.querySelectorAll('.sheet-panel-tab-btn').forEach(btn => {
     btn.onclick = () => {
       document.querySelectorAll('.sheet-panel-tab-btn').forEach(b => b.classList.remove('active'));
