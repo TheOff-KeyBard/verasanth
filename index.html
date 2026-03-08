@@ -717,6 +717,82 @@
     display: grid;
   }
 
+  #upgrade-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.7);
+    backdrop-filter: blur(4px);
+    z-index: 350;
+    display: none;
+    justify-content: center;
+    align-items: center;
+  }
+
+  #upgrade-box {
+    width: min(560px, 94vw);
+    max-height: 85vh;
+    overflow-y: auto;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: var(--shadow);
+  }
+
+  #upgrade-title {
+    font-family: var(--font-title);
+    font-size: 1.1rem;
+    color: var(--ember);
+    margin-bottom: 4px;
+  }
+
+  #upgrade-subtitle {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+  }
+
+  #upgrade-choices {
+    display: grid;
+    gap: 12px;
+  }
+
+  .upgrade-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    background: var(--bg-dark);
+  }
+
+  .upgrade-card-name {
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .upgrade-card-type {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .upgrade-card-desc {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    font-style: italic;
+    margin-bottom: 4px;
+  }
+
+  .upgrade-card-playstyle {
+    font-size: 0.7rem;
+    color: var(--ember-dim);
+    margin-bottom: 8px;
+  }
+
+  .upgrade-select-btn {
+    margin-top: 4px;
+  }
+
   #bounty-box {
     width: min(680px, 96vw);
     max-height: 80vh;
@@ -2611,6 +2687,7 @@
       <div class="stat-row"><span>Stage</span><span class="stat-val" id="stat-stage">—</span></div>
       <div class="stat-row"><span>XP</span><span class="stat-val" id="stat-xp">—</span></div>
       <div class="stat-row"><span>Level</span><span class="stat-val" id="stat-level">—</span></div>
+      <div class="stat-row"><span>Ability</span><span class="stat-val" id="stat-ability">—</span></div>
     </div>
 
     <div id="wallet-panel">
@@ -2754,6 +2831,15 @@
   </div>
 </div>
 
+<!-- ── Upgrade Choice Overlay ───────────────────────────────────── -->
+<div id="upgrade-overlay" style="display:none">
+  <div id="upgrade-box">
+    <div id="upgrade-title">Guild Trial Complete</div>
+    <div id="upgrade-subtitle">Choose your path. This cannot be undone.</div>
+    <div id="upgrade-choices"></div>
+  </div>
+</div>
+
 <!-- ── Board Overlay ────────────────────────────────────────────── -->
 <div id="board-overlay">
   <div id="board-box">
@@ -2877,7 +2963,9 @@
 
 <script type="module">
   import { updateSidebarMap } from './services/map_renderer.js';
+  import { LEVEL_5_UPGRADES } from './data/upgrades.js';
   window.updateSidebarMap = updateSidebarMap;
+  window.LEVEL_5_UPGRADES = LEVEL_5_UPGRADES;
 </script>
 <script>
 // ── Config ───────────────────────────────────────────────────────
@@ -4318,6 +4406,10 @@ function updateCharPanel(c) {
   document.getElementById('stat-xp').textContent     = c.xp ?? '—';
   const charLevel = Math.max(1, 1 + (Number(c.class_stage ?? 0)));
   document.getElementById('stat-level').textContent = charLevel;
+  const upgrades = (typeof c.upgrades === 'string' ? JSON.parse(c.upgrades || '{}') : (c.upgrades || {}));
+  const abilityName = upgrades.level_5 ? (window.LEVEL_5_UPGRADES?.[upgrades.level_5]?.display_name) || upgrades.level_5 : '—';
+  const abEl = document.getElementById('stat-ability');
+  if (abEl) abEl.textContent = abilityName;
 
   const hp    = c.current_hp || 0;
   const maxHp = playerMaxHp = (c.max_hp || 10);
@@ -5395,7 +5487,7 @@ function showCombat(data, isBoss) {
   document.getElementById('combat-enemy-name').textContent = data.enemy_name || data.enemy_id || 'Enemy';
   updateCombatBars(data.player_hp, playerMaxHp, data.enemy_hp, data.enemy_hp);
   updateStatusDisplay(data.statuses ?? {}, data.enemy_statuses ?? {}, data.active_buffs);
-  updateCombatActionButtons(data.ability_cooldown ?? 0, false);
+  updateCombatActionButtons(data.ability_cooldown ?? 0, false, data.ability_used ?? false);
   const panel = document.getElementById('combat-item-panel');
   if (panel) panel.style.display = 'none';
 }
@@ -5408,7 +5500,12 @@ function updateCombatBars(php, pmax, ehp, emax) {
   document.getElementById('enemy-bar').style.width = epct + '%';
 }
 
-const STATUS_LABELS = { resolve: 'Resolve', stealth: 'Stealth', iron_stance: 'Iron Stance', burning: 'Burning', staggered: 'Staggered', taunt: 'Taunt', slip_dodge: 'Slip' };
+const STATUS_LABELS = {
+  resolve: 'Resolve', stealth: 'Stealth', iron_stance: 'Iron Stance', burning: 'Burning', burn: 'Burning',
+  staggered: 'Staggered', stagger: 'Staggered', taunt: 'Taunt', slip_dodge: 'Slip',
+  blind: 'Blinded', stun: 'Stunned', marked: 'Marked', shield: 'Shielded', damage_resist: 'Damage Resist',
+  empowered: 'Empowered', untargetable: 'Untargetable', weakened: 'Weakened', corrupted_power: 'Corrupted Power',
+};
 
 function updateStatusDisplay(statuses, enemyStatuses, activeBuffs) {
   const el = document.getElementById('combat-statuses');
@@ -5419,19 +5516,24 @@ function updateStatusDisplay(statuses, enemyStatuses, activeBuffs) {
     chips.push(`<span class="status-chip status-buff">+${b.value} ${stat} (${b.turns_remaining}t)</span>`);
   }
   for (const [k, v] of Object.entries(statuses || {})) {
-    if (v > 0) chips.push(`<span class="status-chip">${STATUS_LABELS[k] || k} (${v})</span>`);
+    const dur = typeof v === 'object' && v !== null && 'duration' in v ? v.duration : (typeof v === 'number' ? v : 0);
+    if (dur > 0) chips.push(`<span class="status-chip">${STATUS_LABELS[k] || k} (${dur})</span>`);
   }
   if (Object.keys(enemyStatuses || {}).length) chips.push('<span class="status-chip" style="opacity:0.8">—</span>');
   for (const [k, v] of Object.entries(enemyStatuses || {})) {
-    if (v > 0) chips.push(`<span class="status-chip">${STATUS_LABELS[k] || k} (${v})</span>`);
+    const dur = typeof v === 'object' && v !== null && 'duration' in v ? v.duration : (typeof v === 'number' ? v : 0);
+    if (dur > 0) chips.push(`<span class="status-chip">${STATUS_LABELS[k] || k} (${dur})</span>`);
   }
   el.innerHTML = chips.join('');
 }
 
-function updateAbilityButton(cooldown) {
+function updateAbilityButton(cooldown, abilityUsed) {
   const btn = document.getElementById('btn-ability');
   if (!btn) return;
-  if (cooldown > 0) {
+  if (abilityUsed) {
+    btn.disabled = true;
+    btn.textContent = 'Ability (used)';
+  } else if (cooldown > 0) {
     btn.disabled = true;
     btn.textContent = `Ability (${cooldown} turns)`;
   } else {
@@ -5440,8 +5542,8 @@ function updateAbilityButton(cooldown) {
   }
 }
 
-function updateCombatActionButtons(cooldown, itemUsed) {
-  updateAbilityButton(cooldown);
+function updateCombatActionButtons(cooldown, itemUsed, abilityUsed) {
+  updateAbilityButton(cooldown, abilityUsed ?? false);
   const useBtn = document.getElementById('btn-use-item');
   if (useBtn) useBtn.disabled = !!itemUsed;
 }
@@ -5522,7 +5624,7 @@ async function openCombatInventory() {
               if (combatState) combatState = { ...combatState, ...passData, enemy_hp_max: enemyMax };
               updateCombatBars(passData.player_hp, playerMaxHp, passData.enemy_hp, enemyMax);
               updateStatusDisplay(passData.statuses, passData.enemy_statuses, passData.active_buffs);
-              updateCombatActionButtons(passData.ability_cooldown ?? 0, false);
+              updateCombatActionButtons(passData.ability_cooldown ?? 0, false, passData.ability_used ?? false);
             }
           } catch (e) {
             document.getElementById('combat-log').innerHTML = render('<em>' + escapeHtml(e.message) + '</em>');
@@ -5582,7 +5684,7 @@ async function combatAction(action) {
       if (combatState) combatState = { ...combatState, ...data, enemy_hp_max: enemyMax };
       updateCombatBars(data.player_hp, playerMaxHp, data.enemy_hp, enemyMax);
       updateStatusDisplay(data.statuses, data.enemy_statuses, data.active_buffs);
-      updateCombatActionButtons(data.ability_cooldown ?? 0, false);
+      updateCombatActionButtons(data.ability_cooldown ?? 0, false, data.ability_used ?? false);
     }
   } catch(e) {
     log(`<em>${e.message}</em>`);
@@ -5622,6 +5724,41 @@ async function doBoard() {
 
 function closeBoard() {
   document.getElementById('board-overlay').classList.remove('open');
+}
+
+// ── Upgrade Choice (Level 5) ──────────────────────────────────────
+function showUpgradeChoice(instinct) {
+  const choices = Object.values(window.LEVEL_5_UPGRADES || {}).filter(u => u.instinct === instinct);
+  const container = document.getElementById('upgrade-choices');
+  if (!container) return;
+  container.innerHTML = '';
+  choices.forEach(upgrade => {
+    const card = document.createElement('div');
+    card.className = 'upgrade-card';
+    card.innerHTML = `
+      <div class="upgrade-card-name">${escapeHtml(upgrade.display_name)}</div>
+      <div class="upgrade-card-type">${upgrade.type === 'passive' ? 'Passive' : 'Active — once per combat'}</div>
+      <div class="upgrade-card-desc">${escapeHtml(upgrade.combat_log_player || '')}</div>
+      <div class="upgrade-card-playstyle">${escapeHtml(upgrade.playstyle || '')}</div>
+      <button class="btn upgrade-select-btn" data-upgrade-id="${escapeHtml(upgrade.id)}">Choose</button>
+    `;
+    const btn = card.querySelector('.upgrade-select-btn');
+    if (btn) btn.onclick = () => selectUpgrade(upgrade.id);
+    container.appendChild(card);
+  });
+  document.getElementById('upgrade-overlay').style.display = 'flex';
+}
+
+async function selectUpgrade(upgradeId) {
+  try {
+    const data = await POST('/api/character/upgrade', { slot: 'level_5', upgrade_id: upgradeId });
+    document.getElementById('upgrade-overlay').style.display = 'none';
+    const name = (window.LEVEL_5_UPGRADES || {})[upgradeId]?.display_name || upgradeId;
+    log(`<strong>${escapeHtml(name)}</strong> — learned.`);
+    refreshSidebar();
+  } catch(e) {
+    log(`<em>${e.message || 'Failed.'}</em>`);
+  }
 }
 
 // ── Bounty Board ─────────────────────────────────────────────────

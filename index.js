@@ -10,6 +10,7 @@ import { WORLD, FIRST_VISIT_INTROS } from "./data/world.js";
 import { COMBAT_DATA, FIGHTABLE_LOCATIONS, ENCOUNTER_CHANCES, ENCOUNTER_CUES, SCENT_ITEMS, PREDATOR_ENEMIES, getPredatorCue, AMBUSH_ROOMS, getAmbushCue } from "./data/combat.js";
 import { RACES } from "./data/races.js";
 import { INSTINCTS } from "./data/instincts.js";
+import { LEVEL_5_UPGRADES } from "./data/upgrades.js";
 import { NPC_LOCATIONS, NPC_NAMES, NPC_TOPICS, BARTENDER_FEE } from "./data/npcs.js";
 import { SERIS_NOTICES, FLAVOR_NOTICES, ANONYMOUS_NOTICES, IMPOSSIBLE_TEMPLATES, BOARD_NPC_REACTIONS } from "./data/board.js";
 import { SERIS_INTEREST_ITEMS, getSellValue, displayNameToKey, TIER_BASE_VALUES } from "./data/seris.js";
@@ -17,6 +18,7 @@ import { VENDOR_STOCK, VENDOR_NPCS, CAELIR_STOCK, VEYRA_STOCK } from "./data/ven
 import { getNPCResponse, boardNPCReaction } from "./services/npc_dialogue.js";
 import { PIP_REACTIONS } from "./data/npc_dialogue_lines.js";
 import { statMod, rollDie, maxPlayerHp, randomEnemy, resolvePlayerAction, resolveEnemyAttack, tickStatusEffects, tickStatuses, resolveEnemyTrait, getTraitDamageModifier, getStatusEffectOnHit, getTraitOnHitEffect, INSTINCT_DEFS } from "./services/combat.js";
+import { resolveUpgradeAbility } from "./services/upgrade_resolver.js";
 import { generateItem } from "./services/item_generator.js";
 import { getCombatLoot, ROOM_LOOT } from "./data/sewer_loot.js";
 import { rollLoot, ITEM_DATA, getEffectSummary } from "./data/items.js";
@@ -460,7 +462,7 @@ async function getPlayerSheet(db, uid) {
            c.intelligence, c.wisdom, c.charisma,
            c.stats_set, c.alignment_morality, c.alignment_order,
            c.ash_marks, c.ember_shards, c.soul_coins,
-           c.xp, c.class_stage, c.current_hp
+           c.xp, c.class_stage, c.current_hp, c.upgrades
     FROM players p
     LEFT JOIN characters c ON c.user_id=p.user_id
     WHERE p.user_id=?`, [uid]);
@@ -469,12 +471,14 @@ async function getPlayerSheet(db, uid) {
 // HP
 async function getPlayerHp(db, uid, row) {
   const con = row ? row.constitution : 10;
-  const maxHp = maxPlayerHp(con);
+  const classStage = row?.class_stage ?? 0;
+  const maxHp = maxPlayerHp(con, classStage);
   // Use NULL (not 0) as the "never initialized" sentinel.
   // 0 is a valid HP value — a player can be at 0 HP and still alive
   // (e.g. won a fight on 1 HP, took hazard damage, etc.)
   const cur = (row && row.current_hp != null) ? row.current_hp : maxHp;
-  return { current: cur, max: maxHp };
+  // Cap current to max so mid-run players don't die if max recalculates downward
+  return { current: Math.min(cur, maxHp), max: maxHp };
 }
 
 // Consumable effect application (item use)
@@ -486,7 +490,7 @@ async function applyConsumableEffect(db, dbRun, dbGet, uid, effect, combatState)
     status_removed: null,
     enemy_damage: 0,
   };
-  const row = await dbGet(db, "SELECT constitution, current_hp FROM characters WHERE user_id=?", [uid]);
+  const row = await dbGet(db, "SELECT constitution, current_hp, class_stage FROM characters WHERE user_id=?", [uid]);
   const hp = await getPlayerHp(db, uid, row);
 
   if (effect.type === "heal") {
@@ -847,6 +851,7 @@ async function initDb(db) {
     try { await dbRun(db, `ALTER TABLE characters ADD COLUMN crime_heat INTEGER DEFAULT 0`); } catch (_) {}
     try { await dbRun(db, `ALTER TABLE characters ADD COLUMN archetype TEXT DEFAULT 'Survivor'`); } catch (_) {}
     try { await dbRun(db, `ALTER TABLE characters ADD COLUMN last_decay INTEGER`); } catch (_) {}
+    try { await dbRun(db, `ALTER TABLE characters ADD COLUMN upgrades TEXT DEFAULT '{}'`); } catch (_) {}
     await dbRun(db, `CREATE TABLE IF NOT EXISTS crime_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -1304,7 +1309,7 @@ if (path === "/api/admin/command" && method === "POST") {
         await processDeathDrop(db, uid, row?.location || "tavern");
         await dbRun(db, "UPDATE characters SET current_hp=0 WHERE user_id=?", [uid]);
         await dbRun(db, "UPDATE players SET location='tavern' WHERE user_id=?", [uid]);
-        const maxHp = maxPlayerHp(row?.constitution || 10);
+        const maxHp = maxPlayerHp(row?.constitution || 10, row?.class_stage ?? 0);
         await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [maxHp, uid]);
         const dc = await getFlag(db, uid, "death_count");
         await setFlag(db, uid, "death_count", dc + 1);
@@ -1468,7 +1473,7 @@ if (path === "/api/admin/command" && method === "POST") {
       }
 
       const { strength, dexterity, constitution, intelligence, wisdom, charisma } = finalStats;
-      const maxHp = maxPlayerHp(constitution);
+      const maxHp = maxPlayerHp(constitution, 0);
       await dbRun(db, `UPDATE characters SET name=?, race=?, instinct=?, strength=?, dexterity=?, constitution=?,
         intelligence=?, wisdom=?, charisma=?, stats_set=1, current_hp=? WHERE user_id=?`,
         [nameTrimmed, raceKey, instinctKey, strength, dexterity, constitution, intelligence, wisdom, charisma, maxHp, uid]);
@@ -1491,11 +1496,27 @@ if (path === "/api/admin/command" && method === "POST") {
       const stats = { strength, dexterity, constitution, intelligence, wisdom, charisma };
       const validation = validatePointBuy(stats);
       if (!validation.ok) return err(validation.message, 400);
-      const maxHp = maxPlayerHp(constitution);
+      const maxHp = maxPlayerHp(constitution, 0);
       await dbRun(db, `UPDATE characters SET strength=?,dexterity=?,constitution=?,
         intelligence=?,wisdom=?,charisma=?,stats_set=1,current_hp=? WHERE user_id=?`,
         [strength,dexterity,constitution,intelligence,wisdom,charisma,maxHp,uid]);
       return json({ ok: true, max_hp: maxHp });
+    }
+
+    // ── POST: Choose upgrade (level 5, etc.) ──
+    if (path === "/api/character/upgrade" && method === "POST") {
+      const { slot, upgrade_id } = body;
+      if (slot !== "level_5" || !upgrade_id) return err("slot and upgrade_id required.", 400);
+      const upgrade = LEVEL_5_UPGRADES[upgrade_id];
+      if (!upgrade) return err("Unknown upgrade.", 400);
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (upgrade.instinct !== (row.instinct || "").toLowerCase()) return err("Upgrade does not match your instinct.", 400);
+      const current = JSON.parse(row.upgrades || "{}");
+      if (current[slot]) return err("That slot is already filled.", 400);
+      const next = { ...current, [slot]: upgrade_id };
+      await dbRun(db, "UPDATE characters SET upgrades=? WHERE user_id=?", [JSON.stringify(next), uid]);
+      return json({ ok: true, slot, upgrade_id, display_name: upgrade.display_name });
     }
 
     // ── GET: Roll stats ──
@@ -1620,8 +1641,7 @@ if (path === "/api/admin/command" && method === "POST") {
               enemy_hp_max: enemy.hp,
               player_hp: hp.current,
               player_hp_max: hp.max,
-              ability_cooldown: 0, statuses: {}, enemy_statuses: {}, fade_used: false, hearth_healed: false,
-              turn: 1,
+              ability_cooldown: 0, ability_used: false, npc_ability_used: false, statuses: {}, enemy_statuses: {}, player_statuses: {}, turn: 1, turn_count: 1,
               round: 1,
               location: loc,
               weapon_die: weaponDie,
@@ -1707,8 +1727,7 @@ if (path === "/api/admin/command" && method === "POST") {
               enemy_hp_max: enemy.hp,
               player_hp: hp.current,
               player_hp_max: hp.max,
-              ability_cooldown: 0, statuses: {}, enemy_statuses: {}, fade_used: false, hearth_healed: false,
-              turn: 1,
+              ability_cooldown: 0, ability_used: false, npc_ability_used: false, statuses: {}, enemy_statuses: {}, player_statuses: {}, turn: 1, turn_count: 1,
               round: 1,
               location: row.location,
               weapon_die: weaponDie,
@@ -1931,8 +1950,8 @@ if (path === "/api/admin/command" && method === "POST") {
                 enemy_hp_max: enemy.hp,
                 player_hp: hp.current,
                 player_hp_max: hp.max,
-                ability_cooldown: 0, statuses: {}, enemy_statuses: {}, fade_used: false, hearth_healed: false,
-                turn: 1,
+                ability_cooldown: 0, ability_used: false, npc_ability_used: false, statuses: {}, enemy_statuses: {}, player_statuses: {}, fade_used: false, hearth_healed: false,
+                turn: 1, turn_count: 1,
                 round: 1,
                 location: dest,
                 weapon_die: weaponDie,
@@ -2005,8 +2024,8 @@ if (path === "/api/admin/command" && method === "POST") {
                 enemy_hp_max: enemy.hp,
                 player_hp: hp.current,
                 player_hp_max: hp.max,
-                ability_cooldown: 0, statuses: {}, enemy_statuses: {}, fade_used: false, hearth_healed: false,
-                turn: 1,
+                ability_cooldown: 0, ability_used: false, npc_ability_used: false, statuses: {}, enemy_statuses: {}, player_statuses: {}, fade_used: false, hearth_healed: false,
+                turn: 1, turn_count: 1,
                 round: 1,
                 location: dest,
                 weapon_die: weaponDie,
@@ -2061,8 +2080,8 @@ if (path === "/api/admin/command" && method === "POST") {
             enemy_hp_max: enemy.hp,
             player_hp: hp.current,
             player_hp_max: hp.max,
-            ability_cooldown: 0, statuses: {}, enemy_statuses: {}, fade_used: false, hearth_healed: false,
-            turn: 1,
+            ability_cooldown: 0, ability_used: false, npc_ability_used: false, statuses: {}, enemy_statuses: {}, player_statuses: {}, fade_used: false, hearth_healed: false,
+            turn: 1, turn_count: 1,
             round: 1,
             location: dest,
             weapon_die: weaponDie,
@@ -2162,8 +2181,8 @@ if (path === "/api/admin/command" && method === "POST") {
               enemy_hp_max: enemy.hp,
               player_hp: hp.current,
               player_hp_max: hp.max,
-              ability_cooldown: 0, statuses: {}, enemy_statuses: {}, fade_used: false, hearth_healed: false,
-              turn: 1,
+              ability_cooldown: 0, statuses: {}, enemy_statuses: {}, player_statuses: {}, fade_used: false, hearth_healed: false,
+              turn: 1, turn_count: 1,
               round: 1,
               location: dest,
               weapon_die: weaponDie,
@@ -2358,8 +2377,8 @@ if (path === "/api/admin/command" && method === "POST") {
         enemy_hp_max: enemy.hp,
         player_hp: hp.current,
         player_hp_max: hp.max,
-        ability_cooldown: 0, statuses: {}, enemy_statuses: {}, fade_used: false, hearth_healed: false,
-        turn: 1,
+        ability_cooldown: 0, ability_used: false, npc_ability_used: false, statuses: {}, enemy_statuses: {}, player_statuses: {}, fade_used: false, hearth_healed: false,
+        turn: 1, turn_count: 1,
         round: 1,
         location: row.location,
         weapon_die: weaponDie,
@@ -3087,7 +3106,7 @@ if (path === "/api/combat/state" && method === "GET") {
         enemy_id: enemy.id, enemy_name: enemy.name,
         enemy_hp: enemy.hp, enemy_hp_max: enemy.hp,
         player_hp: hp.current, player_hp_max: hp.max,
-        ability_cooldown: 0, statuses: {}, enemy_statuses: {}, fade_used: false, hearth_healed: false, turn: 1, round: 1, location: row.location,
+        ability_cooldown: 0, ability_used: false, npc_ability_used: false, statuses: {}, enemy_statuses: {}, player_statuses: {}, turn: 1, turn_count: 1, round: 1, location: row.location,
         weapon_die: weaponDie, armor_reduction: armorReduction, shield_bonus: shieldBonus,
         enemy_staggered: false, status_effects: [], trait_state: {},
         armor_break_effects: [], active_buffs: [],
@@ -3135,6 +3154,10 @@ if (path === "/api/combat/state" && method === "GET") {
       state.armor_break_effects = state.armor_break_effects ?? [];
       state.statuses = state.statuses ?? {};
       state.enemy_statuses = state.enemy_statuses ?? {};
+      state.player_statuses = state.player_statuses ?? state.statuses ?? {};
+      state.turn_count = state.turn_count ?? state.turn ?? 1;
+      state.ability_used = state.ability_used ?? false;
+      state.npc_ability_used = state.npc_ability_used ?? false;
       state.fade_used = state.fade_used ?? false;
       state.hearth_healed = state.hearth_healed ?? false;
       state.round = state.round ?? state.turn ?? 1;
@@ -3165,18 +3188,52 @@ if (path === "/api/combat/state" && method === "GET") {
         .map((e) => ({ ...e, duration: e.duration - 1 }))
         .filter((e) => e.duration > 0);
 
+      const upgradesJson = JSON.parse(row.upgrades || "{}");
+      const level5Upgrade = LEVEL_5_UPGRADES[upgradesJson?.level_5];
+
       const armorBreakReduction = state.armor_break_effects.reduce((s, e) => s + (e.defense_reduction ?? 0), 0);
       const baseTierArmor = Math.max(0, (state.armor_reduction ?? 0) - armorBreakReduction);
       const equipDefense = (equippedStats.defense || 0) + (activeBonuses.defense || 0);
-      const effectiveArmor = baseTierArmor + equipDefense;
+      let effectiveArmor = baseTierArmor + equipDefense;
+
+      // Passive: battle_hardened, stone_guard, quiet_prayer
+      const playerHpPercent = (state.player_hp_max ?? 1) > 0 ? (state.player_hp ?? 0) / state.player_hp_max : 0;
+      const turnCount = state.turn_count ?? state.turn ?? 1;
+      if (level5Upgrade?.id === "quiet_prayer" && turnCount > 0 && turnCount % 3 === 0) {
+        const healAmt = Math.max(1, Math.floor((state.player_hp_max ?? 20) * (level5Upgrade.heal_percent ?? 0.08)));
+        playerHp = Math.min(playerHp + healAmt, state.player_hp_max);
+        const negStatuses = ["armor_break", "bleed", "poison", "burn", "weakened", "blind", "stun"];
+        const toRemove = negStatuses.find((s) => (state.statuses?.[s] ?? 0) > 0);
+        if (toRemove && (level5Upgrade.remove_statuses ?? 0) > 0) {
+          delete state.statuses[toRemove];
+        }
+      }
+      if (level5Upgrade?.id === "battle_hardened") {
+        const baseResist = level5Upgrade.passive_defense_bonus ?? 0.15;
+        const lowHpBonus = playerHpPercent < (level5Upgrade.low_hp_threshold ?? 0.4) ? (level5Upgrade.low_hp_bonus_resist ?? 0.2) : 0;
+        effectiveArmor = Math.floor(effectiveArmor * (1 + baseResist + lowHpBonus));
+      }
 
       // 3. Resolve player action (pass = no action, e.g. after item use)
-      const attack = usePass
-        ? { dmg: 0, heal: 0, skip_retaliation: false }
-        : resolvePlayerAction(stats, enemy, useAbility, instinct, state);
+      let attack;
+      if (usePass) {
+        attack = { dmg: 0, heal: 0, skip_retaliation: false };
+      } else if (useAbility) {
+        if (level5Upgrade) {
+          if (level5Upgrade.type === "passive") return err(`${level5Upgrade.display_name} is passive — it activates automatically.`, 400);
+          if (state.ability_used) return err(`${level5Upgrade.display_name} has already been used this combat.`, 400);
+          attack = resolveUpgradeAbility(level5Upgrade, row, state, enemy, equippedItemMap);
+          state.ability_used = true;
+        } else {
+          attack = resolvePlayerAction(stats, enemy, true, instinct, state, undefined);
+        }
+      } else {
+        attack = resolvePlayerAction(stats, enemy, false, instinct, state, undefined);
+      }
 
-      // Add equipment + buff attack bonus (melee_power or spell_power for wand/staff)
-      if (!attack.heal && attack.dmg != null && attack.dmg > 0) {
+      // Add equipment + buff attack bonus (melee_power or spell_power) — NOT for Level 5 upgrade abilities
+      const usedUpgradeAbility = useAbility && level5Upgrade;
+      if (!usedUpgradeAbility && !attack.heal && attack.dmg != null && attack.dmg > 0) {
         const weaponMainId = equippedItemMap?.weapon_main;
         const weaponDef = weaponMainId ? EQUIPMENT_DATA[weaponMainId] : null;
         const isSpellWeapon = weaponDef && ["wand", "staff"].includes(weaponDef.sub_type || "");
@@ -3191,8 +3248,12 @@ if (path === "/api/combat/state" && method === "GET") {
       if (attack.set_flag === "hearth_healed") state.hearth_healed = true;
 
       if (useAbility) {
-        const def = INSTINCT_DEFS[instinct];
-        state.ability_cooldown = def?.primary?.cadence ?? 3;
+        if (level5Upgrade) {
+          state.ability_cooldown = 0;  // Level 5 upgrades are once-per-combat, no cooldown
+        } else {
+          const def = INSTINCT_DEFS[instinct];
+          state.ability_cooldown = def?.primary?.cadence ?? 3;
+        }
       } else {
         state.ability_cooldown = Math.max(0, (state.ability_cooldown ?? 0) - 1);
       }
@@ -3213,7 +3274,7 @@ if (path === "/api/combat/state" && method === "GET") {
       }
       if (attack.status_on_player) {
         const dur = attack.status_duration_player ?? attack.status_duration ?? 1;
-        state.statuses[attack.status_on_player] = dur;
+        state.statuses[attack.status_on_player] = attack.status_value != null ? { duration: dur, value: attack.status_value } : dur;
       }
 
       // 4. Enemy retaliation (skip if staggered or skip_retaliation)
@@ -3223,9 +3284,11 @@ if (path === "/api/combat/state" && method === "GET") {
       let dodged = false;
       const skipRetaliation = attack.skip_retaliation ?? attack.skipRetaliation ?? false;
       const staggered = (state.enemy_statuses?.staggered ?? 0) > 0;
+      const stunned = (state.enemy_statuses?.stun ?? 0) > 0;
+      const untargetable = (state.statuses?.untargetable ?? 0) > 0;
 
       if (!skipRetaliation) {
-        if (staggered) {
+        if (staggered || stunned || untargetable) {
           enemySkippedStagger = true;
         } else {
           const traitResult = resolveEnemyTrait(enemy, state);
@@ -3254,6 +3317,24 @@ if (path === "/api/combat/state" && method === "GET") {
 
           enemyDmg = Math.floor(enemyDmg * (attack.damageReduction ? 1 - attack.damageReduction : 1));
           enemyDmg = Math.max(0, enemyDmg - effectiveArmor);
+
+          // Passive: stone_guard (20% resist when above 50% HP)
+          if (level5Upgrade?.id === "stone_guard" && playerHpPercent > (level5Upgrade.hp_threshold ?? 0.5)) {
+            enemyDmg = Math.floor(enemyDmg * (1 - (level5Upgrade.passive_resist_above_threshold ?? 0.2)));
+          }
+
+          // damage_resist, shield (Level 5 status effects)
+          const resistVal = state.damage_resist_value ?? 0.4;
+          if ((state.statuses?.damage_resist ?? 0) > 0 || (typeof state.statuses?.damage_resist === "object" && state.statuses?.damage_resist?.duration > 0)) {
+            enemyDmg = Math.floor(enemyDmg * (1 - resistVal));
+          }
+          const shieldEntry = state.statuses?.shield;
+          const shieldVal = typeof shieldEntry === "object" ? shieldEntry?.value ?? 0 : 0;
+          if (shieldVal > 0) {
+            const absorbed = Math.min(enemyDmg, shieldVal);
+            enemyDmg = Math.max(0, enemyDmg - absorbed);
+            if (typeof shieldEntry === "object") shieldEntry.value = Math.max(0, shieldEntry.value - absorbed);
+          }
 
           // Dodge check
           const dodgeChance = (equippedStats.dodge || 0) + (activeBonuses.dodge || 0);
@@ -3321,7 +3402,7 @@ if (path === "/api/combat/state" && method === "GET") {
             await dbRun(db, "UPDATE combat_state SET state_json=? WHERE user_id=?", [JSON.stringify(state), uid]);
             await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [playerHp, uid]);
             const summonMsg = `*The Rat King falls — but something else rises from the ash.*\n\n*${minion.name} emerges.*`;
-            return json({ result: "ongoing", message: summonMsg, player_hp: playerHp, enemy_hp: state.enemy_hp, enemy_hp_max: state.enemy_hp_max, ability_cooldown: state.ability_cooldown ?? 0, statuses: state.statuses ?? {}, enemy_statuses: state.enemy_statuses ?? {}, active_buffs: state.active_buffs ?? [] });
+            return json({ result: "ongoing", message: summonMsg, player_hp: playerHp, enemy_hp: state.enemy_hp, enemy_hp_max: state.enemy_hp_max, ability_cooldown: state.ability_cooldown ?? 0, ability_used: state.ability_used ?? false, statuses: state.statuses ?? {}, enemy_statuses: state.enemy_statuses ?? {}, active_buffs: state.active_buffs ?? [] });
           }
         }
 
@@ -3335,7 +3416,7 @@ if (path === "/api/combat/state" && method === "GET") {
             await dbRun(db, "DELETE FROM combat_state WHERE user_id=?", [uid]);
             await dbRun(db, "UPDATE characters SET current_hp=0 WHERE user_id=?", [uid]);
             await dbRun(db, "UPDATE players SET location='tavern' WHERE user_id=?", [uid]);
-            const maxHp = maxPlayerHp(row.constitution);
+            const maxHp = maxPlayerHp(row.constitution, row.class_stage ?? 0);
             await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [maxHp, uid]);
             await setFlag(db, uid, "death_count", (await getFlag(db, uid, "death_count", 0)) + 1);
             await setFlag(db, uid, "just_respawned", 1);
@@ -3459,7 +3540,7 @@ if (path === "/api/combat/state" && method === "GET") {
         await dbRun(db, "DELETE FROM combat_state WHERE user_id=?", [uid]);
         await dbRun(db, "UPDATE characters SET current_hp=0 WHERE user_id=?", [uid]);
         await dbRun(db, "UPDATE players SET location='tavern' WHERE user_id=?", [uid]);
-        const maxHp = maxPlayerHp(row.constitution);
+        const maxHp = maxPlayerHp(row.constitution, row.class_stage ?? 0);
         await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [maxHp, uid]);
         const dc = await getFlag(db, uid, "death_count");
         await setFlag(db, uid, "death_count", dc + 1);
@@ -3479,6 +3560,7 @@ if (path === "/api/combat/state" && method === "GET") {
       state.enemy_hp = enemyHp;
       state.player_hp = playerHp;
       state.turn++;
+      state.turn_count = (state.turn_count ?? state.turn ?? 1) + 1;
       state.round = (state.round ?? state.turn) + 1;
       await dbRun(db, "UPDATE combat_state SET state_json=? WHERE user_id=?", [JSON.stringify(state), uid]);
       await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [playerHp, uid]);
@@ -3504,6 +3586,7 @@ if (path === "/api/combat/state" && method === "GET") {
         player_hp: playerHp, enemy_hp: enemyHp,
         enemy_hp_max: state.enemy_hp_max,
         ability_cooldown: state.ability_cooldown ?? 0,
+        ability_used: state.ability_used ?? false,
         statuses: state.statuses ?? {},
         active_buffs: state.active_buffs ?? [],
         enemy_statuses: state.enemy_statuses ?? {},
@@ -3539,8 +3622,8 @@ if (path === "/api/combat/state" && method === "GET") {
       if (targetLoc?.location !== row.location) return err("Target is not here.", 400);
       const pvpRow = await dbGet(db, "SELECT downed_until FROM pvp_state WHERE user_id=? AND downed_until>?", [targetUid, Math.floor(Date.now() / 1000)]);
       if (!pvpRow) return err("That player is not downed.", 400);
-      const targetChar = await dbGet(db, "SELECT constitution FROM characters WHERE user_id=?", [targetUid]);
-      const maxHp = maxPlayerHp(targetChar?.constitution || 10);
+      const targetChar = await dbGet(db, "SELECT constitution, class_stage FROM characters WHERE user_id=?", [targetUid]);
+      const maxHp = maxPlayerHp(targetChar?.constitution || 10, targetChar?.class_stage ?? 0);
       const reviveHp = Math.max(1, Math.floor(maxHp * 0.3));
       await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [reviveHp, targetUid]);
       await dbRun(db, "INSERT INTO pvp_state (user_id, downed_until, downed_by, created_at, updated_at) VALUES (?, 0, NULL, ?, ?) ON CONFLICT(user_id) DO UPDATE SET downed_until=0, downed_by=NULL, updated_at=excluded.updated_at", [targetUid, Math.floor(Date.now() / 1000), Math.floor(Date.now() / 1000)]);
@@ -3586,7 +3669,8 @@ if (path === "/api/combat/state" && method === "GET") {
       const { ashLost } = await processDeathDrop(db, targetUid, targetLoc.location);
       await dbRun(db, "UPDATE characters SET current_hp=0 WHERE user_id=?", [targetUid]);
       await dbRun(db, "UPDATE players SET location='tavern' WHERE user_id=?", [targetUid]);
-      const maxHp = maxPlayerHp((await dbGet(db, "SELECT constitution FROM characters WHERE user_id=?", [targetUid]))?.constitution || 10);
+      const finishChar = await dbGet(db, "SELECT constitution, class_stage FROM characters WHERE user_id=?", [targetUid]);
+      const maxHp = maxPlayerHp(finishChar?.constitution || 10, finishChar?.class_stage ?? 0);
       await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [maxHp, targetUid]);
       const dc = await getFlag(db, targetUid, "death_count");
       await setFlag(db, targetUid, "death_count", dc + 1);
@@ -3626,7 +3710,7 @@ if (path === "/api/combat/state" && method === "GET") {
       }
       const strMod = statMod(row.strength);
       const dmg = Math.max(1, rollDie(6) + strMod);
-      const newHp = Math.max(0, (targetRow.current_hp || maxPlayerHp(targetRow.constitution)) - dmg);
+      const newHp = Math.max(0, (targetRow.current_hp || maxPlayerHp(targetRow.constitution, targetRow.class_stage ?? 0)) - dmg);
       await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [newHp, targetUid]);
       if (!isParty) await updateAlignment(db, uid, -10, 0, (row.instinct || "").toLowerCase());
       const targetName = targetRow.name || "Unknown";
@@ -3646,7 +3730,7 @@ if (path === "/api/combat/state" && method === "GET") {
       if ((row.ash_marks || 0) < BARTENDER_FEE) {
         return json({ ok: false, message: `*Kelvaris doesn't look at you.*\n\n"Ten marks. That's what a room costs."\n\nYou have **${row.ash_marks || 0}** Ash Marks.` });
       }
-      const maxHp = maxPlayerHp(row.constitution);
+      const maxHp = maxPlayerHp(row.constitution, row.class_stage ?? 0);
       await dbRun(db, "UPDATE characters SET ash_marks=ash_marks-?,current_hp=? WHERE user_id=?", [BARTENDER_FEE, maxHp, uid]);
       await setFlag(db, uid, "has_room", 1);
       const instinct = (row.instinct || "").toLowerCase();
@@ -3841,7 +3925,7 @@ if (path === "/api/combat/state" && method === "GET") {
         await dbRun(db, "UPDATE inventory SET qty=qty-1 WHERE user_id=? AND item=?", [uid, item_id]);
       }
 
-      const hpRow = await dbGet(db, "SELECT constitution, current_hp FROM characters WHERE user_id=?", [uid]);
+      const hpRow = await dbGet(db, "SELECT constitution, current_hp, class_stage FROM characters WHERE user_id=?", [uid]);
       const hp = await getPlayerHp(db, uid, hpRow);
 
       let resultStatus = "ok";

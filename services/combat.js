@@ -4,7 +4,7 @@ export function statMod(v) { return Math.floor((v - 10) / 2); }
 
 export function rollDie(sides) { return Math.floor(Math.random() * sides) + 1; }
 
-export function maxPlayerHp(con) { return 20 + statMod(con) * 3; }
+export function maxPlayerHp(con, classStage = 0) { return 10 + statMod(con) * 3 + (classStage ?? 0) * 4; }
 
 /**
  * Pick a random enemy for the given location. Uses floor-based pools and 8% boss chance.
@@ -167,21 +167,27 @@ export const INSTINCT_DEFS = {
 export function tickStatuses(statuses) {
   const next = {};
   for (const [k, v] of Object.entries(statuses || {})) {
-    if (v > 1) next[k] = v - 1;
+    if (typeof v === "object" && v !== null && "duration" in v) {
+      if (v.duration > 1) next[k] = { ...v, duration: v.duration - 1 };
+    } else if (typeof v === "number" && v > 1) {
+      next[k] = v - 1;
+    }
   }
   return next;
 }
 
 /**
  * Resolve player action — ability or normal attack. Uses INSTINCT_DEFS.
+ * @param {object} upgrades - Optional. If upgrades.level_5 is a function, use it instead of def.primary.effect.
  */
-export function resolvePlayerAction(stats, enemy, useAbility, instinct, state) {
+export function resolvePlayerAction(stats, enemy, useAbility, instinct, state, upgrades = null) {
   const strMod = statMod(stats.strength);
   const def = INSTINCT_DEFS[instinct];
   const weaponDie = state?.weapon_die ?? 6;
 
   if (useAbility && def) {
-    const result = def.primary.effect(stats, enemy, state);
+    const effectFn = typeof upgrades?.level_5 === "function" ? upgrades.level_5 : def.primary.effect;
+    const result = effectFn(stats, enemy, state);
     const narrative =
       typeof def.primary.narrative === "function"
         ? def.primary.narrative(result.dmg ?? result.heal, result.wounded)
@@ -238,6 +244,9 @@ export function resolveEnemyAttack(enemy, stats, playerStatuses = {}, enemyStatu
   if ((enemyStatuses?.staggered ?? 0) > 0) return { dmg: 0, hit: false };
 
   let roll = rollDie(20) + Math.floor(((enemy.accuracy ?? 65) - 50) / 5);
+  if ((enemyStatuses?.blind ?? 0) > 0) {
+    roll = Math.max(1, roll - 40);
+  }
 
   if ((enemyStatuses?.taunt ?? 0) > 0) {
     roll = Math.min(roll, rollDie(20) + Math.floor(((enemy.accuracy ?? 65) - 50) / 5));
@@ -258,6 +267,12 @@ export function resolveEnemyAttack(enemy, stats, playerStatuses = {}, enemyStatu
   }
   if ((playerStatuses?.iron_stance ?? 0) > 0) {
     dmg = Math.max(0, dmg - STATUS_DEFS.iron_stance.flat_damage_reduction);
+  }
+  if ((enemyStatuses?.stagger ?? 0) > 0) {
+    dmg = Math.max(0, Math.floor(dmg * (1 - 0.20)));
+  }
+  if ((enemyStatuses?.weakened ?? 0) > 0) {
+    dmg = Math.max(0, Math.floor(dmg * (1 - 0.25)));
   }
 
   return { dmg, hit: true };
