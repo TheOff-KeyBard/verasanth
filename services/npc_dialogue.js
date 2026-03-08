@@ -1,6 +1,74 @@
 import { boardNPCReaction } from "../data/board.js";
+import { NPC_DIALOGUE_LINES } from "../data/npc_dialogue_lines.js";
 
 export { boardNPCReaction };
+
+const STATIC_DIALOGUE_CHANCE = 0.3;
+
+/**
+ * Maps npcId + topic + playerContext to a static dialogue category when context matches.
+ * Returns null when no category matches (LLM will handle).
+ */
+function getStaticDialogueCategory(npcId, topic, playerContext) {
+  const t = (topic || "").toLowerCase().trim();
+  const seenSewer = !!(playerContext.seen_sewer_wall_markings ?? 0);
+  const morality = playerContext.morality ?? playerContext.mercy_score ?? 0;
+
+  const visitKeys = {
+    bartender: "kelvaris_visits",
+    weaponsmith: "caelir_visits",
+    armorsmith: "veyra_visits",
+    herbalist: "thalara_visits",
+    othorion: "othorion_visits",
+    warden: "grommash_visits",
+    curator: "seris_visits",
+  };
+  const visits = (playerContext[visitKeys[npcId]] ?? 0) | 0;
+
+  // No topic or empty → greeting
+  if (!t) return "greeting";
+
+  // Sewer-related topics + seen sewer
+  const sewerTopics = ["sewer", "sewers", "cistern"];
+  if (sewerTopics.includes(t) && seenSewer) {
+    if (npcId === "bartender") return "sewer_return";
+    if (npcId === "herbalist") return "sewer_reactions";
+    if (npcId === "weaponsmith") return "sewer_materials";
+    if (npcId === "armorsmith") return "sewer_symbols";
+    if (npcId === "othorion") return "sewer_return";
+  }
+
+  // Forge/work
+  if (t === "forge" || t === "work" || t === "atelier") {
+    if (npcId === "weaponsmith") return "crafting";
+    if (npcId === "armorsmith") return "forge";
+  }
+
+  // Remedies (herbalist)
+  if (t === "remedies" && npcId === "herbalist") return "potion";
+
+  // Artifacts/items (curator, othorion)
+  if ((t === "artifacts" || t === "items") && npcId === "curator") return "artifact_interest";
+  if ((t === "artifacts" || t === "items") && npcId === "othorion") return "artifact_detection";
+
+  // Pip (othorion)
+  if (t === "pip" && npcId === "othorion") return "pip";
+
+  // High trust when topic is general (no specific topic match)
+  const isGeneralTopic = !t || ["general", "hello", "hi", "greeting"].includes(t);
+  if (isGeneralTopic && visits >= 5) {
+    const highTrustNpcs = ["bartender", "weaponsmith", "armorsmith", "herbalist"];
+    if (highTrustNpcs.includes(npcId)) return "high_trust";
+  }
+
+  // Warden alignment
+  if (npcId === "warden") {
+    if (morality >= 40) return "honorable_player";
+    if (morality <= -40) return "dangerous_player";
+  }
+
+  return null;
+}
 
 export async function getNPCResponse(env, npcId, topic, playerContext) {
   try {
@@ -607,6 +675,13 @@ FORMATTING RULES:
   // Board notices — don't need Claude, use static pool
   if (topic === "board") {
     return boardNPCReaction(npcId);
+  }
+
+  // Static dialogue pool — 30% chance when context matches
+  const category = getStaticDialogueCategory(npcId, topic, playerContext);
+  const pool = NPC_DIALOGUE_LINES[npcId]?.[category];
+  if (pool && pool.length > 0 && Math.random() < STATIC_DIALOGUE_CHANCE) {
+    return pool[Math.floor(Math.random() * pool.length)];
   }
 
   const systemPromptEntry = systemPrompts[npcId];

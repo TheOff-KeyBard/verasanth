@@ -15,6 +15,7 @@ import { SERIS_NOTICES, FLAVOR_NOTICES, ANONYMOUS_NOTICES, IMPOSSIBLE_TEMPLATES,
 import { SERIS_INTEREST_ITEMS, getSellValue, displayNameToKey, TIER_BASE_VALUES } from "./data/seris.js";
 import { VENDOR_STOCK, VENDOR_NPCS, CAELIR_STOCK, VEYRA_STOCK } from "./data/vendor_stock.js";
 import { getNPCResponse, boardNPCReaction } from "./services/npc_dialogue.js";
+import { PIP_REACTIONS } from "./data/npc_dialogue_lines.js";
 import { statMod, rollDie, maxPlayerHp, randomEnemy, resolvePlayerAction, resolveEnemyAttack, tickStatusEffects, tickStatuses, resolveEnemyTrait, getTraitDamageModifier, getStatusEffectOnHit, getTraitOnHitEffect, INSTINCT_DEFS } from "./services/combat.js";
 import { generateItem } from "./services/item_generator.js";
 import { getCombatLoot, ROOM_LOOT } from "./data/sewer_loot.js";
@@ -2205,7 +2206,12 @@ if (path === "/api/admin/command" && method === "POST") {
       if (!obj) return err(`Nothing called '${target}' here.`, 404);
       const flagName = SEWER_STORY_MARKINGS[row.location]?.[target];
       if (flagName) await setFlag(db, uid, flagName, 1);
-      return json({ target, desc: obj.desc, actions: obj.actions || [] });
+      let desc = obj.desc;
+      if (target === "pip" && room?.objects?.pip && PIP_REACTIONS.length > 0) {
+        const reaction = PIP_REACTIONS[Math.floor(Math.random() * PIP_REACTIONS.length)];
+        desc = `${desc}\n\n${reaction}`;
+      }
+      return json({ target, desc, actions: obj.actions || [] });
     }
 
     // ── POST: Search (room/object loot) ──

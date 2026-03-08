@@ -268,48 +268,78 @@
     color: var(--danger);
   }
 
-  #node-map {
-    width: 300px;
-    height: auto;
-    min-height: 120px;
-    background: #0d0b08;
+  /* ── Sidebar map (data-driven SVG) ───────────────────────────────── */
+  .sidebar-section .section-title {
+    font-size: 10px;
+    font-family: var(--font-title);
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin: 0 0 8px 0;
+  }
+  #map-container {
+    width: 100%;
+    height: 250px;
+    background: var(--bg3);
     border: 1px solid var(--border-warm);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 10px;
   }
-
-  #node-map svg {
-    display: block;
+  #dynamic-map {
+    width: 100%;
+    height: 100%;
   }
-
-  #node-map .node-circle {
-    fill: #3a2a1a;
-    stroke: #c9a84c;
+  .map-link {
+    stroke: var(--border-warm);
+    stroke-width: 1.5;
+    stroke-dasharray: 4;
+    opacity: 0.7;
+  }
+  .map-link.locked {
+    opacity: 0.3;
+    stroke-dasharray: 2 4;
+  }
+  .map-node {
+    fill: var(--bg);
+    stroke: var(--border-warm);
+    stroke-width: 1;
+    transition: all 0.25s ease;
+  }
+  .map-node.discovered {
+    opacity: 1;
+  }
+  .map-node.undiscovered {
+    opacity: 0.15;
+  }
+  .map-node.adjacent {
+    stroke: var(--ember);
+  }
+  .map-node.current {
+    fill: var(--ember);
+    stroke: #fff;
+    filter: drop-shadow(0 0 5px var(--ember));
+  }
+  .map-node.safe {
     stroke-width: 1.5;
   }
-
-  #node-map .node-circle.danger {
-    stroke: #8b1a1a;
+  .map-node.danger {
+    stroke-width: 1.5;
   }
-
-  #node-map .node-circle.current {
-    fill: #c4622a;
-    stroke: #e8845a;
-    animation: node-pulse 1.5s ease-in-out infinite;
+  #location-label {
+    font-size: 0.8rem;
+    color: var(--ember);
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 1px;
   }
-
-  @keyframes node-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
-  }
-
-  #node-map .node-label {
-    font: 8px var(--font-title), serif;
-    fill: #8a7a6a;
-  }
-
-  #node-map .connection-line {
-    stroke: #3a2a1a;
-    stroke-width: 1;
-    opacity: 0.6;
+  #map-subtitle {
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 1px;
   }
 
   .section-label {
@@ -2276,11 +2306,6 @@
         <div class="button-row" id="exits-row"></div>
       </div>
 
-      <div id="node-map-wrap" style="margin-top:16px">
-        <div class="section-label">Map</div>
-        <div id="node-map"></div>
-      </div>
-
       <div id="objects-section" style="display:none">
         <div class="section-label">Inspect</div>
         <div class="button-row" id="objects-row"></div>
@@ -2318,6 +2343,15 @@
       <div class="stat-row"><span>Stage</span><span class="stat-val" id="stat-stage">—</span></div>
       <div class="stat-row"><span>XP</span><span class="stat-val" id="stat-xp">—</span></div>
     </div>
+
+    <section class="sidebar-section" id="map-section">
+      <h3 class="section-title">Map</h3>
+      <div id="map-container">
+        <svg id="dynamic-map" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div id="location-label">Unknown Location</div>
+      <div id="map-subtitle">Unknown Region</div>
+    </section>
 
     <div id="wallet-panel">
       <div class="currency-row"><span>Ash Marks</span><span class="currency-val" id="w-ash">0</span></div>
@@ -2547,6 +2581,10 @@
   </div>
 </div>
 
+<script type="module">
+  import { updateSidebarMap } from './services/map_renderer.js';
+  window.updateSidebarMap = updateSidebarMap;
+</script>
 <script>
 // ── Config ───────────────────────────────────────────────────────
 const API = '';  // use relative paths (same origin)
@@ -4084,74 +4122,6 @@ function shortName(locId) {
   return name.length > 14 ? name.slice(0, 12) + '…' : name;
 }
 
-function renderNodeMap(currentLoc) {
-  const wrap = document.getElementById('node-map');
-  wrap.innerHTML = '';
-  const shown = new Set(visitedSet);
-  if (currentLoc) shown.add(currentLoc);
-
-  const positions = [];
-  shown.forEach(id => {
-    if (NODE_POSITIONS[id]) positions.push(id);
-  });
-  if (positions.length === 0) return;
-
-  const padding = 20;
-  let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
-  positions.forEach(id => {
-    const p = NODE_POSITIONS[id];
-    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
-    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
-  });
-  minX -= padding; minY -= padding; maxX += padding; maxY += padding;
-  const w = Math.max(300, maxX - minX);
-  const h = Math.max(120, maxY - minY);
-
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', `${minX - 10} ${minY - 10} ${w + 20} ${h + 20}`);
-  svg.setAttribute('width', '300');
-  svg.setAttribute('height', (300 * (h / w)) | 0);
-
-  const drawn = new Set();
-  connectionsList.forEach(([a, b]) => {
-    if (!shown.has(a) || !shown.has(b)) return;
-    const pa = NODE_POSITIONS[a];
-    const pb = NODE_POSITIONS[b];
-    if (!pa || !pb) return;
-    const key = a < b ? a + ',' + b : b + ',' + a;
-    if (drawn.has(key)) return;
-    drawn.add(key);
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', pa.x);
-    line.setAttribute('y1', pa.y);
-    line.setAttribute('x2', pb.x);
-    line.setAttribute('y2', pb.y);
-    line.setAttribute('class', 'connection-line');
-    svg.appendChild(line);
-  });
-
-  positions.forEach(id => {
-    const p = NODE_POSITIONS[id];
-    const isCurrent = id === currentLoc;
-    const danger = DANGEROUS_LOCATIONS.has(id);
-    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    circle.setAttribute('cx', p.x);
-    circle.setAttribute('cy', p.y);
-    circle.setAttribute('r', isCurrent ? 8 : 6);
-    circle.setAttribute('class', 'node-circle' + (danger ? ' danger' : '') + (isCurrent ? ' current' : ''));
-    svg.appendChild(circle);
-    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    label.setAttribute('x', p.x);
-    label.setAttribute('y', p.y + 18);
-    label.setAttribute('text-anchor', 'middle');
-    label.setAttribute('class', 'node-label');
-    label.textContent = shortName(id);
-    svg.appendChild(label);
-  });
-
-  wrap.appendChild(svg);
-}
-
 // ── Room rendering ───────────────────────────────────────────────
 function renderHazardWarning(hazard) {
   const existing = document.getElementById('hazard-warning');
@@ -4192,7 +4162,7 @@ function renderRoom(data) {
     document.getElementById('exits-section').style.display = 'none';
   }
 
-  renderNodeMap(data.location);
+  if (window.updateSidebarMap) window.updateSidebarMap(data.location, visitedSet, { ...LOCATION_NAMES, ...locationNamesMap });
   currentGameLocation = data.location || '';
   currentRoomFightable = data.fightable ?? false;
 
