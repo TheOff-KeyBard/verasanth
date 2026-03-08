@@ -2518,6 +2518,17 @@ if (path === "/api/admin/command" && method === "POST") {
       return json({ locations, connections });
     }
 
+    // ── GET: Map discovered locations (persisted; survives death/refresh) ──
+    if (path === "/api/map/discovered" && method === "GET") {
+      const rows = await dbAll(db, "SELECT flag FROM player_flags WHERE user_id=? AND (flag LIKE 'visited_%' OR flag='has_seen_market_square')", [uid]);
+      const discovered = new Set();
+      for (const r of rows) {
+        if (r.flag === "has_seen_market_square") discovered.add("market_square");
+        else if (r.flag.startsWith("visited_")) discovered.add(r.flag.slice(9));
+      }
+      return json({ discovered: Array.from(discovered) });
+    }
+
     // ── POST: Set player flag (e.g. visited_<location>) ──
     if (path === "/api/flag" && method === "POST") {
       const { flag, value } = body;

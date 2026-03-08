@@ -341,6 +341,27 @@
     text-transform: uppercase;
     letter-spacing: 1px;
   }
+  .map-legend {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    max-height: 120px;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 12px;
+  }
+  .map-legend-item {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .map-legend-item.current {
+    color: var(--ember);
+    font-weight: 600;
+  }
 
   .section-label {
     font-family: var(--font-title);
@@ -2315,6 +2336,7 @@
       </div>
       <div id="location-label">Unknown Location</div>
       <div id="map-subtitle">Unknown Region</div>
+      <div id="map-legend" class="map-legend"></div>
     </div>
   </div>
   <div id="inv-panel-slide" class="sheet-panel inv-panel-slide" style="display:none;">
@@ -3726,23 +3748,21 @@ async function doRegister() {
 
 // ── Load / refresh game state ────────────────────────────────────
 async function loadGame() {
-  const [charData, lookData, walletData, invData, locData, flagsData] = await Promise.all([
+  const [charData, lookData, walletData, invData, locData, mapData] = await Promise.all([
     GET('/api/character'),
     GET('/api/look'),
     GET('/api/wallet'),
     GET('/api/inventory'),
     GET('/api/data/locations').catch(() => ({ locations: {}, connections: [] })),
-    GET('/api/character/flags').catch(() => ({})),
+    GET('/api/map/discovered').catch(() => ({ discovered: [] })),
   ]);
 
   locationNamesMap = locData.locations || {};
   connectionsList = locData.connections || [];
-  visitedSet = new Set(
-    Object.keys(flagsData || {}).filter(k => k.startsWith('visited_')).map(k => k.slice(9))
-  );
+  visitedSet = new Set(mapData?.discovered || []);
   if (lookData.location) {
     visitedSet.add(lookData.location);
-    POST('/api/flag', { flag: 'visited_' + lookData.location, value: 1 }).catch(() => {});
+    POST('/api/flag', { flag: lookData.location === 'market_square' ? 'has_seen_market_square' : 'visited_' + lookData.location, value: 1 }).catch(() => {});
   }
 
   updateCharPanel(charData);
@@ -4319,7 +4339,8 @@ async function doSearchArea() {
 async function doMove(dir) {
   try {
     const data = await POST('/api/move', { direction: dir });
-    await POST('/api/flag', { flag: 'visited_' + data.location, value: 1 }).catch(() => {});
+    const visitFlag = data.location === 'market_square' ? 'has_seen_market_square' : 'visited_' + data.location;
+    await POST('/api/flag', { flag: visitFlag, value: 1 }).catch(() => {});
     visitedSet.add(data.location);
     renderRoom(data);
     startLingerTimer(data.fightable);
@@ -4892,7 +4913,12 @@ async function combatAction(action) {
       updateAbilityButton(0);
       document.getElementById('combat-overlay').classList.remove('open', 'boss-encounter');
       log(render(data.message));
-      const lookData = await GET('/api/look');
+      const [lookData, mapData] = await Promise.all([
+        GET('/api/look'),
+        GET('/api/map/discovered').catch(() => ({ discovered: [] })),
+      ]);
+      visitedSet = new Set(mapData?.discovered || []);
+      if (lookData.location) visitedSet.add(lookData.location);
       renderRoom(lookData);
       refreshSidebar();
       startLingerTimer(currentRoomFightable);

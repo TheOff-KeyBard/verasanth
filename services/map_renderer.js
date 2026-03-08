@@ -109,9 +109,32 @@ export function updateSidebarMap(currentRoomId, discoveredLocations, locationNam
     circle.setAttribute("cy", meta.y);
     circle.setAttribute("r", isCurrent ? 8 : 6);
     circle.setAttribute("class", cls);
+    const label = locationNamesMap[nodeId] || meta?.label || nodeId;
+    const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+    title.textContent = label;
+    circle.appendChild(title);
     svgEl.appendChild(circle);
   }
 
   locationLabel.textContent = locationNamesMap[currentRoomId] || nodes[currentRoomId]?.label || currentRoomId || "Unknown Location";
   mapSubtitle.textContent = mapDef.label || "Unknown Region";
+
+  const legendEl = document.getElementById("map-legend");
+  if (legendEl) {
+    const items = nodesToRender.map((nodeId) => {
+      const label = locationNamesMap[nodeId] || nodes[nodeId]?.label || nodeId;
+      const isCurrent = nodeId === currentRoomId;
+      return { nodeId, label, isCurrent };
+    });
+    legendEl.innerHTML = items
+      .map(({ label, isCurrent }) => `<span class="map-legend-item${isCurrent ? " current" : ""}">${escapeHtml(label)}</span>`)
+      .join("");
+  }
+}
+
+function escapeHtml(s) {
+  if (s == null) return "";
+  const div = document.createElement("div");
+  div.textContent = String(s);
+  return div.innerHTML;
 }
