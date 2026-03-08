@@ -195,7 +195,7 @@ export function resolvePlayerAction(stats, enemy, useAbility, instinct, state, u
     return { ...result, narrative, ability: true };
   }
 
-  let roll = rollDie(20) + strMod;
+  let roll = rollDie(20) + strMod + (state?.accuracy_bonus ?? 0);
   const isFade = instinct === "shadowbound" && !state?.fade_used;
   if (isFade) {
     roll = Math.max(roll, rollDie(20) + strMod);

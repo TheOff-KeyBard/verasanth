@@ -3314,6 +3314,7 @@ const VENDOR_NPCS = {
   weaponsmith: { buy: true, sell: true },
   armorsmith: { buy: true, sell: true },
   herbalist: { buy: true, sell: true },
+  trader: { buy: true, sell: true },
   curator: { buy: false, sell: true },
   othorion: { buy: false, sell: true },
 };
@@ -3831,7 +3832,7 @@ async function populateCharacterSheet() {
   });
   document.getElementById('cs-xp').textContent = char.xp ?? '—';
   document.getElementById('cs-stage').textContent = char.class_stage ?? '—';
-  document.getElementById('cs-ash').textContent = wallet.ash_marks ?? 0;
+  document.getElementById('cs-ash').textContent = wallet.formatted_am ?? wallet.ash_marks ?? 0;
   document.getElementById('cs-ember').textContent = wallet.ember_shards ?? 0;
   document.getElementById('cs-soul').textContent = wallet.soul_coins ?? 0;
   const items = inv.items || [];
@@ -4041,7 +4042,7 @@ async function refreshSheetPanel() {
     return (s === 'weapon_offhand' && dualWield && eq[s]) ? label + ' ⚔ Dual Wield' : label;
   });
   const loadout = loadoutParts.join(' · ');
-  document.getElementById('panel-tab-inventory').innerHTML = '<p>◈ ' + (wallet.ash_marks ?? 0) + ' Ash · ◆ ' + (wallet.ember_shards ?? 0) + ' Ember · ○ ' + (wallet.soul_coins ?? 0) + ' Soul</p>' +
+  document.getElementById('panel-tab-inventory').innerHTML = '<p>◈ ' + (wallet.formatted_am ?? wallet.ash_marks ?? 0) + ' Ash · ◆ ' + (wallet.ember_shards ?? 0) + ' Ember · ○ ' + (wallet.soul_coins ?? 0) + ' Soul</p>' +
     '<p class="inv-loadout" style="margin-bottom:6px">' + escapeHtml(loadout) + '</p>' +
     '<p>' + (items.length ? escapeHtml(items.join(', ')) : 'Nothing carried.') + '</p>';
   let flagsHtml = '<ul>';
@@ -4422,8 +4423,8 @@ function updateCharPanel(c) {
 }
 
 function updateWallet(w) {
-  document.getElementById('w-ash').textContent   = w.ash_marks   || 0;
-  document.getElementById('w-ember').textContent = w.ember_shards|| 0;
+  document.getElementById('w-ash').textContent   = w.formatted_am ?? (w.ash_marks ?? 0);
+  document.getElementById('w-ember').textContent = w.ember_shards || 0;
   document.getElementById('w-soul').textContent  = w.soul_coins  || 0;
 }
 
@@ -5369,15 +5370,18 @@ async function openTradeBuy(npcId) {
   document.getElementById('trade-confirm').style.display = 'none';
   document.getElementById('trade-overlay').classList.add('open');
   try {
-    const data = await GET(`/api/vendor/${npcId}/stock`);
+    const data = await POST('/api/shop/browse', { npc_id: npcId });
     const list = document.getElementById('trade-list');
-    (data.stock || []).forEach(entry => {
+    const items = data.items || [];
+    items.forEach(entry => {
       const b = document.createElement('button');
       b.className = 'trade-item';
-      b.innerHTML = escapeHtml(entry.display_name) + ' <span class="price">' + entry.price + ' AM</span>';
-      b.onclick = () => confirmTradeBuy(entry);
+      const name = entry.name || entry.display_name || entry.id;
+      b.innerHTML = escapeHtml(name) + ' <span class="price">' + (entry.price ?? 0) + ' AM</span>';
+      b.onclick = () => confirmTradeBuy({ ...entry, id: entry.id, display_name: name, price: entry.price });
       list.appendChild(b);
     });
+    if (items.length === 0) list.innerHTML = '<p class="text-dim">Nothing for sale.</p>';
   } catch (e) {
     document.getElementById('trade-list').innerHTML = '<p class="err">' + escapeHtml(e.message) + '</p>';
   }
@@ -5392,7 +5396,7 @@ async function openTradeSell(npcId) {
   try {
     const [invData, offersData] = await Promise.all([
       GET('/api/inventory'),
-      GET(`/api/vendor/${npcId}/sell-offers`).catch(() => ({ offers: {} })),
+      POST('/api/shop/sell_offers', { npc_id: npcId }).catch(() => ({ offers: {} })),
     ]);
     const details = invData.itemDetails || [];
     const offers = offersData.offers || {};
@@ -5406,7 +5410,7 @@ async function openTradeSell(npcId) {
       b.onclick = () => confirmTradeSell(it, price);
       list.appendChild(b);
     });
-    if (details.length === 0) list.innerHTML = '<p class="text-dim">Nothing to sell.</p>';
+    if (list.querySelectorAll('.trade-item').length === 0) list.innerHTML = '<p class="text-dim">Nothing to sell.</p>';
   } catch (e) {
     document.getElementById('trade-list').innerHTML = '<p class="err">' + escapeHtml(e.message) + '</p>';
   }
@@ -5431,7 +5435,7 @@ async function doTradeBuy() {
   const { npc, pendingItem } = tradeState;
   if (!npc || !pendingItem) return;
   try {
-    const data = await POST('/api/vendor/buy', { npc, item_id: pendingItem.id });
+    const data = await POST('/api/shop/buy', { npc_id: npc, item_id: pendingItem.id });
     log(render(data.message || ''));
     refreshSidebar();
     cancelTradeConfirm();
@@ -5445,7 +5449,7 @@ async function doTradeSell() {
   const { npc, pendingItem } = tradeState;
   if (!npc || !pendingItem) return;
   try {
-    const data = await POST('/api/sell', { npc, item: pendingItem.id });
+    const data = await POST('/api/shop/sell', { npc_id: npc, item_id: pendingItem.id });
     log(render(data.message || ''));
     refreshSidebar();
     cancelTradeConfirm();

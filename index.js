@@ -7,7 +7,7 @@
 
 import { runAdminCommand } from "./admin.js";
 import { WORLD, FIRST_VISIT_INTROS } from "./data/world.js";
-import { COMBAT_DATA, FIGHTABLE_LOCATIONS, ENCOUNTER_CHANCES, ENCOUNTER_CUES, SCENT_ITEMS, PREDATOR_ENEMIES, getPredatorCue, AMBUSH_ROOMS, getAmbushCue } from "./data/combat.js";
+import { COMBAT_DATA, FIGHTABLE_LOCATIONS, ENCOUNTER_CHANCES, ENCOUNTER_CUES, SCENT_ITEMS, PREDATOR_ENEMIES, getPredatorCue, AMBUSH_ROOMS, getAmbushCue, LOCATION_TO_FLOOR } from "./data/combat.js";
 import { RACES } from "./data/races.js";
 import { INSTINCTS } from "./data/instincts.js";
 import { LEVEL_5_UPGRADES } from "./data/upgrades.js";
@@ -15,6 +15,7 @@ import { NPC_LOCATIONS, NPC_NAMES, NPC_TOPICS, BARTENDER_FEE } from "./data/npcs
 import { SERIS_NOTICES, FLAVOR_NOTICES, ANONYMOUS_NOTICES, IMPOSSIBLE_TEMPLATES, BOARD_NPC_REACTIONS } from "./data/board.js";
 import { SERIS_INTEREST_ITEMS, getSellValue, displayNameToKey, TIER_BASE_VALUES } from "./data/seris.js";
 import { VENDOR_STOCK, VENDOR_NPCS, CAELIR_STOCK, VEYRA_STOCK } from "./data/vendor_stock.js";
+import { VENDOR_STOCK as ECON_VENDOR_STOCK, getSellPrice as econGetSellPrice, getItemForSell, rollCashLoot, rollItemDrop, LOOT_ITEMS, REFINED_REAGENTS } from "./data/economy.js";
 import { getNPCResponse, boardNPCReaction } from "./services/npc_dialogue.js";
 import { PIP_REACTIONS } from "./data/npc_dialogue_lines.js";
 import { statMod, rollDie, maxPlayerHp, randomEnemy, resolvePlayerAction, resolveEnemyAttack, tickStatusEffects, tickStatuses, resolveEnemyTrait, getTraitDamageModifier, getStatusEffectOnHit, getTraitOnHitEffect, INSTINCT_DEFS } from "./services/combat.js";
@@ -30,6 +31,40 @@ import { rotateSewerCondition } from "./services/sewer_rotation.js";
 import { LEGACY_SLOT_MAP, EQUIPMENT_SLOTS, EQUIPMENT_DATA, INSTINCT_AFFINITIES } from "./data/equipment.js";
 import { getEquipmentSlot, resolveLegacySlot, isValidEquipmentSlot, canEquipItem, equipItem, unequipItem, getEquippedItemMap, getAffinityHint, getCharacterLevel } from "./services/equipment.js";
 import { aggregateEquipmentStats, applyInstinctAffinities, getItemEffectiveStats } from "./services/equipment_stats.js";
+
+// ─────────────────────────────────────────────────────────────
+// ECONOMY HELPERS
+// ─────────────────────────────────────────────────────────────
+
+// Economy Blueprint v2: service costs and buff flag names
+const SMITH_SERVICES = { edge_hone: 8, balanced_grip: 10, heavy_draw: 12 };
+const ARMOR_SERVICES = { strap_tighten: 8, weight_redistribute: 10, shield_brace: 12 };
+const THALARA_SERVICES = { cleansing_tonic: 20, ember_tonic: 18, deep_lung_draught: 15 };
+const COMBAT_BUFF_FLAGS = [
+  "buff_edge_hone_combats_remaining", "buff_balanced_grip_combats_remaining", "buff_heavy_draw_combats_remaining",
+  "buff_strap_tighten_combats_remaining", "buff_weight_redist_combats_remaining", "buff_shield_brace_combats_remaining",
+  "buff_ember_tonic_combats_remaining", "buff_deep_lung_combats_remaining",
+];
+
+async function decrementCombatBuffs(db, uid) {
+  for (const flag of COMBAT_BUFF_FLAGS) {
+    const v = await getFlag(db, uid, flag, 0);
+    if (v > 1) await setFlag(db, uid, flag, v - 1);
+    else if (v === 1) await dbRun(db, "DELETE FROM player_flags WHERE user_id=? AND flag=?", [uid, flag.toLowerCase()]);
+  }
+}
+
+/** Format Ash Marks for display. 1 CC = 100 AM. Never stored. */
+function formatAM(am) {
+  const a = Math.floor(Number(am) || 0);
+  const cc = Math.floor(a / 100);
+  const rem = a % 100;
+  const parts = [];
+  if (cc) parts.push(`${cc} CC`);
+  if (rem || !parts.length) parts.push(`${rem} AM`);
+  if (cc) parts.push(`(${a} AM)`);
+  return parts.join(" ");
+}
 
 // ─────────────────────────────────────────────────────────────
 // GAME DATA (remaining in index)
@@ -1655,6 +1690,7 @@ if (path === "/api/admin/command" && method === "POST") {
               auto_triggered: true,
               roamer: true,
             };
+            await decrementCombatBuffs(db, uid);
             await dbRun(db,
               "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
               [uid, JSON.stringify(state)]);
@@ -1741,6 +1777,7 @@ if (path === "/api/admin/command" && method === "POST") {
               auto_triggered: true,
               roamer: true,
             };
+            await decrementCombatBuffs(db, uid);
             await dbRun(db,
               "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
               [uid, JSON.stringify(state)]);
@@ -1967,6 +2004,7 @@ if (path === "/api/admin/command" && method === "POST") {
                 boss_id: telegraphRow.boss_id,
                 boss_reward: def.reward,
               };
+              await decrementCombatBuffs(db, uid);
               await dbRun(db,
                 "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
                 [uid, JSON.stringify(state)]);
@@ -2038,6 +2076,7 @@ if (path === "/api/admin/command" && method === "POST") {
                 active_buffs: [],
                 auto_triggered: true,
               };
+              await decrementCombatBuffs(db, uid);
               await dbRun(db,
                 "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
                 [uid, JSON.stringify(state)]);
@@ -2093,6 +2132,7 @@ if (path === "/api/admin/command" && method === "POST") {
             armor_break_effects: [],
             auto_triggered: true,
           };
+          await decrementCombatBuffs(db, uid);
           await dbRun(db,
             "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
             [uid, JSON.stringify(state)]);
@@ -2194,6 +2234,7 @@ if (path === "/api/admin/command" && method === "POST") {
               armor_break_effects: [],
               auto_triggered: true,
             };
+            await decrementCombatBuffs(db, uid);
             await dbRun(db,
               "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
               [uid, JSON.stringify(state)]);
@@ -2391,6 +2432,7 @@ if (path === "/api/admin/command" && method === "POST") {
         active_buffs: [],
         auto_triggered: true,
       };
+      await decrementCombatBuffs(db, uid);
       await dbRun(db,
         "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
         [uid, JSON.stringify(state)]);
@@ -3127,6 +3169,7 @@ if (path === "/api/combat/state" && method === "GET") {
         enemy_staggered: false, status_effects: [], trait_state: {},
         armor_break_effects: [], active_buffs: [],
       };
+      await decrementCombatBuffs(db, uid);
       await dbRun(db, "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
         [uid, JSON.stringify(state)]);
       return json({ ...state, message: `*${enemy.name} emerges from the dark.*\n\n${enemy.desc || ""}` });
@@ -3194,6 +3237,19 @@ if (path === "/api/combat/state" && method === "GET") {
       for (const buff of (state.active_buffs || [])) {
         activeBonuses[buff.stat] = (activeBonuses[buff.stat] || 0) + (buff.value ?? 0);
       }
+      // Economy Blueprint v2: combat buff flags (smith/armor/thalara services)
+      const edgeHone = await getFlag(db, uid, "buff_edge_hone_combats_remaining", 0);
+      if (edgeHone > 0) activeBonuses.melee_power = (activeBonuses.melee_power || 0) + 1;
+      const balancedGrip = await getFlag(db, uid, "buff_balanced_grip_combats_remaining", 0);
+      if (balancedGrip > 0) activeBonuses.accuracy = (activeBonuses.accuracy || 0) + 3;
+      const strapTighten = await getFlag(db, uid, "buff_strap_tighten_combats_remaining", 0);
+      if (strapTighten > 0) activeBonuses.defense = (activeBonuses.defense || 0) + 1;
+      const weightRedist = await getFlag(db, uid, "buff_weight_redist_combats_remaining", 0);
+      if (weightRedist > 0) activeBonuses.dodge = (activeBonuses.dodge || 0) + 1;
+      const shieldBrace = await getFlag(db, uid, "buff_shield_brace_combats_remaining", 0);
+      if (shieldBrace > 0) activeBonuses.block = (activeBonuses.block || 0) + 2;
+      const emberTonic = await getFlag(db, uid, "buff_ember_tonic_combats_remaining", 0);
+      if (emberTonic > 0) activeBonuses.spell_power = (activeBonuses.spell_power || 0) + 1;
 
       // 1. Tick status effects (bleed/poison/fire_touch)
       const statusDmg = tickStatusEffects(state);
@@ -3240,10 +3296,12 @@ if (path === "/api/combat/state" && method === "GET") {
           if (state.ability_used) return err(`${level5Upgrade.display_name} has already been used this combat.`, 400);
           attack = resolveUpgradeAbility(level5Upgrade, row, state, enemy, equippedItemMap);
           state.ability_used = true;
-        } else {
-          attack = resolvePlayerAction(stats, enemy, true, instinct, state, undefined);
+      } else {
+        state.accuracy_bonus = activeBonuses.accuracy ?? 0;
+        attack = resolvePlayerAction(stats, enemy, true, instinct, state, undefined);
         }
       } else {
+        state.accuracy_bonus = activeBonuses.accuracy ?? 0;
         attack = resolvePlayerAction(stats, enemy, false, instinct, state, undefined);
       }
 
@@ -3473,9 +3531,12 @@ if (path === "/api/combat/state" && method === "GET") {
         await dbRun(db, "UPDATE characters SET xp=? WHERE user_id=?", [newXp, uid]);
         const canAdvance = newXp >= [0,500,1500,3500,7500,15000][(xpRow.class_stage||0)+1];
 
-        // Loot — simple cash drop
-        let lootAsh = Math.floor(Math.random() * 15) + 5;
+        // Loot — tiered cash + item drop (Economy Blueprint v2)
+        const floor = LOCATION_TO_FLOOR[state.location || "drain_entrance"] ?? 1;
+        const enemyTier = floor <= 2 ? 1 : floor <= 4 ? 2 : 3;
+        let lootAsh = rollCashLoot(enemyTier);
         let bossRewardLine = "";
+        let lootItemLine = "";
 
         // Phase 3: Boss reward (telegraphed boss from BOSS_DEFS)
         if (state.boss && state.boss_reward) {
@@ -3492,6 +3553,17 @@ if (path === "/api/combat/state" && method === "GET") {
         }
 
         await dbRun(db, "UPDATE characters SET ash_marks=ash_marks+? WHERE user_id=?", [lootAsh, uid]);
+
+        const itemDrop = rollItemDrop(enemyTier);
+        if (itemDrop) {
+          const lootDef = LOOT_ITEMS[itemDrop];
+          const isUnidentifiedRelic = lootDef?.category === "loot_relic" || lootDef?.category === "loot_artifact";
+          const dropName = isUnidentifiedRelic ? "Strange Object" : (lootDef?.name || ITEM_DATA[itemDrop]?.name || itemDrop);
+          await dbRun(db, `INSERT INTO inventory (user_id, item, qty, tier, display_name) VALUES (?, ?, 1, 1, ?)
+            ON CONFLICT(user_id, item) DO UPDATE SET qty = qty + 1`,
+            [uid, itemDrop, dropName]);
+          lootItemLine = ` | **${dropName}**`;
+        }
 
         // Loot — floor-specific from sewer_loot, or procedural fallback
         const playerLevel = 1 + (xpRow.class_stage || 0);
@@ -3541,12 +3613,13 @@ if (path === "/api/combat/state" && method === "GET") {
         const itemLine = itemLines.length ? ` | **${itemLines.join("**, **")}**` : "";
         let victoryMsg = `*${enemy.name} falls.*\n\n${attack.narrative}${fallRiskMsg ? fallRiskMsg : ""}`;
         if (sporeBurstEnemies.includes(state.enemy_id)) victoryMsg += `\n\n*It bursts — spores fill your lungs. **4** damage.*`;
-        victoryMsg += `\n\n**+${xpGain} XP** | **+${lootAsh} Ash Marks**${bossRewardLine || ""}${itemLine}`;
-        return json({
-          result: "victory",
-          message: victoryMsg,
-          can_advance: !!canAdvance, player_hp: playerHp,
-        });
+        victoryMsg += `\n\n**+${xpGain} XP** | **+${lootAsh} Ash Marks**${bossRewardLine || ""}${lootItemLine || ""}${itemLine}`;
+        const resp = { result: "victory", message: victoryMsg, can_advance: !!canAdvance, player_hp: playerHp };
+        if (itemDrop) {
+          resp.loot_item = itemDrop;
+          resp.loot_item_name = LOOT_ITEMS[itemDrop]?.name || itemDrop;
+        }
+        return json(resp);
       }
 
       // Death
@@ -3740,6 +3813,9 @@ if (path === "/api/combat/state" && method === "GET") {
 
     // ── POST: Rest ──
     if (path === "/api/rest" && method === "POST") {
+      if (body.currency === "soul_coins" || (body.amount_sc && body.amount_sc > 0)) {
+        return json({ ok: false, message: "Take that thing out of my shop before someone sees." });
+      }
       const row = await getPlayerSheet(db, uid);
       if (!row) return err("No character.", 404);
       if (row.location !== "tavern") return err("You need to be at the Shadow Hearth Inn.");
@@ -3826,6 +3902,259 @@ if (path === "/api/combat/state" && method === "GET") {
         message: `*You purchase ${entry.display_name} for ${entry.price} Ash Marks.*`,
         ash_marks: ash - entry.price,
       });
+    }
+
+    // ── POST: Shop sell offers (Economy Blueprint v2) ──
+    if (path === "/api/shop/sell_offers" && method === "POST") {
+      const npc_id = body.npc_id;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (!npc_id) return err("Missing npc_id.", 400);
+      const npcLoc = NPC_LOCATIONS[npc_id];
+      if (!npcLoc || npcLoc !== row.location) return err("Vendor is not here.", 400);
+      const invRows = await dbAll(db, "SELECT item,qty,display_name FROM inventory WHERE user_id=?", [uid]);
+      const offers = {};
+      for (const r of invRows) {
+        const itemForSell = getItemForSell(r.item, ITEM_DATA);
+        if (!itemForSell) continue;
+        const price = econGetSellPrice(itemForSell, npc_id);
+        if (price > 0) offers[r.item] = price;
+      }
+      return json({ offers });
+    }
+
+    // ── POST: Shop browse (Economy Blueprint v2) ──
+    if (path === "/api/shop/browse" && method === "POST") {
+      if (body.currency === "soul_coins" || (body.amount_sc && body.amount_sc > 0)) {
+        return json({ ok: false, message: "Take that thing out of my shop before someone sees." });
+      }
+      const npc_id = body.npc_id;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (!npc_id) return err("Missing npc_id.", 400);
+      const npcLoc = NPC_LOCATIONS[npc_id];
+      if (!npcLoc || npcLoc !== row.location) return err("Vendor is not here.", 400);
+      const items = ECON_VENDOR_STOCK[npc_id];
+      if (!items) return err("Unknown vendor.", 404);
+      return json({ items });
+    }
+
+    // ── POST: Shop buy (Economy Blueprint v2) ──
+    if (path === "/api/shop/buy" && method === "POST") {
+      if (body.currency === "soul_coins" || (body.amount_sc && body.amount_sc > 0)) {
+        return json({ ok: false, message: "Take that thing out of my shop before someone sees." });
+      }
+      const { npc_id, item_id } = body;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (!npc_id || !item_id) return err("Missing npc_id or item_id.", 400);
+      const npcLoc = NPC_LOCATIONS[npc_id];
+      if (!npcLoc || npcLoc !== row.location) return err("Vendor is not here.", 400);
+      const items = ECON_VENDOR_STOCK[npc_id];
+      if (!items) return err("Unknown vendor.", 404);
+      const entry = items.find((s) => s.id === item_id);
+      if (!entry) return err("Item not in stock.", 404);
+      const ash = Number(row.ash_marks ?? 0);
+      if (ash < entry.price) return err(`You need ${entry.price} Ash Marks. You have ${ash}.`, 400);
+      await dbRun(db, "UPDATE characters SET ash_marks=ash_marks-? WHERE user_id=?", [entry.price, uid]);
+      const invRow = await dbGet(db, "SELECT item,qty FROM inventory WHERE user_id=? AND item=?", [uid, item_id]);
+      if (invRow) {
+        await dbRun(db, "UPDATE inventory SET qty=qty+1 WHERE user_id=? AND item=?", [uid, item_id]);
+      } else {
+        await dbRun(db, "INSERT INTO inventory (user_id, item, qty, display_name) VALUES (?, ?, 1, ?)", [uid, item_id, entry.name]);
+      }
+      const newBal = ash - entry.price;
+      return json({ ok: true, message: `*You purchase ${entry.name} for ${entry.price} Ash Marks.*`, new_balance: newBal });
+    }
+
+    // ── POST: Shop sell (Economy Blueprint v2) ──
+    if (path === "/api/shop/sell" && method === "POST") {
+      if (body.currency === "soul_coins" || (body.amount_sc && body.amount_sc > 0)) {
+        return json({ ok: false, message: "Take that thing out of my shop before someone sees." });
+      }
+      const { npc_id, item_id } = body;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (!npc_id || !item_id) return err("Missing npc_id or item_id.", 400);
+      const npcLoc = NPC_LOCATIONS[npc_id];
+      if (!npcLoc || npcLoc !== row.location) return err("Vendor is not here.", 400);
+      const invRow = await dbGet(db, "SELECT item,qty,display_name FROM inventory WHERE user_id=? AND item=?", [uid, item_id]);
+      if (!invRow || invRow.qty < 1) return err(`You don't have that item.`, 400);
+      const itemForSell = getItemForSell(item_id, ITEM_DATA);
+      if (!itemForSell) return err("That vendor won't buy that.", 400);
+      const amount = econGetSellPrice(itemForSell, npc_id);
+      if (amount <= 0) return err("That vendor won't buy that.", 400);
+      if (invRow.qty <= 1) {
+        await dbRun(db, "DELETE FROM inventory WHERE user_id=? AND item=?", [uid, item_id]);
+      } else {
+        await dbRun(db, "UPDATE inventory SET qty=qty-1 WHERE user_id=? AND item=?", [uid, item_id]);
+      }
+      const newBalance = (row.ash_marks || 0) + amount;
+      await dbRun(db, "UPDATE characters SET ash_marks=ash_marks+? WHERE user_id=?", [amount, uid]);
+      return json({ ok: true, message: `*They take it.*\n\n"${amount} marks."`, amount_received: amount, new_balance: newBalance });
+    }
+
+    // ── POST: Identify (Seris, 40 AM) ──
+    if (path === "/api/identify" && method === "POST") {
+      if (body.currency === "soul_coins" || (body.amount_sc && body.amount_sc > 0)) {
+        return json({ ok: false, message: "Take that thing out of my shop before someone sees." });
+      }
+      const { item_id } = body;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (row.location !== NPC_LOCATIONS.curator) return err("Seris is not here.", 400);
+      if (!item_id) return err("Missing item_id.", 400);
+      const loot = LOOT_ITEMS[item_id];
+      const isRelic = loot?.category === "loot_relic";
+      const isArtifact = loot?.category === "loot_artifact";
+      if (!isRelic && !isArtifact) return err("That isn't something Seris identifies.", 400);
+      const invRow = await dbGet(db, "SELECT item,qty,display_name FROM inventory WHERE user_id=? AND item=?", [uid, item_id]);
+      if (!invRow || invRow.qty < 1) return err("You don't have that item.", 400);
+      const identified = invRow.display_name && invRow.display_name !== "Strange Object";
+      if (identified) return err("You already know what that is.", 400);
+      const cost = 40;
+      if ((row.ash_marks || 0) < cost) return err(`You need ${cost} Ash Marks. You have ${row.ash_marks || 0}.`, 400);
+      const realName = loot?.name || ITEM_DATA[item_id]?.name || item_id;
+      await dbRun(db, "UPDATE characters SET ash_marks=ash_marks-? WHERE user_id=?", [cost, uid]);
+      await dbRun(db, "UPDATE inventory SET display_name=? WHERE user_id=? AND item=?", [realName, uid, item_id]);
+      return json({ ok: true, message: `*Seris turns it over once. Twice.*\n\n"${realName}. Worth something to the right buyer."`, new_balance: (row.ash_marks || 0) - cost });
+    }
+
+    // ── POST: Appraise (Othorion, 25 AM) ──
+    if (path === "/api/appraise" && method === "POST") {
+      if (body.currency === "soul_coins" || (body.amount_sc && body.amount_sc > 0)) {
+        return json({ ok: false, message: "Take that thing out of my shop before someone sees." });
+      }
+      const { item_id } = body;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (row.location !== NPC_LOCATIONS.othorion) return err("Othorion is not here.", 400);
+      if (!item_id) return err("Missing item_id.", 400);
+      const invRow = await dbGet(db, "SELECT item,qty FROM inventory WHERE user_id=? AND item=?", [uid, item_id]);
+      if (!invRow || invRow.qty < 1) return err("You don't have that item.", 400);
+      const loot = LOOT_ITEMS[item_id];
+      const cost = 25;
+      if ((row.ash_marks || 0) < cost) return err(`You need ${cost} Ash Marks. You have ${row.ash_marks || 0}.`, 400);
+      await dbRun(db, "UPDATE characters SET ash_marks=ash_marks-? WHERE user_id=?", [cost, uid]);
+      const routes = loot?.category === "loot_relic" ? ["Seris", "the Archive", "the Veil Market"] : ["Seris", "Still Scale"];
+      const advice = routes[Math.floor(Math.random() * routes.length)];
+      return json({ ok: true, message: `*Othorion peers at it.*\n\n"Someone like ${advice} would pay for that. I don't buy — I only look."`, new_balance: (row.ash_marks || 0) - cost });
+    }
+
+    // ── POST: Compress (Thalara, 15 AM) ──
+    if (path === "/api/compress" && method === "POST") {
+      if (body.currency === "soul_coins" || (body.amount_sc && body.amount_sc > 0)) {
+        return json({ ok: false, message: "Take that thing out of my shop before someone sees." });
+      }
+      const { item_id } = body;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (row.location !== NPC_LOCATIONS.herbalist) return err("Thalara is not here.", 400);
+      if (!item_id) return err("Missing item_id.", 400);
+      const refined = REFINED_REAGENTS[item_id];
+      if (!refined) return err("That reagent can't be compressed.", 400);
+      const invRow = await dbGet(db, "SELECT item,qty FROM inventory WHERE user_id=? AND item=?", [uid, item_id]);
+      if (!invRow || invRow.qty < 3) return err("You need three of the same reagent.", 400);
+      const cost = 15;
+      if ((row.ash_marks || 0) < cost) return err(`You need ${cost} Ash Marks. You have ${row.ash_marks || 0}.`, 400);
+      await dbRun(db, "UPDATE characters SET ash_marks=ash_marks-? WHERE user_id=?", [cost, uid]);
+      if (invRow.qty === 3) {
+        await dbRun(db, "DELETE FROM inventory WHERE user_id=? AND item=?", [uid, item_id]);
+      } else {
+        await dbRun(db, "UPDATE inventory SET qty=qty-3 WHERE user_id=? AND item=?", [uid, item_id]);
+      }
+      const existingRefined = await dbGet(db, "SELECT item,qty FROM inventory WHERE user_id=? AND item=?", [uid, refined.id]);
+      if (existingRefined) {
+        await dbRun(db, "UPDATE inventory SET qty=qty+1 WHERE user_id=? AND item=?", [uid, refined.id]);
+      } else {
+        await dbRun(db, "INSERT INTO inventory (user_id, item, qty, display_name) VALUES (?, ?, 1, ?)", [uid, refined.id, refined.name]);
+      }
+      return json({ ok: true, message: `*Thalara works it down to a single vial.*\n\n"${refined.name}. Cleaner. Stronger."`, new_balance: (row.ash_marks || 0) - cost });
+    }
+
+    // ── POST: Smith service (Caelir, 8–12 AM) ──
+    if (path === "/api/smith_service" && method === "POST") {
+      if (body.currency === "soul_coins" || (body.amount_sc && body.amount_sc > 0)) {
+        return json({ ok: false, message: "Take that thing out of my shop before someone sees." });
+      }
+      const { service_id } = body;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (row.location !== NPC_LOCATIONS.weaponsmith) return err("Caelir is not here.", 400);
+      const cost = SMITH_SERVICES[service_id];
+      if (!cost) return err("Unknown service.", 400);
+      if ((row.ash_marks || 0) < cost) return err(`You need ${cost} Ash Marks. You have ${row.ash_marks || 0}.`, 400);
+      const combats = service_id === "heavy_draw" ? 3 : 5;
+      const flag = service_id === "edge_hone" ? "buff_edge_hone_combats_remaining" : service_id === "balanced_grip" ? "buff_balanced_grip_combats_remaining" : "buff_heavy_draw_combats_remaining";
+      await dbRun(db, "UPDATE characters SET ash_marks=ash_marks-? WHERE user_id=?", [cost, uid]);
+      await setFlag(db, uid, flag, combats);
+      return json({ ok: true, message: `*Caelir works the blade.*\n\n"Should hold for a few fights."`, new_balance: (row.ash_marks || 0) - cost });
+    }
+
+    // ── POST: Armor service (Veyra, 8–12 AM) ──
+    if (path === "/api/armor_service" && method === "POST") {
+      if (body.currency === "soul_coins" || (body.amount_sc && body.amount_sc > 0)) {
+        return json({ ok: false, message: "Take that thing out of my shop before someone sees." });
+      }
+      const { service_id } = body;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (row.location !== NPC_LOCATIONS.armorsmith) return err("Veyra is not here.", 400);
+      const cost = ARMOR_SERVICES[service_id];
+      if (!cost) return err("Unknown service.", 400);
+      if ((row.ash_marks || 0) < cost) return err(`You need ${cost} Ash Marks. You have ${row.ash_marks || 0}.`, 400);
+      const combats = service_id === "shield_brace" ? 3 : 5;
+      const flag = service_id === "strap_tighten" ? "buff_strap_tighten_combats_remaining" : service_id === "weight_redistribute" ? "buff_weight_redist_combats_remaining" : "buff_shield_brace_combats_remaining";
+      await dbRun(db, "UPDATE characters SET ash_marks=ash_marks-? WHERE user_id=?", [cost, uid]);
+      await setFlag(db, uid, flag, combats);
+      return json({ ok: true, message: `*Veyra adjusts the straps.*\n\n"Should hold for a few fights."`, new_balance: (row.ash_marks || 0) - cost });
+    }
+
+    // ── POST: Thalara service (15–20 AM) ──
+    if (path === "/api/thalara_service" && method === "POST") {
+      if (body.currency === "soul_coins" || (body.amount_sc && body.amount_sc > 0)) {
+        return json({ ok: false, message: "Take that thing out of my shop before someone sees." });
+      }
+      const { service_id } = body;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (row.location !== NPC_LOCATIONS.herbalist) return err("Thalara is not here.", 400);
+      const cost = THALARA_SERVICES[service_id];
+      if (!cost) return err("Unknown service.", 400);
+      if ((row.ash_marks || 0) < cost) return err(`You need ${cost} Ash Marks. You have ${row.ash_marks || 0}.`, 400);
+      await dbRun(db, "UPDATE characters SET ash_marks=ash_marks-? WHERE user_id=?", [cost, uid]);
+      if (service_id === "cleansing_tonic") {
+        await dbRun(db, "DELETE FROM player_flags WHERE user_id=? AND flag=?", [uid, "corruption_residue"]);
+        return json({ ok: true, message: `*Thalara hands you a bitter draught.*\n\n"Drink. It'll clear the residue."`, new_balance: (row.ash_marks || 0) - cost });
+      }
+      const combats = service_id === "ember_tonic" ? 5 : 8;
+      const flag = service_id === "ember_tonic" ? "buff_ember_tonic_combats_remaining" : "buff_deep_lung_combats_remaining";
+      await setFlag(db, uid, flag, combats);
+      return json({ ok: true, message: `*Thalara measures and mixes.*\n\n"Should hold for a few fights."`, new_balance: (row.ash_marks || 0) - cost });
+    }
+
+    // ── POST: Black market sell (Lirael, veil_market_hidden) ──
+    if (path === "/api/shop/sell_black_market" && method === "POST") {
+      const { item_id } = body;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (row.location !== "veil_market_hidden") return err("Lirael is not here.", 400);
+      if (!item_id) return err("Missing item_id.", 400);
+      const invRow = await dbGet(db, "SELECT item,qty FROM inventory WHERE user_id=? AND item=?", [uid, item_id]);
+      if (!invRow || invRow.qty < 1) return err("You don't have that item.", 400);
+      const itemForSell = getItemForSell(item_id, ITEM_DATA);
+      if (!itemForSell) return err("Lirael won't take that.", 400);
+      const gross = Math.floor(itemForSell.base_value * 0.55);
+      const cut = Math.floor(gross * 0.15);
+      const net = gross - cut;
+      if (invRow.qty <= 1) {
+        await dbRun(db, "DELETE FROM inventory WHERE user_id=? AND item=?", [uid, item_id]);
+      } else {
+        await dbRun(db, "UPDATE inventory SET qty=qty-1 WHERE user_id=? AND item=?", [uid, item_id]);
+      }
+      const newBalance = (row.ash_marks || 0) + net;
+      await dbRun(db, "UPDATE characters SET ash_marks=ash_marks+? WHERE user_id=?", [net, uid]);
+      return json({ ok: true, message: `Lirael takes her cut. You receive ${net} AM.`, amount_received: net, new_balance: newBalance });
     }
 
     // ── GET: Stats (aggregated equipment + affinity) ──
@@ -4134,7 +4463,13 @@ if (path === "/api/combat/state" && method === "GET") {
     // ── GET: Wallet ──
     if (path === "/api/wallet" && method === "GET") {
       const row = await dbGet(db, "SELECT ash_marks,ember_shards,soul_coins FROM characters WHERE user_id=?", [uid]);
-      return json(row || { ash_marks:0, ember_shards:0, soul_coins:0 });
+      const r = row || { ash_marks: 0, ember_shards: 0, soul_coins: 0 };
+      return json({
+        ash_marks: r.ash_marks,
+        ember_shards: r.ember_shards,
+        soul_coins: r.soul_coins,
+        formatted_am: formatAM(r.ash_marks),
+      });
     }
 
     // ── GET: Progression flags (for character sheet) ──
