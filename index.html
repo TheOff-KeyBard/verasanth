@@ -5664,6 +5664,7 @@ async function combatAction(action) {
       co.classList.remove('open', 'boss-encounter');
       log(render(data.message));
       if (data.can_advance) log('<em>⚡ You feel something shift. A new stage awaits.</em>');
+      if (data.upgrade_pending && data.instinct) showUpgradeChoice(data.instinct);
       refreshSidebar();
       const lookData = await GET('/api/look');
       renderRoom(lookData);

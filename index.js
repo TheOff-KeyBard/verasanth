@@ -3344,11 +3344,34 @@ if (path === "/api/combat/state" && method === "GET") {
 
       if (attack.status_on_enemy) {
         const dur = attack.status_duration_enemy ?? attack.status_duration ?? 1;
-        state.enemy_statuses[attack.status_on_enemy] = dur;
+        const status = attack.status_on_enemy;
+        if (status === "burn") {
+          const cur = state.enemy_statuses?.burn ?? 0;
+          state.enemy_statuses = state.enemy_statuses || {};
+          state.enemy_statuses.burn = cur > 0 ? cur + dur : dur;
+        } else if (status === "stagger" || status === "stun") {
+          if ((state.enemy_statuses?.[status] ?? 0) <= 0) {
+            state.enemy_statuses = state.enemy_statuses || {};
+            state.enemy_statuses[status] = dur;
+          }
+        } else {
+          state.enemy_statuses = state.enemy_statuses || {};
+          state.enemy_statuses[status] = dur;
+        }
       }
       if (attack.status_on_player) {
         const dur = attack.status_duration_player ?? attack.status_duration ?? 1;
-        state.statuses[attack.status_on_player] = attack.status_value != null ? { duration: dur, value: attack.status_value } : dur;
+        const status = attack.status_on_player;
+        if (status === "shield" && attack.status_value != null) {
+          const cur = typeof state.statuses?.shield === "object" ? (state.statuses.shield?.value ?? 0) : 0;
+          if (attack.status_value > cur) {
+            state.statuses = state.statuses || {};
+            state.statuses.shield = { duration: dur, value: attack.status_value };
+          }
+        } else {
+          state.statuses = state.statuses || {};
+          state.statuses[status] = attack.status_value != null ? { duration: dur, value: attack.status_value } : dur;
+        }
       }
 
       // 4. Enemy retaliation (skip if staggered or skip_retaliation)
@@ -3526,10 +3549,15 @@ if (path === "/api/combat/state" && method === "GET") {
         }
 
         const xpGain = enemy.xp || 50;
-        const xpRow  = await dbGet(db, "SELECT xp,class_stage FROM characters WHERE user_id=?", [uid]);
+        const xpRow  = await dbGet(db, "SELECT xp,class_stage,upgrades FROM characters WHERE user_id=?", [uid]);
         const newXp  = (xpRow.xp || 0) + xpGain;
         await dbRun(db, "UPDATE characters SET xp=? WHERE user_id=?", [newXp, uid]);
         const canAdvance = newXp >= [0,500,1500,3500,7500,15000][(xpRow.class_stage||0)+1];
+        let newClassStage = xpRow.class_stage ?? 0;
+        if (canAdvance) {
+          newClassStage = newClassStage + 1;
+          await dbRun(db, "UPDATE characters SET class_stage=? WHERE user_id=?", [newClassStage, uid]);
+        }
 
         // Loot — tiered cash + item drop (Economy Blueprint v2)
         const floor = LOCATION_TO_FLOOR[state.location || "drain_entrance"] ?? 1;
@@ -3566,7 +3594,7 @@ if (path === "/api/combat/state" && method === "GET") {
         }
 
         // Loot — floor-specific from sewer_loot, or procedural fallback
-        const playerLevel = 1 + (xpRow.class_stage || 0);
+        const playerLevel = 1 + newClassStage;
         const locationId = state.location || "drain_entrance";
         const isBoss = !!bossFlag;
         const lootCondition = await getActiveSewerCondition(db);
@@ -3618,6 +3646,13 @@ if (path === "/api/combat/state" && method === "GET") {
         if (itemDrop) {
           resp.loot_item = itemDrop;
           resp.loot_item_name = LOOT_ITEMS[itemDrop]?.name || itemDrop;
+        }
+        if (newClassStage === 5) {
+          const upgradesJson = JSON.parse(xpRow.upgrades || "{}");
+          if (!upgradesJson?.level_5) {
+            resp.upgrade_pending = true;
+            resp.instinct = (row.instinct || "").toLowerCase();
+          }
         }
         return json(resp);
       }

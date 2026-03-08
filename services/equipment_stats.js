@@ -56,7 +56,7 @@ export function aggregateEquipmentStats(equippedItemMap) {
   const mainWeapon = mainWeaponId ? EQUIPMENT_DATA[mainWeaponId] : null;
   const offhandWeapon = offhandWeaponId ? EQUIPMENT_DATA[offhandWeaponId] : null;
 
-  const isDualWield = mainWeapon?.sub_type === "light_blade" && offhandWeapon?.sub_type === "light_blade";
+  const isDualWield = mainWeapon?.tags?.includes("light_blade") && offhandWeapon?.tags?.includes("light_blade");
   if (isDualWield) {
     aggregated.dual_wield = true;
     const offhandPower = offhandWeapon?.stat_modifiers?.melee_power || 0;
