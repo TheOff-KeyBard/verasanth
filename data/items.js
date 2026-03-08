@@ -4,6 +4,8 @@
  * @see blueprints/Item System/item_system.md
  */
 
+import { EQUIPMENT_DATA } from "./equipment.js";
+
 // Dungeon tier by location (0 = surface, 1–5 = sewer floors)
 const DUNGEON_TIERS = {
   market_square: 0, tavern: 0, wardens_post: 0, north_road: 0, south_road: 0,
@@ -107,4 +109,9 @@ export function rollLoot(enemyId) {
     }
   }
   return drops;
+}
+
+// Merge equipment items into ITEM_DATA for sell value (extend, do not replace)
+for (const [id, def] of Object.entries(EQUIPMENT_DATA || {})) {
+  if (!ITEM_DATA[id]) ITEM_DATA[id] = { name: def.name, value: def.value_am ?? 10 };
 }

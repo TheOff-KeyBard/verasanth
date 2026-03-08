@@ -25,6 +25,8 @@ import { getRelationship, setRelationship, getPartyMembers, triggerBetrayalCasca
 import { handleQuestDialogue, recordEnemyKill, checkQuestProgressForItem, assignNextQuestIfAvailable } from "./services/quests.js";
 import { QUEST_BY_ID } from "./data/quests.js";
 import { rotateSewerCondition } from "./services/sewer_rotation.js";
+import { LEGACY_SLOT_MAP, EQUIPMENT_SLOTS, EQUIPMENT_DATA } from "./data/equipment.js";
+import { getEquipmentSlot, resolveLegacySlot, isValidEquipmentSlot, canEquipItem, equipItem, unequipItem, getEquippedItemMap } from "./services/equipment.js";
 
 // ─────────────────────────────────────────────────────────────
 // GAME DATA (remaining in index)
@@ -707,6 +709,23 @@ async function initDb(db) {
       item TEXT NOT NULL,
       PRIMARY KEY (user_id, slot)
     )`);
+
+    // Equipment migration: weapon -> weapon_main, armor -> chest, shield -> weapon_offhand (one-time)
+    try { await dbRun(db, `CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY)`); } catch (_) {}
+    const eqMigrated = await dbGet(db, "SELECT 1 FROM _migrations WHERE name=?", ["equipment_slots_v1"]);
+    if (!eqMigrated) {
+      try {
+        const legacyRows = await dbAll(db, "SELECT user_id, slot, item FROM equipment_slots WHERE slot IN ('weapon','armor','shield')");
+        for (const r of legacyRows) {
+          const newSlot = LEGACY_SLOT_MAP[r.slot];
+          if (newSlot && newSlot !== r.slot) {
+            await dbRun(db, "DELETE FROM equipment_slots WHERE user_id=? AND slot=?", [r.user_id, r.slot]);
+            await dbRun(db, "INSERT INTO equipment_slots (user_id, slot, item) VALUES (?, ?, ?)", [r.user_id, newSlot, r.item]);
+          }
+        }
+        await dbRun(db, "INSERT OR IGNORE INTO _migrations (name) VALUES (?)", ["equipment_slots_v1"]);
+      } catch (_) {}
+    }
 
     // PvPvE system (Phase 1)
     await dbRun(db, `CREATE TABLE IF NOT EXISTS player_relationships (
@@ -1508,9 +1527,9 @@ if (path === "/api/admin/command" && method === "POST") {
             for (const eq of eqRows) {
               const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
               const tier = Math.min(invRow?.tier ?? 1, 3);
-              if (eq.slot === "weapon") weaponDie = [6, 8, 10, 12][tier];
-              else if (eq.slot === "armor") armorReduction = [0, 2, 4, 6][tier];
-              else if (eq.slot === "shield") shieldBonus = 2;
+              if (eq.slot === "weapon_main") weaponDie = [6, 8, 10, 12][tier];
+              else if (eq.slot === "chest") armorReduction = [0, 2, 4, 6][tier];
+              else if (eq.slot === "weapon_offhand") shieldBonus = 2;
             }
             const state = {
               enemy_id: def.enemy_id,
@@ -1592,9 +1611,9 @@ if (path === "/api/admin/command" && method === "POST") {
             for (const eq of eqRows) {
               const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
               const tier = Math.min(invRow?.tier ?? 1, 3);
-              if (eq.slot === "weapon") weaponDie = [6, 8, 10, 12][tier];
-              else if (eq.slot === "armor") armorReduction = [0, 2, 4, 6][tier];
-              else if (eq.slot === "shield") shieldBonus = 2;
+              if (eq.slot === "weapon_main") weaponDie = [6, 8, 10, 12][tier];
+              else if (eq.slot === "chest") armorReduction = [0, 2, 4, 6][tier];
+              else if (eq.slot === "weapon_offhand") shieldBonus = 2;
             }
             const state = {
               enemy_id: def.enemy_id,
@@ -1805,9 +1824,9 @@ if (path === "/api/admin/command" && method === "POST") {
               for (const eq of eqRows) {
                 const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
                 const tier = Math.min(invRow?.tier ?? 1, 3);
-                if (eq.slot === "weapon") weaponDie = [6, 8, 10, 12][tier];
-                else if (eq.slot === "armor") armorReduction = [0, 2, 4, 6][tier];
-                else if (eq.slot === "shield") shieldBonus = 2;
+                if (eq.slot === "weapon_main") weaponDie = [6, 8, 10, 12][tier];
+                else if (eq.slot === "chest") armorReduction = [0, 2, 4, 6][tier];
+                else if (eq.slot === "weapon_offhand") shieldBonus = 2;
               }
               const state = {
                 enemy_id: def.enemy_id,
@@ -1878,9 +1897,9 @@ if (path === "/api/admin/command" && method === "POST") {
               for (const eq of eqRows) {
                 const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
                 const tier = Math.min(invRow?.tier ?? 1, 3);
-                if (eq.slot === "weapon") weaponDie = [6, 8, 10, 12][tier];
-                else if (eq.slot === "armor") armorReduction = [0, 2, 4, 6][tier];
-                else if (eq.slot === "shield") shieldBonus = 2;
+                if (eq.slot === "weapon_main") weaponDie = [6, 8, 10, 12][tier];
+                else if (eq.slot === "chest") armorReduction = [0, 2, 4, 6][tier];
+                else if (eq.slot === "weapon_offhand") shieldBonus = 2;
               }
               const state = {
                 enemy_id: enemy.id,
@@ -1933,9 +1952,9 @@ if (path === "/api/admin/command" && method === "POST") {
           for (const eq of eqRows) {
             const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
             const tier = Math.min(invRow?.tier ?? 1, 3);
-            if (eq.slot === "weapon") weaponDie = [6, 8, 10, 12][tier];
-            else if (eq.slot === "armor") armorReduction = [0, 2, 4, 6][tier];
-            else if (eq.slot === "shield") shieldBonus = 2;
+            if (eq.slot === "weapon_main") weaponDie = [6, 8, 10, 12][tier];
+            else if (eq.slot === "chest") armorReduction = [0, 2, 4, 6][tier];
+            else if (eq.slot === "weapon_offhand") shieldBonus = 2;
           }
           const state = {
             enemy_id: enemy.id,
@@ -2033,9 +2052,9 @@ if (path === "/api/admin/command" && method === "POST") {
             for (const eq of eqRows) {
               const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
               const tier = Math.min(invRow?.tier ?? 1, 3);
-              if (eq.slot === "weapon") weaponDie = [6, 8, 10, 12][tier];
-              else if (eq.slot === "armor") armorReduction = [0, 2, 4, 6][tier];
-              else if (eq.slot === "shield") shieldBonus = 2;
+              if (eq.slot === "weapon_main") weaponDie = [6, 8, 10, 12][tier];
+              else if (eq.slot === "chest") armorReduction = [0, 2, 4, 6][tier];
+              else if (eq.slot === "weapon_offhand") shieldBonus = 2;
             }
 
             const state = {
@@ -2142,9 +2161,9 @@ if (path === "/api/admin/command" && method === "POST") {
       for (const eq of eqRows) {
         const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
         const tier = Math.min(invRow?.tier ?? 1, 3);
-        if (eq.slot === "weapon") weaponDie = [6, 8, 10, 12][tier];
-        else if (eq.slot === "armor") armorReduction = [0, 2, 4, 6][tier];
-        else if (eq.slot === "shield") shieldBonus = 2;
+        if (eq.slot === "weapon_main") weaponDie = [6, 8, 10, 12][tier];
+        else if (eq.slot === "chest") armorReduction = [0, 2, 4, 6][tier];
+        else if (eq.slot === "weapon_offhand") shieldBonus = 2;
       }
 
       const state = {
@@ -2870,9 +2889,9 @@ if (path === "/api/combat/state" && method === "GET") {
       for (const eq of eqRows) {
         const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
         const tier = Math.min(invRow?.tier ?? 1, 3);
-        if (eq.slot === "weapon") weaponDie = [6, 8, 10, 12][tier];
-        else if (eq.slot === "armor") armorReduction = [0, 2, 4, 6][tier];
-        else if (eq.slot === "shield") shieldBonus = 2;
+        if (eq.slot === "weapon_main") weaponDie = [6, 8, 10, 12][tier];
+        else if (eq.slot === "chest") armorReduction = [0, 2, 4, 6][tier];
+        else if (eq.slot === "weapon_offhand") shieldBonus = 2;
       }
       const state = {
         enemy_id: enemy.id, enemy_name: enemy.name,
@@ -3469,18 +3488,14 @@ if (path === "/api/combat/state" && method === "GET") {
       if (raw) {
         return json({ items: rows.map((r) => ({ id: r.item, qty: r.qty })) });
       }
-      const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
-      const equipment = { weapon: null, armor: null, shield: null };
-      for (const eq of eqRows) {
-        if (equipment.hasOwnProperty(eq.slot)) equipment[eq.slot] = eq.item;
-      }
-      const equipmentMap = new Set(eqRows.map(e => e.item));
+      const equipment = await getEquippedItemMap(db, dbAll, uid);
+      const equipmentMap = new Set(Object.values(equipment).filter(Boolean));
       const items = rows.map(r => {
         const label = r.display_name || r.item;
         return r.qty === 1 ? label : `${label} x${r.qty}`;
       });
       const itemDetails = rows.map(r => {
-        const slot = getItemSlot(r.item, r.display_name);
+        const slot = getEquipmentSlot(r.item) ?? resolveLegacySlot(getItemSlot(r.item, r.display_name)) ?? null;
         const equipped = !!(r.equipped || equipmentMap.has(r.item));
         return {
           id: r.item,
@@ -3542,32 +3557,32 @@ if (path === "/api/combat/state" && method === "GET") {
 
     // ── POST: Equip ──
     if (path === "/api/inventory/equip" && method === "POST") {
-      const { item: itemId } = body;
+      const { item: itemId, slot: slotParam } = body;
       if (!itemId) return err("Missing item.", 400);
       const invRow = await dbGet(db, "SELECT item,qty,display_name,tier FROM inventory WHERE user_id=? AND item=?", [uid, itemId]);
       if (!invRow) return err("You don't have that item.", 404);
-      const slot = getItemSlot(itemId, invRow.display_name);
-      if (!slot) return err("Not equippable.", 400);
-      const old = await dbGet(db, "SELECT item FROM equipment_slots WHERE user_id=? AND slot=?", [uid, slot]);
-      if (old) {
-        await dbRun(db, "UPDATE inventory SET equipped=0 WHERE user_id=? AND item=?", [uid, old.item]);
-        await dbRun(db, "DELETE FROM equipment_slots WHERE user_id=? AND slot=?", [uid, slot]);
-      }
-      await dbRun(db, "INSERT INTO equipment_slots (user_id, slot, item) VALUES (?, ?, ?)", [uid, slot, itemId]);
-      await dbRun(db, "UPDATE inventory SET equipped=1 WHERE user_id=? AND item=?", [uid, itemId]);
-      return json({ ok: true, slot, item: itemId });
+      const itemDef = EQUIPMENT_DATA[itemId] || null;
+      const legacySlot = getItemSlot(itemId, invRow.display_name);
+      const itemSlot = itemDef?.slot ?? (legacySlot ? resolveLegacySlot(legacySlot) : null);
+      const targetSlot = slotParam ?? itemSlot;
+      if (!targetSlot) return err("Not equippable.", 400);
+      const resolvedSlot = resolveLegacySlot(targetSlot) || targetSlot;
+      if (!isValidEquipmentSlot(resolvedSlot)) return err("Invalid slot.", 400);
+      const row = await getPlayerSheet(db, uid);
+      const check = canEquipItem(row, itemDef || { slot: itemSlot }, resolvedSlot);
+      if (!check.ok) return err(check.message || "Cannot equip.", 400);
+      const result = await equipItem(db, dbRun, dbGet, uid, itemId, resolvedSlot);
+      return json({ ok: true, slot: result.slot, item: itemId });
     }
 
     // ── POST: Unequip ──
     if (path === "/api/inventory/unequip" && method === "POST") {
       const { slot } = body;
-      if (!slot || !["weapon", "armor", "shield"].includes(slot)) return err("Invalid slot.", 400);
-      const old = await dbGet(db, "SELECT item FROM equipment_slots WHERE user_id=? AND slot=?", [uid, slot]);
-      if (old) {
-        await dbRun(db, "UPDATE inventory SET equipped=0 WHERE user_id=? AND item=?", [uid, old.item]);
-        await dbRun(db, "DELETE FROM equipment_slots WHERE user_id=? AND slot=?", [uid, slot]);
-      }
-      return json({ ok: true, slot });
+      if (!slot) return err("Missing slot.", 400);
+      const targetSlot = resolveLegacySlot(slot) || slot;
+      if (!isValidEquipmentSlot(targetSlot)) return err("Invalid slot.", 400);
+      await unequipItem(db, dbRun, dbGet, uid, targetSlot);
+      return json({ ok: true, slot: targetSlot });
     }
 
     // ── POST: Sell (to NPC) ──

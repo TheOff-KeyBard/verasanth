@@ -3497,7 +3497,10 @@ async function populateCharacterSheet() {
   const eq = inv.equipment || {};
   const idToName = {};
   (inv.itemDetails || []).forEach(it => { idToName[it.id] = it.display_name || it.id; });
-  const loadout = 'Weapon: ' + (idToName[eq.weapon] || '—') + ' · Armor: ' + (idToName[eq.armor] || '—') + ' · Shield: ' + (idToName[eq.shield] || '—');
+  const slotLabels = { weapon_main:'Weapon',weapon_offhand:'Offhand',head:'Head',chest:'Chest',hands:'Hands',legs:'Legs',feet:'Feet',cloak:'Cloak',ring_1:'Ring 1',ring_2:'Ring 2',charm:'Charm',relic:'Relic' };
+  const slotOrder = ['weapon_main','weapon_offhand','head','chest','hands','legs','feet','cloak','ring_1','ring_2','charm','relic'];
+  const loadoutParts = slotOrder.map(s => (slotLabels[s] || s) + ': ' + (idToName[eq[s]] || '—'));
+  const loadout = loadoutParts.join(' · ');
   document.getElementById('cs-inv-list').innerHTML = (loadout ? '<div class="inv-loadout" style="margin-bottom:6px">' + escapeHtml(loadout) + '</div>' : '') + (items.length ? escapeHtml(items.join(', ')) : 'Nothing carried.');
   const ul = document.getElementById('cs-flags-list');
   ul.innerHTML = '';
@@ -3677,7 +3680,10 @@ async function refreshSheetPanel() {
   const eq = inv.equipment || {};
   const idToName = {};
   (inv.itemDetails || []).forEach(it => { idToName[it.id] = it.display_name || it.id; });
-  const loadout = 'Weapon: ' + (idToName[eq.weapon] || '—') + ' · Armor: ' + (idToName[eq.armor] || '—') + ' · Shield: ' + (idToName[eq.shield] || '—');
+  const slotLabels = { weapon_main:'Weapon',weapon_offhand:'Offhand',head:'Head',chest:'Chest',hands:'Hands',legs:'Legs',feet:'Feet',cloak:'Cloak',ring_1:'Ring 1',ring_2:'Ring 2',charm:'Charm',relic:'Relic' };
+  const slotOrder = ['weapon_main','weapon_offhand','head','chest','hands','legs','feet','cloak','ring_1','ring_2','charm','relic'];
+  const loadoutParts = slotOrder.map(s => (slotLabels[s] || s) + ': ' + (idToName[eq[s]] || '—'));
+  const loadout = loadoutParts.join(' · ');
   document.getElementById('panel-tab-inventory').innerHTML = '<p>◈ ' + (wallet.ash_marks ?? 0) + ' Ash · ◆ ' + (wallet.ember_shards ?? 0) + ' Ember · ○ ' + (wallet.soul_coins ?? 0) + ' Soul</p>' +
     '<p class="inv-loadout" style="margin-bottom:6px">' + escapeHtml(loadout) + '</p>' +
     '<p>' + (items.length ? escapeHtml(items.join(', ')) : 'Nothing carried.') + '</p>';
@@ -4135,17 +4141,28 @@ function updateStanding(data) {
   }
 }
 
+const EQUIPMENT_SLOT_LABELS = {
+  weapon_main: 'Weapon Main', weapon_offhand: 'Weapon Offhand', head: 'Head', chest: 'Chest',
+  hands: 'Hands', legs: 'Legs', feet: 'Feet', cloak: 'Cloak',
+  ring_1: 'Ring 1', ring_2: 'Ring 2', charm: 'Charm', relic: 'Relic',
+};
+const EQUIPMENT_SLOT_ORDER = ['weapon_main','weapon_offhand','head','chest','hands','legs','feet','cloak','ring_1','ring_2','charm','relic'];
+
 function updateInventory(invData) {
   const loadoutEl = document.getElementById('inv-loadout');
   const el = document.getElementById('inv-list');
   if (!loadoutEl || !el) return;
   const itemDetails = invData?.itemDetails || [];
-  const equipment = invData?.equipment || { weapon: null, armor: null, shield: null };
+  const equipment = invData?.equipment || {};
   const idToName = {};
   itemDetails.forEach(it => { idToName[it.id] = it.display_name || it.id; });
-  loadoutEl.innerHTML = '<span><strong>Weapon:</strong> ' + (idToName[equipment.weapon] || '— none —') + '</span>' +
-    '<span><strong>Armor:</strong> ' + (idToName[equipment.armor] || '— none —') + '</span>' +
-    '<span><strong>Shield:</strong> ' + (idToName[equipment.shield] || '— none —') + '</span>';
+  let loadoutHtml = '';
+  EQUIPMENT_SLOT_ORDER.forEach(slot => {
+    const itemId = equipment[slot];
+    const label = EQUIPMENT_SLOT_LABELS[slot] || slot;
+    loadoutHtml += '<span><strong>' + escapeHtml(label) + ':</strong> ' + escapeHtml(idToName[itemId] || '— none —') + '</span>';
+  });
+  loadoutEl.innerHTML = loadoutHtml;
   el.innerHTML = '';
   if (!itemDetails.length) {
     el.innerHTML = '<div style="color:var(--text-dim);font-size:0.82rem">Nothing carried.</div>';
