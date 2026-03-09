@@ -60,7 +60,10 @@ export function getSellPrice(item, npc_id) {
 /** Resolve item by id for sell price. Returns { base_value, category, name } or null. */
 export function getItemForSell(itemId, itemData = {}) {
   const loot = LOOT_ITEMS[itemId];
-  if (loot) return { ...loot, base_value: loot.base_value };
+  if (loot) {
+    if (loot.unsellable) return null;
+    return { ...loot, base_value: loot.base_value };
+  }
   for (const stock of Object.values(VENDOR_STOCK)) {
     const entry = stock.find((s) => s.id === itemId);
     if (entry) return { base_value: entry.base_value, category: entry.category, name: entry.name };
@@ -86,6 +89,14 @@ export const LOOT_ITEMS = {
   rusted_gear:      { name: "Rusted Gear",             category: "loot_scrap",  base_value: 6 },
   broken_pipe:      { name: "Broken Pipe Segment",     category: "loot_scrap",   base_value: 7 },
   charred_bolt:     { name: "Charred Bolt",            category: "loot_scrap",   base_value: 5 },
+  ashbound_resonance: {
+    name: "Ashbound Resonance",
+    category: "loot_artifact",
+    base_value: 0,
+    lore: "The foundational tone of Verasanth — the resonance that the containment architecture was built around. It is not an object. It is a recording of the city's original state, pressed into the shape of something a hand can hold. Seris has been looking for it for a long time. She will say she wants to stabilize it. She believes that is true.",
+    unsellable: true,
+    quest_item: true,
+  },
 };
 
 /** loot_reagent → refined item (2.5× base_value). Compress: 3× same → 1 refined. */

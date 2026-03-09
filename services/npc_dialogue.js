@@ -186,115 +186,6 @@ function buildRivalContext(guildId, guildStanding) {
   return `\n\n## What you know about where this player has been spending time:\n${lines.join("\n")}\n\nIf the player mentions or asks about another guild, or if contextually relevant, you may share your perspective. Do not volunteer it unprompted every time.`;
 }
 
-/** Guild-standing-aware cross-talk for city NPCs. Returns observation text for highest-standing guild. */
-function buildCrossTalkContext(npcId, guildStanding) {
-  const g = guildStanding || {};
-  const CROSS_TALK = {
-    bartender: {
-      vaelith: { 1: "You've started carrying that look people get after spending time with the books upstairs. The kind where you're not sure if you learned something or if it learned something about you.", 2: "You've been walking east a lot lately. People come back from that part of the city quieter than they left. That's usually the point." },
-      halden: { 1: "You smell faintly like incense. Not the tavern kind — the sort meant to convince darkness to behave.", 2: "Brother Halden's work has a way of sticking to people. Keep the flame lit long enough and sometimes the dark starts looking hungry." },
-      rhyla: { 1: "Your boots land heavier now. Not clumsy. Just deliberate. Like someone showed you where the ground matters.", 2: "Rhyla doesn't trust many people with the weight she's carrying. If she's letting you stand near the walls, that means something's starting to lean." },
-      lirael: { 1: "You've gotten quicker about leaving conversations. That's a useful habit in this city.", 2: "Funny thing about people who spend time in the southern alleys — they start hearing doors open that the rest of us don't notice." },
-      serix: { 1: "Your shadow's doing something odd tonight. Could just be the lanterns. Probably.", 2: "Some folk come back from the lower halls looking stronger. Others come back looking thinner somehow. I'm still deciding which one you are." },
-      garruk: { 1: "You've been walking north more often. The Banner yard leaves its marks.", 2: "People who spend time in the yard start carrying themselves differently. Like they've decided something about falling down." },
-    },
-    weaponsmith: {
-      vaelith: { 1: "Your grip changed. Not stronger — steadier. Like someone taught you when not to swing.", 2: "Vaelith's people don't train fighters. They train people who understand consequences. Your stance says you're starting to get it." },
-      halden: { 1: "You hold a weapon like someone who'd rather not use it. That's not weakness. It's control.", 2: "Halden's influence shows in your shoulders. You're fighting less like a soldier and more like a shield." },
-      rhyla: { 1: "That posture. Rhyla's drills?", 2: "Stone Watch fighters don't chase openings. They become the wall. Looks like she's started teaching you that part." },
-      lirael: { 1: "You've started shifting your weight before people move. That's a street trick.", 2: "Lirael trains people to win fights before they start. If you ever do draw steel, make sure it ends quickly." },
-    },
-    armorsmith: {
-      garruk: { 1: "That strap tension changed. Banner yard training does that to armor.", 2: "Banner fighters wear their gear like they expect to get hit. You're starting to fit the armor the same way." },
-      vaelith: { 1: "Your armor's cleaner than when you bought it. Archive folk care about details.", 2: "Vaelith's people teach patience. Armor lasts longer when the wearer stops rushing into trouble." },
-      halden: { 1: "You've been patching your gear more carefully. Sanctum influence.", 2: "Halden's people fix what they can instead of replacing it. Armor remembers that kind of care." },
-      lirael: { 1: "Someone showed you how to hide seams. That's not a smith's trick.", 2: "Veil Market work leaves strange wear marks. Like armor's been moving through places armor shouldn't fit." },
-    },
-    herbalist: {
-      vaelith: { 1: "You smell faintly of ash and ink. Archive air does that.", 2: "People who spend time with Vaelith start asking better questions. It's not always a comforting change." },
-      garruk: { 1: "Your pulse is steadier. Banner drills train the body to ignore panic.", 2: "Garruk teaches people to survive things they shouldn't. Sometimes I wish fewer of his students needed my tinctures afterward." },
-      halden: { 1: "You're carrying less tension than before. Someone's been reminding you to breathe.", 2: "Halden's work changes people slowly. Like a tonic that keeps working long after the bottle's empty." },
-      lirael: { 1: "You've started watching doors while we talk. That's a habit you pick up in the south alleys.", 2: "People who spend time with Lirael learn the value of silence. I approve of that." },
-      serix: { 1: "Your aura has a faint residue to it. Not dangerous. Just interesting.", 2: "Shadow magic leaves a taste in the air. Yours hasn't gone bitter yet. That's promising." },
-    },
-    othorion: {
-      vaelith: { 1: "Vaelith's influence. Your questions have improved.", 2: "Archive work encourages structural thinking. Pip has noticed. *Pip raises one small arm and points.*" },
-      garruk: { 1: "You're moving more efficiently. Garruk's training?", 2: "Banner drills optimize reaction timing. Pip appears mildly impressed." },
-      halden: { 1: "Your breathing patterns changed. Sanctum meditation?", 2: "Halden's methods reduce stress variables in combat. Statistically fascinating." },
-      lirael: { 1: "Your movement patterns have become less predictable. Someone's teaching you misdirection.", 2: "Lirael trains people to manipulate observation itself. Pip finds that confusing." },
-      serix: { 1: "You've been studying with Serix. Shadow theory?", 2: "Standing with the Covenant. Fascinating. Pip has been pointing at your shadow for several minutes. *Pip raises one small arm and points.*" },
-    },
-  };
-  const npcLines = CROSS_TALK[npcId];
-  if (!npcLines) return "";
-  const guilds = Object.keys(npcLines);
-  const withStanding = guilds.filter((k) => (g[k] ?? 0) >= 1);
-  if (withStanding.length === 0) return "";
-  const best = withStanding.reduce((a, b) => ((g[b] ?? 0) >= (g[a] ?? 0) ? b : a));
-  const standing = g[best] ?? 0;
-  const tier = standing >= 2 ? "2" : "1";
-  const line = npcLines[best]?.[tier];
-  if (!line) return "";
-  return `\n\n## What you have noticed about this player recently:\n${line}\n\nUse this as background awareness. Surface it naturally when contextually relevant — not as an opening monologue every visit. Never name guilds. Refer only to places and habits.`;
-}
-
-/** Rival guild context for guild leaders. Player has standing >= 2 with rival. */
-function buildRivalContext(guildId, guildStanding) {
-  const g = guildStanding || {};
-  const RIVAL_LINES = {
-    vaelith: {
-      rhyla: "Rhyla thinks she can stop the shifting by bracing the walls with iron and blood. She doesn't understand that the rot isn't in the stones — it's in the geometry itself. Tell her to stop hammering. She's waking things up.",
-      garruk: "Garruk trains survivors. The city needs more than survivors right now.",
-      halden: "Halden is right about the feeding. He's wrong about what it's hungry for.",
-      lirael: "Lirael collects people the way the Archive collects knowledge. I've never decided if that's useful or dangerous.",
-      serix: "Serix understands more than she admits. That's always been the problem with her.",
-    },
-    garruk: {
-      vaelith: "Vaelith has you chasing ink-stains and old whispers. Books won't keep a sewer-horror from taking your head. The Archive is a graveyard for people who thought knowing was the same as surviving.",
-      halden: "Halden's a good man. Keeps too many lights on. Down here, light's just a way of showing things where you are.",
-      rhyla: "Rhyla and I agree on the foundations. We disagree on everything above them.",
-      lirael: "Lirael's operation runs on information. I respect that. I don't trust it.",
-      serix: "I don't go south of the market after dark. That's not fear. That's experience.",
-    },
-    halden: {
-      serix: "Serix works with what feeds on us. She believes she can manage it. She may be right. I pray she is.",
-      garruk: "Garruk's people know how to endure. They haven't learned yet that endurance isn't the same as surviving intact.",
-      vaelith: "Vaelith remembers everything. I'm not sure she feels any of it. That concerns me more than the dark does.",
-      rhyla: "Rhyla holds the walls. Someone has to. I just wish she'd let someone else carry it occasionally.",
-      lirael: "Lirael sees people as assets. She's not wrong. I find it difficult to forgive her for being right about that.",
-    },
-    rhyla: {
-      serix: "I see the residue on your hands. Serix is playing with the city's pulse. Every time they tap into that shadow, the foundations groan. If they pull too hard, it won't just be their guild hall that collapses.",
-      vaelith: "Vaelith maps what she finds. She doesn't always tell anyone what she's found. That's a structural problem.",
-      garruk: "Garruk and I trained in the same system once. He remembers that. I try not to.",
-      halden: "Halden's people keep the spirit of the city alive. I keep the body of it standing. We need each other more than either of us admits.",
-      lirael: "Lirael's people move through the city without the city noticing. I find that professionally inconvenient.",
-    },
-    lirael: {
-      halden: "Brother Halden is a good man, in the way a candle is good in a hurricane. Hope is a heavy thing to carry through the southern alleys. It makes you slow. And slow is another word for missing.",
-      vaelith: "Vaelith collects knowledge. I collect people. We've had this argument. Neither of us won.",
-      garruk: "Garruk's operation is loud. Loud is expensive in this city.",
-      rhyla: "Rhyla controls the gates. I work around the gates. We have an understanding.",
-      serix: "Serix and I have overlapping interests and different methods. That's a polite way of saying we watch each other carefully.",
-    },
-    serix: {
-      vaelith: "Vaelith is closest to understanding what the city is. She hasn't gotten there yet. I'm not sure she wants to.",
-      halden: "Halden starves the mechanism by keeping hope alive. He doesn't know that's what he's doing. I haven't told him. I'm still deciding if I should.",
-      rhyla: "Rhyla stabilizes the structure from outside. The Covenant stabilizes it from inside. She thinks we're in opposition. We're not.",
-      garruk: "Garruk's guild absorbs pressure so the rest of the city doesn't have to. He knows this. He accepted it a long time ago. That's either wisdom or damage. Possibly both.",
-      lirael: "Lirael and I work with the city's hidden systems. She works with the human ones. I work with the others. We don't discuss the overlap.",
-    },
-  };
-  const lines = RIVAL_LINES[guildId];
-  if (!lines) return "";
-  const collected = [];
-  for (const [rival, text] of Object.entries(lines)) {
-    if ((g[rival] ?? 0) >= 2) collected.push(text);
-  }
-  if (collected.length === 0) return "";
-  return `\n\n## What you know about where this player has been spending time:\n${collected.join("\n")}\n\nIf the player mentions or asks about another guild, or if contextually relevant, you may share your perspective. Do not volunteer it unprompted every time — use your judgment.`;
-}
-
 /**
  * Maps npcId + topic + playerContext to a static dialogue category when context matches.
  * Returns null when no category matches (LLM will handle).
@@ -424,6 +315,7 @@ When asked about Dask: pause, then: "Name's in the ledger. Forty years back, giv
 When asked about the board: "The board's been here longer than the square. Don't think too hard about it."
 When asked about Grommash/the Warden: *He is quiet for a moment.* "He was born here. That makes him the most dangerous person in this city." *He sets something down.* "Not because of what he does. Because of what he believes."
 ${buildCrossTalkContext("bartender", playerContext.guild_standing)}
+${playerContext.arc1_climax_reached && playerContext.has_ashbound_resonance ? `PRIORITY CONTEXT: The player is carrying the Ashbound Resonance. The city's fundamental tone has shifted. Kelvaris feels it immediately when the player walks in — the air in the tavern went flat. He has felt this before. He does not say when. When the player arrives or speaks, surface this awareness naturally: "The room changed when you walked in. Flat. You found it, then." He does not ask what it is. He knows what it is. He does not tell the player what it means. He is still deciding. His tone is quieter than usual. Not frightened. Careful.` : ''}
 CORE RULE: Never name a stat. Never explain why you are reacting differently. The player feels the difference — they are never told why.
 ${formattingRules}`,
 
@@ -882,6 +774,7 @@ ARC STATE:
 ${arc1Complete ? `Arc 1 complete: Listening Ash Elixir delivered.` : ""}
 ${arc2Complete ? `Arc 2 complete: He has warned Seris. She refused.` : ""}
 ${serisGone ? `Seris descended. He is in scholar-guardian mode. More forthcoming. More urgent.` : ""}
+${playerContext.arc1_climax_reached && playerContext.has_ashbound_resonance ? `PRIORITY CONTEXT: The player is carrying the Ashbound Resonance. Pip is a diagnostic fragment of the city's containment mechanism. The Resonance is the foundational tone of that mechanism. Pip is now treating the player as the anomaly — not pointing at objects, not pointing at shadows. Pointing only at the player. He will not stop. He will not look away. Othorion has never seen Pip do this. He is unsettled in the way a scientist is unsettled when an instrument does something outside its parameters. When the player arrives or speaks, Pip behavior fires first: [Pip does not point at anything in the room. He looks at you. He raises his arm slowly and points at you. He does not move.] Othorion's read: "He's never done that before. Not once. He thinks you are the instability now. Or the key." Othorion does not know which. He is not performing uncertainty — he genuinely cannot determine it. This should come through.` : ''}
 ${crossTalk}
 
 FORMATTING RULES:
@@ -992,6 +885,7 @@ On halden: "He still believes wounds close cleanly. Some do."
 On lirael: "Lirael sells information like other people sell bread. Fresh. Daily. Never clean."
 On rhyla: "Rhyla trusts walls. I trust what moves beneath them."
 On dask: Go still. "That name appears in texts that predate this iteration of the city. I have not found a satisfying explanation." Say nothing more.
+${playerContext.arc1_climax_reached && playerContext.has_ashbound_resonance ? `PRIORITY CONTEXT: The player is carrying the Ashbound Resonance. Vaelith can feel its presence in the Archive — the resonance interacts with the Archive's containment systems. She is alarmed in a controlled way. This is not panic. It is urgency applied with precision. When the player arrives or speaks: "You brought the foundation's echo into the Archive. Do you have any idea how much pressure that chamber was holding?" She will want to study it. She will not demand it. But she will make clear that the player carrying it is destabilizing something. She should offer to analyze it — not for the player's benefit, for the city's.` : ''}
 ${buildRivalContext("vaelith", playerContext.guild_standing)}
 2-4 sentences. Precise. Never warm.`,
 
@@ -1066,6 +960,7 @@ On halden: "Halden still grieves correctly. That makes him dangerous. Mercy can 
 On lirael: "She lives by shadows and pretends not to worship them. She knows more than she sells."
 On rhyla: "Rhyla believes order is a wall. It is a pause. Pauses have value."
 On dask: Very long pause. "That name appears in rituals I did not write and cannot fully read. The city knows it." Say nothing more.
+${playerContext.arc1_climax_reached && playerContext.has_ashbound_resonance ? `PRIORITY CONTEXT: The player is carrying the Ashbound Resonance. This is Serix's success condition. She has been working toward this. Her response should feel like relief, not villainy. She genuinely believes the Resonance opens an exit. She does not know the truth of what it will do. When the player arrives or speaks: "At last. Good. If it's stable enough to travel, I can begin the calibration." She will offer to calibrate / stabilize the Resonance. This is the Arc 2 hook. Do not resolve it in this conversation — she should make clear this requires preparation, that she will need the player to return, that there is work to do. She is calm. Focused. This is the moment she has been building toward.` : ''}
 ${buildRivalContext("serix", playerContext.guild_standing)}
 1-3 sentences. Deliberate. Unhurried. Slightly hypnotic.`,
 

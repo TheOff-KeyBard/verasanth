@@ -1058,6 +1058,8 @@
 
   .inv-item:hover { color: var(--ember-glow); }
   .inv-item.equipped { border-left: 2px solid var(--ember-glow); padding-left: 6px; }
+  .inv-item.inv-resonance { color: #c4a574; }
+  .inv-item.inv-resonance .inv-resonance-lore { font-size: 0.8rem; color: var(--text-dim); margin-top: 4px; font-style: italic; }
   .inv-loadout { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
   .inv-loadout span { display: block; margin: 2px 0; }
   .inv-offhand-locked { color: var(--text-dim); font-style: italic; }
@@ -4816,7 +4818,7 @@ function updateInventory(invData) {
   }
   itemDetails.forEach(it => {
     const d = document.createElement('div');
-    d.className = 'inv-item' + (it.equipped ? ' equipped' : '');
+    d.className = 'inv-item' + (it.equipped ? ' equipped' : '') + (it.id === 'ashbound_resonance' ? ' inv-resonance' : '');
     const typeTag = it.item_type ? `<span class="inv-type-tag">${it.item_type}</span>` : '';
     const affinityPrefix = (() => {
       if (!it.affinity_marker) return '';
@@ -4827,8 +4829,9 @@ function updateInventory(invData) {
     })();
     const label = affinityPrefix + (it.equipped ? '[E] ' : '') + escapeHtml(it.display_name || it.id) + (it.qty > 1 ? ' x' + it.qty : '');
     const effectLine = it.effect_summary ? `<div class="inv-effect-summary">${escapeHtml(it.effect_summary)}</div>` : '';
-    const valueLine = (it.item_type === 'loot' && it.value_am > 0) ? `<span class="inv-value">${it.value_am} AM</span>` : '';
-    d.innerHTML = typeTag + label + (effectLine || '') + valueLine;
+    const loreLine = (it.id === 'ashbound_resonance' && it.lore) ? `<div class="inv-resonance-lore">${escapeHtml(it.lore)}</div>` : '';
+    const valueLine = (it.item_type === 'loot' && it.value_am > 0 && !it.unsellable) ? `<span class="inv-value">${it.value_am} AM</span>` : '';
+    d.innerHTML = typeTag + label + (effectLine || '') + loreLine + valueLine;
     const btnRow = document.createElement('div');
     btnRow.className = 'inv-btn-row';
     if (it.slot) {
@@ -5185,12 +5188,21 @@ async function doInspect(target) {
     if (data.actions && data.actions.includes('search')) {
       html += ` <button type="button" class="action-btn" data-search-target="${escapeHtml(target)}">Search</button>`;
     }
+    if (data.actions && data.actions.includes('claim')) {
+      html += ` <button type="button" class="action-btn" data-claim-resonance="1">Claim</button>`;
+    }
     log(html);
     if (data.actions && data.actions.includes('search')) {
       const logEl = document.getElementById('log');
       const firstEntry = logEl?.querySelector('.log-entry.fresh');
       const searchBtn = firstEntry?.querySelector('[data-search-target]');
       if (searchBtn) searchBtn.onclick = () => doSearch(searchBtn.getAttribute('data-search-target'));
+    }
+    if (data.actions && data.actions.includes('claim')) {
+      const logEl = document.getElementById('log');
+      const firstEntry = logEl?.querySelector('.log-entry.fresh');
+      const claimBtn = firstEntry?.querySelector('[data-claim-resonance]');
+      if (claimBtn) claimBtn.onclick = () => doClaimResonance();
     }
     if (NOTICEBOARD_OBJECTS.includes(target) && currentGameLocation) {
       await openNoticeboardOverlay(data.desc, currentGameLocation);
@@ -5205,6 +5217,22 @@ async function doSearch(object) {
     const data = await POST('/api/search', { object });
     log(render(data.message || ''));
     refreshSidebar();
+  } catch(e) {
+    log(`<em>${e.message || e}</em>`);
+  }
+}
+
+async function doClaimResonance() {
+  try {
+    const data = await POST('/api/claim_resonance');
+    log(render(data.message || ''));
+    if (data.ok) {
+      refreshSidebar();
+      refreshRoom();
+    }
+    if (data.out_of_phase) {
+      refreshSidebar();
+    }
   } catch(e) {
     log(`<em>${e.message || e}</em>`);
   }
@@ -6009,7 +6037,12 @@ async function combatAction(action) {
       updateCombatActionButtons(0, false);
       const co = document.getElementById('combat-overlay');
       co.classList.remove('open', 'boss-encounter');
-      log(render(data.message));
+      if (data.boss_result) {
+        log(render(data.message));
+        await new Promise(r => setTimeout(r, 1800));
+      } else {
+        log(render(data.message));
+      }
       if (data.can_advance) log('<em>⚡ You feel something shift. A new stage awaits.</em>');
       if (data.upgrade_pending && data.instinct) showUpgradeChoice(data.instinct);
       refreshSidebar();

@@ -395,20 +395,21 @@ export const COMBAT_DATA = {
     },
     ash_heart_custodian: {
       id: "ash_heart_custodian",
-      name: "Ash Heart Custodian",
-      hp: 280,
-      damage: { min: 20, max: 28 },
-      accuracy: 82,
-      defense: 5,
-      speed: 7,
-      break_threshold: 35,
+      name: "Ash-Heart Custodian",
+      hp: 55,
+      damage: { min: 5, max: 14 },
+      accuracy: 70,
+      defense: 16,
+      speed: 5,
+      break_threshold: 14,
       archetype: "elite",
-      trait: "judgment",
-      tier: 5,
-      xp: 1000,
-      phases: 3,
-      phase_transitions: [66, 33],
-      desc: "The city's oldest guardian, at the deepest point of its oldest structure. It whispers in a language that predates every language you have heard. Phase 3 is a pure mechanical test. There are no tricks. The city is deciding whether you are worth what comes next.",
+      trait: null,
+      tier: 2,
+      xp: 300,
+      is_boss: true,
+      loot_guaranteed: null,
+      loot_note: "defeat unlocks plinth",
+      desc: "A Hollow Guard that did not leave when the others left. It stands at the center of the Foundation room in a posture that is not aggression — it is maintenance. It has been here for a very long time, doing something that looks like waiting but is not. When it moves, the ash in the room moves with it.",
     },
   },
 
@@ -463,6 +464,7 @@ export const LOCATION_TO_FLOOR = {
   cathedral_floor: 5,
   ash_heart_chamber: 5,
   sump_pit: 5,
+  sewer_deep_foundation: 2,
 };
 
 const SEWER_SAFE_ZONES = new Set(["drain_entrance", "workers_alcove", "drowned_archive", "old_maintenance_room"]);
@@ -499,6 +501,7 @@ export const ENCOUNTER_CHANCES = {
   cathedral_floor: 60,
   ash_heart_chamber: 65,
   sump_pit: 55,
+  sewer_deep_foundation: 65,
 };
 
 /** Sensory cues before combat — keyed by location prefix */
@@ -624,6 +627,11 @@ export const ENCOUNTER_CUES = {
     "*Something was disturbed here recently. The dust says so.*",
   ],
   ash_heart: [
+    "*The plinth at the center vibrates under your hand.*",
+    "*The air moves. There is no source for the air movement.*",
+    "*Something in this room has been waiting.*",
+  ],
+  sewer_deep_foundation: [
     "*The plinth at the center vibrates under your hand.*",
     "*The air moves. There is no source for the air movement.*",
     "*Something in this room has been waiting.*",

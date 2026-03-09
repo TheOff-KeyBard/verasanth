@@ -336,6 +336,7 @@ const BOSS_NODES = {
   drowned_vault: { boss_id: "cistern_leviathan", flag: "boss_floor3" },
   broken_regulator_chamber: { boss_id: "broken_regulator", flag: "boss_floor4" },
   ash_heart_chamber: { boss_id: "ash_heart_custodian", flag: "boss_floor5" },
+  sewer_deep_foundation: { boss_id: "ash_heart_custodian", flag: "boss_custodian_defeated" },
 };
 
 function rollEncounter(location, modifiers = {}) {
@@ -2560,6 +2561,29 @@ if (path === "/api/admin/command" && method === "POST") {
       const flagName = SEWER_STORY_MARKINGS[row.location]?.[target];
       if (flagName) await setFlag(db, uid, flagName, 1);
       let desc = obj.desc;
+      if (target === "plinth" && row.location === "sewer_deep_foundation") {
+        const bossDefeated = await getFlag(db, uid, "boss_custodian_defeated", 0);
+        const alreadyClaimed = await getFlag(db, uid, "ashbound_resonance_claimed", 0);
+        if (alreadyClaimed) {
+          return json({
+            target: "plinth",
+            desc: "The depression is empty now. Not like a container emptied — like a breath that has been exhaled. Whatever was here is gone. You took it. The room knows.",
+            actions: ["inspect"],
+          });
+        }
+        if (bossDefeated) {
+          return json({
+            target: "plinth",
+            desc: obj.desc,
+            actions: ["inspect", "claim"],
+          });
+        }
+        return json({
+          target: "plinth",
+          desc: "The depression in the plinth is empty. It was not always. Whatever was here broke when it was removed, or it was broken to allow removal. The ash around the base holds the shape of something that sat here for a very long time.",
+          actions: ["inspect"],
+        });
+      }
       if (target === "pip" && row.location === "crucible") {
         const hasCisternArtifact = await getFlag(db, uid, "cistern_artifact_found", 0);
         desc = hasCisternArtifact
@@ -2572,6 +2596,79 @@ if (path === "/api/admin/command" && method === "POST") {
         desc = `${desc}\n\n${reaction}`;
       }
       return json({ target, desc, actions: obj.actions || [] });
+    }
+
+    // ── POST: Claim Resonance ──
+    if (path === "/api/claim_resonance" && method === "POST") {
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (row.location !== "sewer_deep_foundation") {
+        return err("There is nothing to claim here.");
+      }
+      const bossDefeated = await getFlag(db, uid, "boss_custodian_defeated", 0);
+      if (!bossDefeated) {
+        return json({
+          ok: false,
+          message: "The plinth holds something. But the room isn't ready yet.\nThe Custodian is still here.",
+        });
+      }
+      const alreadyClaimed = await getFlag(db, uid, "ashbound_resonance_claimed", 0);
+      if (alreadyClaimed) {
+        return json({
+          ok: false,
+          message: "You already took what was here.\nThe plinth remembers.",
+        });
+      }
+      const standings = {
+        vaelith: await getFlag(db, uid, "guild_standing_vaelith", 0),
+        garruk: await getFlag(db, uid, "guild_standing_garruk", 0),
+        halden: await getFlag(db, uid, "guild_standing_halden", 0),
+        lirael: await getFlag(db, uid, "guild_standing_lirael", 0),
+        serix: await getFlag(db, uid, "guild_standing_serix", 0),
+        rhyla: await getFlag(db, uid, "guild_standing_rhyla", 0),
+      };
+      const hasAnyStanding = Object.values(standings).some((s) => s >= 1);
+      if (!hasAnyStanding) {
+        await setFlag(db, uid, "seen_resonance_out_of_phase", 1);
+        return json({
+          ok: false,
+          out_of_phase: true,
+          message: `Your hand reaches toward the depression.
+
+The Resonance is there — you can feel the shape of it, the weight of it.
+
+But your hand passes through.
+
+The city does not know you yet.
+The Resonance does not know you yet.
+
+You need to be part of something before it will let you take it.`,
+        });
+      }
+      await dbRun(db,
+        `INSERT INTO inventory(user_id, item, qty) VALUES(?,?,1)
+         ON CONFLICT(user_id, item) DO UPDATE SET qty=qty+1`,
+        [uid, "ashbound_resonance"]);
+      await setFlag(db, uid, "ashbound_resonance_claimed", 1);
+      await setFlag(db, uid, "arc1_climax_reached", 1);
+      return json({
+        ok: true,
+        item: "ashbound_resonance",
+        item_name: "Ashbound Resonance",
+        message: `As your hand nears the depression, the ash in the chamber stops falling.
+
+It hangs in the air, trembling.
+
+The Resonance is not an object. It is a tone — a pressure in the bones, a sound
+you realize has been underneath every silence since you arrived.
+
+It moves into your hand like it was always going to.
+
+When it stops, the absence is louder than anything the sewer has ever said.
+
+You are holding the foundation of Verasanth.
+The city knows.`,
+      });
     }
 
     // ── POST: Search (room/object loot) ──
@@ -2753,11 +2850,15 @@ if (path === "/api/admin/command" && method === "POST") {
       const guildStandingLirael = await getFlag(db, uid, "guild_standing_lirael") || 0;
       const guildStandingSerix = await getFlag(db, uid, "guild_standing_serix") || 0;
       const guildStandingRhyla = await getFlag(db, uid, "guild_standing_rhyla") || 0;
+      const arc1Climax = await getFlag(db, uid, "arc1_climax_reached", 0);
+      const hasResonance = await dbGet(db, "SELECT 1 FROM inventory WHERE user_id=? AND item='ashbound_resonance' AND qty>0", [uid]);
 
       const playerContext = {
         items_sold: itemsSold, deaths, morality, depth_tier: depthTier,
         instinct: row.instinct || null,
         has_corruption: !!(await getFlag(db, uid, "has_corruption")),
+        arc1_climax_reached: !!arc1Climax,
+        has_ashbound_resonance: !!hasResonance,
         guild_standing: {
           vaelith: guildStandingVaelith,
           garruk: guildStandingGarruk,
@@ -3884,6 +3985,7 @@ if (path === "/api/combat/state" && method === "GET") {
         const bossFlags = { rat_king: "boss_floor1", sporebound_custodian: "boss_floor2", cistern_leviathan: "boss_floor3", broken_regulator: "boss_floor4", ash_heart_custodian: "boss_floor5" };
         const bossFlag = bossFlags[state.enemy_id];
         if (bossFlag) await setFlag(db, uid, bossFlag, 1);
+        if (state.enemy_id === "ash_heart_custodian") await setFlag(db, uid, "boss_custodian_defeated", 1);
 
         const victoryLoc = state.location || "drain_entrance";
         if (victoryLoc === "vermin_nest") await setFlag(db, uid, "nest_cleared_floor1", 1);
@@ -3987,15 +4089,33 @@ if (path === "/api/combat/state" && method === "GET") {
         if (bossFlag) {
           await setFlag(db, uid, `boss_killed_${state.enemy_id}`, 1);
         }
+        if (state.enemy_id === "ash_heart_custodian") {
+          await setFlag(db, uid, "boss_custodian_defeated", 1);
+        }
 
         const mKill = instinct === "ironblood" ? 0 : -1;
         await updateAlignment(db, uid, mKill, 1, instinct);
 
         const itemLine = itemLines.length ? ` | **${itemLines.join("**, **")}**` : "";
-        let victoryMsg = `*${enemy.name} falls.*\n\n${attack.narrative}${fallRiskMsg ? fallRiskMsg : ""}`;
-        if (sporeBurstEnemies.includes(state.enemy_id)) victoryMsg += `\n\n*It bursts — spores fill your lungs. **4** damage.*`;
-        victoryMsg += `\n\n**+${xpGain} XP** | **+${lootAsh} Ash Marks**${bossRewardLine || ""}${lootItemLine || ""}${itemLine}`;
+        let victoryMsg;
+        if (state.enemy_id === "ash_heart_custodian") {
+          victoryMsg = `The Custodian does not fall. It stops.
+
+The grinding hum that has been underneath every sound in this room
+since you entered goes quiet. You did not notice it until it stopped.
+
+The ash that moved with it settles.
+
+The plinth is still.
+Something about the room has changed.`;
+          victoryMsg += `\n\n**+${xpGain} XP** | **+${lootAsh} Ash Marks**${bossRewardLine || ""}${lootItemLine || ""}${itemLine}`;
+        } else {
+          victoryMsg = `*${enemy.name} falls.*\n\n${attack.narrative}${fallRiskMsg ? fallRiskMsg : ""}`;
+          if (sporeBurstEnemies.includes(state.enemy_id)) victoryMsg += `\n\n*It bursts — spores fill your lungs. **4** damage.*`;
+          victoryMsg += `\n\n**+${xpGain} XP** | **+${lootAsh} Ash Marks**${bossRewardLine || ""}${lootItemLine || ""}${itemLine}`;
+        }
         const resp = { result: "victory", message: victoryMsg, can_advance: !!canAdvance, player_hp: playerHp };
+        if (state.enemy_id === "ash_heart_custodian") resp.boss_result = true;
         if (itemDrop) {
           resp.loot_item = itemDrop;
           resp.loot_item_name = LOOT_ITEMS[itemDrop]?.name || itemDrop;
@@ -4368,6 +4488,8 @@ if (path === "/api/combat/state" && method === "GET") {
       if (!npcLoc || npcLoc !== row.location) return err("Vendor is not here.", 400);
       const invRow = await dbGet(db, "SELECT item,qty,display_name FROM inventory WHERE user_id=? AND item=?", [uid, item_id]);
       if (!invRow || invRow.qty < 1) return err(`You don't have that item.`, 400);
+      const lootDef = LOOT_ITEMS[item_id];
+      if (lootDef?.unsellable) return json({ ok: false, message: "That isn't something you can sell." });
       const itemForSell = getItemForSell(item_id, ITEM_DATA);
       if (!itemForSell) return err("That vendor won't buy that.", 400);
       const amount = econGetSellPrice(itemForSell, npc_id);
@@ -4595,13 +4717,14 @@ if (path === "/api/combat/state" && method === "GET") {
         const slot = getEquipmentSlot(r.item) ?? resolveLegacySlot(getItemSlot(r.item, r.display_name)) ?? null;
         const equipped = !!(r.equipped || equipmentMap.has(r.item));
         const itemDef = ITEM_DATA[r.item];
+        const lootDef = LOOT_ITEMS[r.item];
         const effect = itemDef?.effect;
         const eqDef = EQUIPMENT_DATA[r.item];
         const affinity = slot && instinct && eqDef ? getAffinityHint(eqDef, instinct) : null;
         const statMods = eqDef ? getItemEffectiveStats(eqDef) : null;
         return {
           id: r.item,
-          display_name: r.display_name || r.item,
+          display_name: r.display_name || lootDef?.name || r.item,
           qty: r.qty,
           tier: r.tier ?? 1,
           slot: slot ?? null,
@@ -4610,11 +4733,13 @@ if (path === "/api/combat/state" && method === "GET") {
           effect_summary: getEffectSummary(r.item, itemDef),
           in_combat: effect?.in_combat ?? false,
           out_of_combat: effect?.out_of_combat ?? true,
-          value_am: itemDef?.value ?? 0,
+          value_am: lootDef?.unsellable ? 0 : (itemDef?.value ?? 0),
           affinity_marker: affinity?.marker ?? null,
           affinity_tooltip: affinity?.tooltip ?? null,
           affinity_details: affinity ? { hasBonuses: affinity.hasBonuses, hasPenalties: affinity.hasPenalties, bonusStats: affinity.bonusStats, penaltyStats: affinity.penaltyStats } : null,
           stat_modifiers: statMods && Object.keys(statMods).length ? statMods : null,
+          lore: lootDef?.lore ?? null,
+          unsellable: !!lootDef?.unsellable,
         };
       });
       const offhandLocked = !!(await getFlag(db, uid, "offhand_locked", 0));

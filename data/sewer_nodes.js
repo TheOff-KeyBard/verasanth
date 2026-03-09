@@ -331,7 +331,7 @@ export const SEWER_NODES = {
     name: "The Cathedral Floor",
     district: "The Undercity — Deep",
     description: "The cathedral floor is worn by the passage of things that have walked it for longer than the city above has existed. The sump guardians hold positions that have not changed. They guard the approach to the pit and the approach to the chamber with equal patience. They have always done this.",
-    exits: { north: "rune_lit_corridor", east: "ash_heart_chamber", south: "sump_pit" },
+    exits: { north: "rune_lit_corridor", east: "ash_heart_chamber", foundation: "sewer_deep_foundation", south: "sump_pit" },
     objects: {
       cathedral_architecture: { desc: "Worn smooth. By feet. By time. By things that are not feet.", actions: ["inspect"] },
       pit_entrance: { desc: "The pit. It breathes. The inscription: THE KEY DOES NOT OPEN UPWARD.", actions: ["inspect"] },
@@ -352,6 +352,19 @@ export const SEWER_NODES = {
     },
     items: [],
     pvpve: { group_target: true, group_required: true },
+  },
+  sewer_deep_foundation: {
+    name: "The Foundation",
+    district: "The Undercity — Deep",
+    description: "The lowest room. The oldest room. The ash here moves with a rhythm that predates the city above. At the center, a low stone plinth. The Custodian stood here until you arrived. The room is still.",
+    exits: { west: "cathedral_floor" },
+    objects: {
+      plinth: {
+        desc: "A low stone plinth at the exact center of the room. The palm-shaped depression on its surface is the same — worn smooth, darkened at the edges. But something is different now. The depression is no longer empty in the way an empty space is empty. It is empty the way a held breath is empty. The Resonance is here. It is out of phase with the room. Your hand would pass through it — unless you are the right kind of witness.",
+        actions: ["inspect", "claim"],
+      },
+    },
+    items: [],
   },
   sump_pit: {
     name: "The Sump Pit",
