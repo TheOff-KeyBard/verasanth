@@ -1,0 +1,11 @@
+{
+  "name": "Verasanth",
+  "short_name": "Verasanth",
+  "description": "A city that remembers.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0d0b08",
+  "theme_color": "#0d0b08",
+  "icons": []
+}

@@ -1300,6 +1300,23 @@ export default {
       return json(out);
     }
 
+    // GET /manifest.json — PWA manifest (no auth)
+    if (path === "/manifest.json" && method === "GET") {
+      return new Response(JSON.stringify({
+        name: "Verasanth",
+        short_name: "Verasanth",
+        description: "A city that remembers.",
+        start_url: "/",
+        display: "standalone",
+        orientation: "portrait-primary",
+        background_color: "#0d0b08",
+        theme_color: "#0d0b08",
+        icons: []
+      }), {
+        headers: { "Content-Type": "application/manifest+json" }
+      });
+    }
+
     // Static assets first (no auth, no DB)
     if (env.ASSETS) {
       const asset = await env.ASSETS.fetch(requestForAssets);
@@ -3284,7 +3301,6 @@ The city knows.`,
       const kelvarisDepthFired = await getFlag(db, uid, "kelvaris_depth_hook_fired", 0);
       const othorionDepthFired = await getFlag(db, uid, "othorion_depth_hook_fired", 0);
       const pressureGateOpened = await getFlag(db, uid, "pressure_gate_opened", 0);
-      const bossCustodianDefeated = await getFlag(db, uid, "boss_custodian_defeated", 0);
 
       if (npc === "weaponsmith" && warnedMidSewer && !caelirBladeFired) {
         await setFlag(db, uid, "caelir_blade_hook_fired", 1);

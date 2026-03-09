@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0d0b08">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Verasanth">
+<link rel="manifest" href="/manifest.json">
 <title>Verasanth</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -38,7 +43,10 @@
     --font-body:   'Crimson Text', serif;
   }
 
-  html, body {
+  html {
+    height: 100%;
+  }
+  body {
     height: 100%;
     background: var(--bg);
     color: var(--text);
@@ -2510,6 +2518,160 @@
   #chat-panel .chat-send-btn:hover:not(:disabled) { background: rgba(196,98,42,0.15); }
   #chat-panel .chat-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
   #chat-panel .chat-error { font-size: 0.8rem; color: var(--danger); padding: 4px 12px; }
+
+  /* ── Mobile toggle button (hidden on desktop) ──────────────────── */
+  #char-toggle {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 80;
+    background: var(--bg2);
+    border-top: 1px solid var(--border-warm);
+    padding: 10px 20px;
+    cursor: pointer;
+    font-family: var(--font-title);
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ash-light);
+    text-align: center;
+    transition: background 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #char-toggle:hover,
+  #char-toggle:active {
+    background: var(--bg3);
+    color: var(--ember-glow);
+  }
+
+  /* ── Bottom sheet (character panel on mobile) ───────────────────── */
+  #char-sheet {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 90;
+    background: var(--bg2);
+    border-top: 1px solid var(--border-warm);
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 20px 20px 80px;
+    box-shadow: 0 -20px 60px rgba(0,0,0,0.7);
+    transform: translateY(100%);
+    transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  #char-sheet.open {
+    transform: translateY(0);
+  }
+
+  #char-sheet-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 85;
+    background: rgba(0,0,0,0.5);
+  }
+
+  #char-sheet-backdrop.open {
+    display: block;
+  }
+
+  #char-sheet-close {
+    display: block;
+    width: 100%;
+    background: none;
+    border: 1px solid var(--border-warm);
+    color: var(--text-dim);
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    padding: 10px;
+    cursor: pointer;
+    margin-bottom: 16px;
+    letter-spacing: 0.05em;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ── Mobile breakpoint ──────────────────────────────────────────── */
+  @media (max-width: 700px) {
+
+    /* Single-column layout — sidebar hidden, main area full width */
+    #app {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    /* Hide desktop sidebar */
+    #sidebar {
+      display: none;
+    }
+
+    /* Show mobile toggle bar at bottom */
+    #char-toggle {
+      display: block;
+    }
+
+    /* Show mobile character sheet when triggered */
+    #char-sheet {
+      display: block;
+    }
+
+    /* Add bottom padding to main area so toggle bar doesn't cover content */
+    #main-area {
+      border-right: none;
+      padding-bottom: 48px;
+    }
+
+    /* Reduce room panel padding */
+    #room-panel {
+      padding: 18px 16px 12px;
+    }
+
+    /* Tighten log */
+    #log {
+      max-height: 140px;
+      padding: 10px 16px;
+    }
+
+    /* Larger touch targets for all action buttons */
+    .btn {
+      padding: 11px 18px;
+      font-size: 0.95rem;
+    }
+
+    /* Larger touch targets for dialogue topic buttons */
+    .topic-btn {
+      padding: 10px 16px;
+      font-size: 0.9rem;
+    }
+
+    /* Combat box tighter on small screens */
+    #combat-box {
+      padding: 18px 16px;
+    }
+
+    /* Header wraps gracefully */
+    #header {
+      flex-wrap: wrap;
+      padding: 12px 16px 10px;
+      gap: 6px;
+    }
+
+    /* Footer less padding */
+    #footer {
+      padding: 8px 16px;
+      padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    }
+
+    /* Board box full width */
+    #board-box {
+      padding: 20px 18px 80px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -2866,6 +3028,40 @@
       <div class="chat-error" id="chat-error" style="display:none;"></div>
     </div>
   </div>
+</div>
+
+<!-- ── Mobile character sheet backdrop ─────────────────────────── -->
+<div id="char-sheet-backdrop" onclick="closeCharSheet()"></div>
+
+<!-- ── Mobile character sheet (bottom drawer) ──────────────────── -->
+<div id="char-sheet">
+  <button id="char-sheet-close" onclick="closeCharSheet()">Close</button>
+  <div id="m-char-name" style="font-family:var(--font-title);font-size:0.95rem;color:var(--text-bright);letter-spacing:0.08em;margin-bottom:4px;">—</div>
+  <div id="m-char-title" style="font-size:0.8rem;color:var(--ember-dim);letter-spacing:0.05em;margin-bottom:14px;"></div>
+  <div id="m-hp-bar-wrap" style="margin:12px 0 8px;">
+    <div style="display:flex;justify-content:space-between;font-size:0.78rem;color:var(--text-dim);margin-bottom:4px;">
+      <span>Health</span><span id="m-hp-text">—</span>
+    </div>
+    <div style="height:6px;background:var(--bg3);border:1px solid var(--border);overflow:hidden;">
+      <div id="m-hp-bar-fill" style="height:100%;background:var(--ember);transition:width 0.4s ease;box-shadow:0 0 8px rgba(196,98,42,0.5);width:100%;"></div>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:0.85rem;color:var(--text-dim);"><span>Stage</span><span style="color:var(--text);" id="m-stat-stage">—</span></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:0.85rem;color:var(--text-dim);"><span>XP</span><span style="color:var(--text);" id="m-stat-xp">—</span></div>
+  <div style="height:1px;background:var(--border);margin:12px 0;"></div>
+  <div style="font-size:0.82rem;color:var(--text-dim);display:flex;flex-direction:column;gap:4px;">
+    <div style="display:flex;justify-content:space-between;"><span>Ash Marks</span><span style="color:var(--gold);" id="m-w-ash">0</span></div>
+    <div style="display:flex;justify-content:space-between;"><span>Ember Shards</span><span style="color:var(--gold);" id="m-w-ember">0</span></div>
+    <div style="display:flex;justify-content:space-between;"><span>Soul Coins</span><span style="color:var(--gold);" id="m-w-soul">0</span></div>
+  </div>
+  <div style="height:1px;background:var(--border);margin:12px 0;"></div>
+  <div style="font-family:var(--font-title);font-size:0.7rem;letter-spacing:0.15em;color:var(--text-dim);text-transform:uppercase;margin-bottom:8px;">Carried</div>
+  <div id="m-inv-list"><div style="color:var(--text-dim);font-size:0.82rem;">Nothing carried.</div></div>
+</div>
+
+<!-- ── Mobile toggle bar ─────────────────────────────────────────── -->
+<div id="char-toggle" onclick="openCharSheet()">
+  ⚔ Character &amp; Inventory
 </div>
 
 <!-- ── Dialogue Overlay ─────────────────────────────────────────── -->
@@ -4534,10 +4730,15 @@ async function loadGame() {
 
 // ── Character panel ──────────────────────────────────────────────
 function updateCharPanel(c) {
-  document.getElementById('char-name').textContent   = c.name || '—';
-  document.getElementById('char-title').textContent  = c.instinct || '';
-  document.getElementById('stat-stage').textContent  = c.class_stage ?? '—';
-  document.getElementById('stat-xp').textContent     = c.xp ?? '—';
+  const hp    = c.current_hp || 0;
+  const maxHp = playerMaxHp = (c.max_hp || 10);
+  const pct   = Math.max(0, Math.min(100, (hp / maxHp) * 100));
+  const pctStr = pct + '%';
+
+  document.getElementById('char-name').textContent        = c.name || '—';
+  document.getElementById('char-title').textContent        = c.instinct || '';
+  document.getElementById('stat-stage').textContent        = c.class_stage ?? '—';
+  document.getElementById('stat-xp').textContent          = c.xp ?? '—';
   const charLevel = Math.max(1, 1 + (Number(c.class_stage ?? 0)));
   document.getElementById('stat-level').textContent = charLevel;
   const upgrades = (typeof c.upgrades === 'string' ? JSON.parse(c.upgrades || '{}') : (c.upgrades || {}));
@@ -4545,20 +4746,37 @@ function updateCharPanel(c) {
   const abEl = document.getElementById('stat-ability');
   if (abEl) abEl.textContent = abilityName;
 
-  const hp    = c.current_hp || 0;
-  const maxHp = playerMaxHp = (c.max_hp || 10);
-  const pct   = Math.max(0, Math.min(100, (hp / maxHp) * 100));
+  document.getElementById('hp-text').textContent          = `${hp} / ${maxHp}`;
+  document.getElementById('hp-bar-fill').style.width      = pctStr;
+  document.getElementById('header-sub').textContent       = c.location || '';
+  document.getElementById('footer-loc').textContent        = c.location || '';
 
-  document.getElementById('hp-text').textContent        = `${hp} / ${maxHp}`;
-  document.getElementById('hp-bar-fill').style.width    = pct + '%';
-  document.getElementById('header-sub').textContent     = c.location || '';
-  document.getElementById('footer-loc').textContent     = c.location || '';
+  const mCharName = document.getElementById('m-char-name');
+  if (mCharName) {
+    mCharName.textContent      = c.name || '—';
+    document.getElementById('m-char-title').textContent   = c.instinct || '';
+    document.getElementById('m-stat-stage').textContent   = c.class_stage ?? '—';
+    document.getElementById('m-stat-xp').textContent      = c.xp ?? '—';
+    document.getElementById('m-hp-text').textContent       = `${hp} / ${maxHp}`;
+    document.getElementById('m-hp-bar-fill').style.width  = pctStr;
+  }
 }
 
 function updateWallet(w) {
-  document.getElementById('w-ash').textContent   = w.formatted_am ?? (w.ash_marks ?? 0);
-  document.getElementById('w-ember').textContent = w.ember_shards || 0;
-  document.getElementById('w-soul').textContent  = w.soul_coins  || 0;
+  const ash   = w.formatted_am ?? (w.ash_marks ?? 0);
+  const ember = w.ember_shards || 0;
+  const soul  = w.soul_coins  || 0;
+
+  document.getElementById('w-ash').textContent   = ash;
+  document.getElementById('w-ember').textContent = ember;
+  document.getElementById('w-soul').textContent  = soul;
+
+  const mAsh = document.getElementById('m-w-ash');
+  if (mAsh) {
+    mAsh.textContent = ash;
+    document.getElementById('m-w-ember').textContent = ember;
+    document.getElementById('m-w-soul').textContent = soul;
+  }
 }
 
 const ARCHETYPE_FLAVOR = {
@@ -4880,6 +5098,21 @@ function updateInventory(invData) {
     if (btnRow.children.length) d.appendChild(btnRow);
     el.appendChild(d);
   });
+
+  const mInvList = document.getElementById('m-inv-list');
+  if (mInvList) {
+    mInvList.innerHTML = '';
+    if (!itemDetails.length) {
+      mInvList.innerHTML = '<div style="color:var(--text-dim);font-size:0.82rem">Nothing carried.</div>';
+    } else {
+      itemDetails.forEach(it => {
+        const d = document.createElement('div');
+        d.className = 'inv-item' + (it.equipped ? ' equipped' : '');
+        d.textContent = (it.equipped ? '[E] ' : '') + (it.display_name || it.id) + (it.qty > 1 ? ' x' + it.qty : '');
+        mInvList.appendChild(d);
+      });
+    }
+  }
 }
 
 // ── Node map (fog of war: only visited locations, current pulses) ──
@@ -6374,9 +6607,22 @@ document.addEventListener('keydown', e => {
     closeBoard();
     closeBountyBoard();
     closeNoticeboard();
+    closeCharSheet();
     document.getElementById('combat-overlay').classList.remove('open', 'boss-encounter');
   }
 });
+
+function openCharSheet() {
+  document.getElementById('char-sheet').classList.add('open');
+  document.getElementById('char-sheet-backdrop').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeCharSheet() {
+  document.getElementById('char-sheet').classList.remove('open');
+  document.getElementById('char-sheet-backdrop').classList.remove('open');
+  document.body.style.overflow = '';
+}
 
 // ── Admin console (dev only) ──────────────────────────────────────
 // Set window.ADMIN_KEY = 'your-ADMIN_SECRET' and optionally window.ADMIN_API = API (or worker URL).
