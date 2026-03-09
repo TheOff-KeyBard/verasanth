@@ -333,6 +333,7 @@ const BOSS_DEFS = {
 const BOSS_NODES = {
   rusted_gate: { boss_id: "rat_king", flag: "boss_floor1" },
   spore_garden: { boss_id: "sporebound_custodian", flag: "boss_floor2" },
+  broken_pump_room: { boss_id: "drain_warden", flag: "boss_floor2_defeated" },
   drowned_vault: { boss_id: "cistern_leviathan", flag: "boss_floor3" },
   broken_regulator_chamber: { boss_id: "broken_regulator", flag: "boss_floor4" },
   ash_heart_chamber: { boss_id: "ash_heart_custodian", flag: "boss_floor5" },
@@ -365,8 +366,9 @@ const REPUTATION_CITY_LOCATIONS = new Set(["market_square", "north_road", "south
 const FLOOR_GATES = {
   rusted_gate:          { requires_flag: null, exit_dir: "deeper", leads_to: "fungal_bloom_chamber" },
   cracked_aqueduct:     { requires_flag: "boss_floor1", exit_dir: "down", leads_to: "flooded_hall" },
-  sluice_gate:          { requires_flag: "boss_floor2", exit_dir: "down", leads_to: "gear_hall" },
+  sluice_gate:          { requires_flag: "boss_floor2_defeated", alt_flag: "boss_floor2", exit_dir: "down", leads_to: "gear_hall" },
   pressure_valve_shaft: { requires_flag: "boss_floor3", exit_dir: "down", leads_to: "ash_pillar_hall" },
+  cathedral_floor:     { requires_flag: "boss_floor5", exit_dir: "foundation", leads_to: "sewer_deep_foundation" },
 };
 
 // Story markings: (location, object_id) -> flag. When player inspects, set flag so NPC dialogue can unlock.
@@ -1153,7 +1155,7 @@ async function getActiveSewerCondition(db) {
   } catch (_) {
     data = SEWER_CONDITIONS.find(c => c.id === row.condition_id);
   }
-  return data ? { name: data.name, noticeboard_text: data.noticeboard_text, floors: data.floors, effects: data.effects } : null;
+  return data ? { id: data.id, name: data.name, noticeboard_text: data.noticeboard_text, floors: data.floors, effects: data.effects, description_mods: data.description_mods } : null;
 }
 
 async function getBlockedRoutes(db) {
@@ -1707,7 +1709,8 @@ if (path === "/api/admin/command" && method === "POST") {
       const gate = FLOOR_GATES[loc];
       if (gate && gate.requires_flag) {
         const hasFlag = await getFlag(db, uid, gate.requires_flag, 0);
-        if (!hasFlag) {
+        const hasAlt = gate.alt_flag ? await getFlag(db, uid, gate.alt_flag, 0) : 0;
+        if (!hasFlag && !hasAlt) {
           exits = exits.filter(e => e !== gate.exit_dir);
           delete exit_map[gate.exit_dir];
           description += " The gate ahead is sealed. Beyond it, something older waits.";
@@ -1724,6 +1727,23 @@ if (path === "/api/admin/command" && method === "POST") {
       const deathDrops = await getUnclaimedDropsAtLocation(db, loc);
       if (deathDrops.length > 0) {
         description += "\n\nSomething glints near the drain. Ash Marks — someone left them here quickly.";
+      }
+
+      // Lore Thread 2 reward: sewer rooms gain a subtle line when map understood
+      const inSewer = SEWER_LOCATIONS.has(loc) || loc === "sewer_entrance" || loc === "sewer_deep_foundation";
+      if (inSewer) {
+        const mapOriginUnderstood = await getFlag(db, uid, "map_origin_understood", 0);
+        if (mapOriginUnderstood) {
+          description += "\n\nThe layout here matches the map. The streets beneath the streets.";
+        }
+      }
+
+      // Act 1 Sewer Arc: dynamic condition description mods
+      let activeCondition = null;
+      const cond = await getActiveSewerCondition(db);
+      if (cond?.description_mods?.[loc]) {
+        description += cond.description_mods[loc];
+        activeCondition = { id: cond.id, name: cond.name };
       }
 
       // Phase 3: Hazard in room (for renderHazardWarning)
@@ -1807,6 +1827,7 @@ if (path === "/api/admin/command" && method === "POST") {
       if (roamerEncounter) locPayload.encounter = roamerEncounter;
       if (hazardInRoom) locPayload.hazard = hazardInRoom;
       if (room.pvpve) locPayload.pvpve = room.pvpve;
+      if (activeCondition) locPayload.active_condition = activeCondition;
       return json(locPayload);
     }
 
@@ -1914,7 +1935,8 @@ if (path === "/api/admin/command" && method === "POST") {
       const gate = FLOOR_GATES[row.location];
       if (gate && directionUsed === gate.exit_dir && gate.requires_flag) {
         const hasFlag = await getFlag(db, uid, gate.requires_flag, 0);
-        if (!hasFlag) dest = null;
+        const hasAlt = gate.alt_flag ? await getFlag(db, uid, gate.alt_flag, 0) : 0;
+        if (!hasFlag && !hasAlt) dest = null;
       }
       const blocked = await getBlockedRoutes(db);
       if (dest && blocked.includes(dest)) return err("The passage is impassable. The noticeboard warned of this.", 400);
@@ -1993,7 +2015,8 @@ if (path === "/api/admin/command" && method === "POST") {
       const destGate = FLOOR_GATES[dest];
       if (destGate && destGate.requires_flag) {
         const hasFlag = await getFlag(db, uid, destGate.requires_flag, 0);
-        if (!hasFlag) {
+        const hasAlt = destGate.alt_flag ? await getFlag(db, uid, destGate.alt_flag, 0) : 0;
+        if (!hasFlag && !hasAlt) {
           destExits = destExits.filter(e => e !== destGate.exit_dir);
           delete destExitMap[destGate.exit_dir];
           destDescription += " The gate ahead is sealed. Beyond it, something older waits.";
@@ -2015,6 +2038,28 @@ if (path === "/api/admin/command" && method === "POST") {
       const deathDrops = await getUnclaimedDropsAtLocation(db, dest);
       if (deathDrops.length > 0) {
         destDescription += "\n\nSomething glints near the drain. Ash Marks — someone left them here quickly.";
+      }
+      const inSewerDest = SEWER_LOCATIONS.has(dest) || dest === "sewer_entrance" || dest === "sewer_deep_foundation";
+      if (inSewerDest) {
+        const mapOriginUnderstood = await getFlag(db, uid, "map_origin_understood", 0);
+        if (mapOriginUnderstood) destDescription += "\n\nThe layout here matches the map. The streets beneath the streets.";
+      }
+
+      // Act 1 Sewer Arc: breathing moment (flooded_hall, 15% on entry, once per player)
+      if (dest === "flooded_hall") {
+        const seenBreathe = await getFlag(db, uid, "seen_sewer_breathe", 0);
+        if (!seenBreathe && Math.random() < 0.15) {
+          await setFlag(db, uid, "seen_sewer_breathe", 1);
+          destDescription += "\n\nAs you step onto the walkway, the pipes along the wall shudder.\n\nNot a crack. Not a collapse.\nA single, slow contraction — the whole structure compressing slightly and then releasing, like a ribcage.\n\nThe water in the cistern does not ripple.\nThe air pressure changes for exactly one second.\n\nThen it stops.\n\nThe city was not passive just now.";
+        }
+      }
+
+      // Act 1 Sewer Arc: dynamic condition description mods (move)
+      let destActiveCondition = null;
+      const destCond = await getActiveSewerCondition(db);
+      if (destCond?.description_mods?.[dest]) {
+        destDescription += destCond.description_mods[dest];
+        destActiveCondition = { id: destCond.id, name: destCond.name };
       }
 
       // Phase 3: Environmental hazard check
@@ -2361,6 +2406,7 @@ if (path === "/api/admin/command" && method === "POST") {
       if (hazardData) movePayload.hazard = hazardData;
       if (destRoom.pvpve) movePayload.pvpve = destRoom.pvpve;
       if (pvpveWarning) movePayload.pvpve_warning = pvpveWarning;
+      if (destActiveCondition) movePayload.active_condition = destActiveCondition;
       return json(movePayload);
     }
 
@@ -2408,7 +2454,8 @@ if (path === "/api/admin/command" && method === "POST") {
         const gate = FLOOR_GATES[loc];
         if (gate?.requires_flag) {
           const hasFlag = await getFlag(db, uid, gate.requires_flag, 0);
-          if (!hasFlag) delete exitMap[gate.exit_dir];
+          const hasAlt = gate.alt_flag ? await getFlag(db, uid, gate.alt_flag, 0) : 0;
+          if (!hasFlag && !hasAlt) delete exitMap[gate.exit_dir];
         }
         for (const val of Object.values(exitMap)) {
           const dest = typeof val === "string" ? val : val?.target;
@@ -2436,7 +2483,8 @@ if (path === "/api/admin/command" && method === "POST") {
       const destGate = FLOOR_GATES[target];
       if (destGate?.requires_flag) {
         const hasFlag = await getFlag(db, uid, destGate.requires_flag, 0);
-        if (!hasFlag) { destExits = destExits.filter(e => e !== destGate.exit_dir); delete destExitMap[destGate.exit_dir]; }
+        const hasAlt = destGate.alt_flag ? await getFlag(db, uid, destGate.alt_flag, 0) : 0;
+        if (!hasFlag && !hasAlt) { destExits = destExits.filter(e => e !== destGate.exit_dir); delete destExitMap[destGate.exit_dir]; }
       }
       const destBlocked = await getBlockedRoutes(db);
       for (const e of [...destExits]) {
@@ -2595,6 +2643,186 @@ if (path === "/api/admin/command" && method === "POST") {
         const reaction = PIP_REACTIONS[Math.floor(Math.random() * PIP_REACTIONS.length)];
         desc = `${desc}\n\n${reaction}`;
       }
+
+      // ── Lore Thread inspect handlers ──
+      const loc = row.location;
+      if (target === "wall_marks" && loc === "mended_hide") {
+        await setFlag(db, uid, "found_wall_symbol_veyra", 1);
+        const wallRevealed = await getFlag(db, uid, "wall_symbol_meaning_revealed", 0);
+        if (wallRevealed) {
+          desc = "Small symbols burned directly into the wood — not branded, carved first and then heat-set. They run at shoulder height around the entire room. You know what they mean now. She is watching you. She has been watching you.";
+          return json({ target, desc, actions: obj.actions || [] });
+        }
+      }
+      if (target === "symbol_stone" && loc === "overflow_channel") {
+        const foundVeyra = await getFlag(db, uid, "found_wall_symbol_veyra", 0);
+        if (foundVeyra) {
+          await setFlag(db, uid, "found_wall_symbol_sewer", 1);
+          await setFlag(db, uid, "wall_symbol_pattern_noticed", 1);
+          desc = "A single symbol cut into the channel wall. Same style as the marks in Veyra's shop. An apology. You have seen this before.";
+        } else {
+          desc = "A symbol cut into the stone. You do not recognize the system it belongs to. Unfamiliar.";
+        }
+        return json({ target, desc, actions: obj.actions || [] });
+      }
+      if (target === "foundation_seam" && loc === "stone_watch_hall") {
+        const foundSewer = await getFlag(db, uid, "found_wall_symbol_sewer", 0);
+        if (foundSewer) {
+          await setFlag(db, uid, "found_wall_symbol_watch", 1);
+        }
+      }
+      if (target === "oddity_shelf" && loc === "still_scale") {
+        await setFlag(db, uid, "found_traders_map_shelf", 1);
+      }
+      if (target === "wall_orders" && loc === "old_maintenance_room") {
+        const foundFrag1 = await getFlag(db, uid, "found_dask_fragment_1", 0);
+        if (!foundFrag1) {
+          await setFlag(db, uid, "found_dask_fragment_1", 1);
+          desc = `One of the duty orders is different from the rest — the paper is older, the hand more deliberate.
+
+"BY ORDER OF CHIEF ENGINEER M. DASK:
+The lower channels are to be sealed.
+Rotation 7 is the last rotation.
+The mechanism is not broken.
+It is hungry.
+Feed it nothing.
+Let it starve."
+
+Below the order, in a different hand, cramped and fast:
+"We didn't seal them."
+"We couldn't."
+"Something was already on the other side."`;
+        } else {
+          desc = "Duty rosters, patrol schedules, a list of names on brittle paper. You have already found what was different.";
+        }
+        return json({ target, desc, actions: obj.actions || [] });
+      }
+      if (target === "sluice_gate" && loc === "sluice_gate") {
+        const bossDefeated = await getFlag(db, uid, "boss_floor2_defeated", 0);
+        const boss2 = await getFlag(db, uid, "boss_floor2", 0);
+        const hasGateFlag = bossDefeated || boss2;
+        const pressureOpened = await getFlag(db, uid, "pressure_gate_opened", 0);
+        if (!hasGateFlag) {
+          desc = "The door does not move.\nThe cold air continues through the seam in steady pulses.\nYou push. Nothing.\n\nThe door is not locked — there is no lock.\nIt simply does not open.\nAs if it is waiting for something.";
+        } else if (!pressureOpened) {
+          await setFlag(db, uid, "pressure_gate_opened", 1);
+          desc = "The door groans.\n\nNot a mechanical sound — lower than that.\nA sound the stone makes when pressure equalizes across a boundary that has held for a very long time.\n\nA seam opens along the edge.\nA breath of air pushes outward — not cold this time.\nWarm. Old. Carrying a smell you cannot name but that your body responds to before you do.\n\nThe door is open.\nThe dark below is different from the dark above.\nYou know this immediately.";
+        } else {
+          desc = "The door stands open. The warm air from below moves past you continuously now. Something down there is exhaling.";
+        }
+        return json({ target, desc, actions: obj.actions || [] });
+      }
+      if (target === "stone_shelves" && loc === "drowned_vault") {
+        const hasMapFlag = await getFlag(db, uid, "has_traders_map", 0);
+        const hasMapInv = await dbGet(db, "SELECT 1 FROM inventory WHERE user_id=? AND item='has_traders_map' AND qty>0", [uid]);
+        const hasMap = hasMapFlag || hasMapInv;
+        const foundDaskFrag1 = await getFlag(db, uid, "found_dask_fragment_1", 0);
+        const foundDaskFrag2 = await getFlag(db, uid, "found_dask_fragment_2", 0);
+        const hasFrag1 = await getFlag(db, uid, "found_diagnostic_fragment_1", 0);
+        if (hasMap) {
+          await setFlag(db, uid, "found_map_match_vault", 1);
+          desc = "Stone shelves along the vault wall. A district marker is carved into one of them — it matches the map. The original streets.";
+        } else if (foundDaskFrag1 && !foundDaskFrag2) {
+          await setFlag(db, uid, "found_dask_fragment_2", 1);
+          desc = `Among the rolled documents, one is partially unrolled — whoever left in a hurry did not finish securing it.
+
+The material is not paper. It does not tear. The writing is clear.
+
+"The city is not broken.
+It was never broken.
+It is incomplete.
+The mechanism requires a final calibration —
+a resonance key, placed at the origin point.
+Without it, the system will not reach full containment.
+With it, I am no longer certain what it will do.
+I have been here long enough to know I was wrong
+about what this was for.
+   — M. DASK, Final Survey Report"
+
+Beneath the signature, in what appears to be the same hand
+but written much later — the ink a different color, the pressure different:
+
+"Do not calibrate it."`;
+        } else if (hasFrag1) {
+          await setFlag(db, uid, "found_diagnostic_fragment_2", 1);
+          desc = "A small carved alcove in the stone shelves. A second fragment inside. Same material as Pip. Slightly larger.";
+        } else {
+          desc = "Stone shelves along the vault wall. Old documents, markers. The carving is precise.";
+        }
+        return json({ target, desc, actions: obj.actions || [] });
+      }
+      if (target === "origin_pattern" && loc === "sewer_deep_foundation") {
+        const foundVault = await getFlag(db, uid, "found_map_match_vault", 0);
+        if (foundVault) {
+          await setFlag(db, uid, "map_origin_understood", 1);
+          desc = "The floor pattern. It matches the map's central district. This is what was here before. The city was built on top of itself.";
+        }
+        return json({ target, desc, actions: obj.actions || [] });
+      }
+      if (target === "deep_air" && loc === "sewer_deep_foundation") {
+        const foundDaskUpper = await getFlag(db, uid, "found_dask_sewer_upper", 0);
+        const foundDaskFrag2 = await getFlag(db, uid, "found_dask_fragment_2", 0);
+        const foundDaskFrag3 = await getFlag(db, uid, "found_dask_fragment_3", 0);
+        if (foundDaskFrag2 && !foundDaskFrag3) {
+          await setFlag(db, uid, "found_dask_fragment_3", 1);
+          desc = `You look more closely at the name in the stone.
+
+Below it, smaller, pressed close to the floor where you almost missed it:
+
+"I UNDERSTAND NOW.
+I AM NOT LEAVING.
+THE CITY NEEDS SOMEONE DOWN HERE.
+IF THE RESONANCE IS FOUND —
+DO NOT LET THEM CALIBRATE IT.
+THE CITY IS THE CONTAINMENT.
+WE ARE INSIDE IT."
+
+The last line has been written, partially erased by hand, and written again.
+He changed his mind about erasing it.`;
+        } else if (foundDaskUpper) {
+          await setFlag(db, uid, "found_dask_foundation", 1);
+        }
+        if (desc) return json({ target, desc, actions: obj.actions || [] });
+      }
+      if (target === "wall_markings" && loc === "overflow_channel") {
+        await setFlag(db, uid, "found_dask_sewer_upper", 1);
+      }
+      if (target === "ledger" && loc === "tavern") {
+        await setFlag(db, uid, "inspected_ledger", 1);
+        const kelvarisDaskAsked = await getFlag(db, uid, "kelvaris_dask_asked", 0);
+        if (kelvarisDaskAsked) {
+          await setFlag(db, uid, "found_missing_page", 1);
+          desc = "A thick ledger. The most recent entries are in Kelvaris's hand. Further back, the handwriting changes. And partway through — a page is missing. Torn carefully. Not lost. Removed.";
+        }
+        return json({ target, desc, actions: obj.actions || [] });
+      }
+      if (target === "jars" && loc === "hollow_jar") {
+        await setFlag(db, uid, "noticed_iteration_jar", 1);
+      }
+      if (target === "oldest_shelf" && loc === "hollow_jar") {
+        const noticedJar = await getFlag(db, uid, "noticed_iteration_jar", 0);
+        if (noticedJar) {
+          await setFlag(db, uid, "noticed_oldest_shelf", 1);
+        }
+      }
+      if (target === "reading_table" && loc === "hollow_jar") {
+        const thalaraUnderstood = await getFlag(db, uid, "thalara_iterations_understood", 0);
+        if (thalaraUnderstood) {
+          desc = "A low table with papers, open journals, and pressed specimens. The journal she was reading is face-down. The title, just visible: *Residue Log — Ongoing*.";
+        }
+        return json({ target, desc, actions: obj.actions || [] });
+      }
+      if (target === "cistern_stone" && loc === "flooded_hall") {
+        const warnedMid = await getFlag(db, uid, "warned_mid_sewer", 0);
+        if (warnedMid) {
+          await setFlag(db, uid, "found_diagnostic_fragment_1", 1);
+          desc = "Stone at the water's edge. Something is embedded in it — same material as Pip, same faint glow. A fragment. Diagnostic.";
+        } else {
+          desc = "Stone at the water's edge. The cistern has been here a long time.";
+        }
+        return json({ target, desc, actions: obj.actions || [] });
+      }
+
       return json({ target, desc, actions: obj.actions || [] });
     }
 
@@ -2785,6 +3013,31 @@ The city knows.`,
       const seenTier2Graffiti = await getFlag(db, uid, "seen_tier2_graffiti");
       const seenRustedPipe = await getFlag(db, uid, "seen_rusted_pipe");
       const seenFoundationDask = await getFlag(db, uid, "seen_foundation_dask");
+      const foundWallSymbolVeyra = await getFlag(db, uid, "found_wall_symbol_veyra", 0);
+      const foundWallSymbolSewer = await getFlag(db, uid, "found_wall_symbol_sewer", 0);
+      const foundWallSymbolWatch = await getFlag(db, uid, "found_wall_symbol_watch", 0);
+      const wallSymbolPatternNoticed = await getFlag(db, uid, "wall_symbol_pattern_noticed", 0);
+      const wallSymbolMeaningRevealed = await getFlag(db, uid, "wall_symbol_meaning_revealed", 0);
+      const foundTradersMapShelf = await getFlag(db, uid, "found_traders_map_shelf", 0);
+      const hasTradersMap = await dbGet(db, "SELECT 1 FROM inventory WHERE user_id=? AND item='has_traders_map' AND qty>0", [uid]);
+      const foundMapMatchVault = await getFlag(db, uid, "found_map_match_vault", 0);
+      const mapOriginUnderstood = await getFlag(db, uid, "map_origin_understood", 0);
+      const tradersMapRevealHeard = await getFlag(db, uid, "traders_map_reveal_heard", 0);
+      const noticedIterationJar = await getFlag(db, uid, "noticed_iteration_jar", 0);
+      const noticedOldestShelf = await getFlag(db, uid, "noticed_oldest_shelf", 0);
+      const thalaraJarsAsked = await getFlag(db, uid, "thalara_jars_asked", 0);
+      const thalaraIterationsUnderstood = await getFlag(db, uid, "thalara_iterations_understood", 0);
+      const inspectedLedger = await getFlag(db, uid, "inspected_ledger", 0);
+      const foundDaskSewerUpper = await getFlag(db, uid, "found_dask_sewer_upper", 0);
+      const foundDaskFoundation = await getFlag(db, uid, "found_dask_foundation", 0);
+      const kelvarisDaskAsked = await getFlag(db, uid, "kelvaris_dask_asked", 0);
+      const foundMissingPage = await getFlag(db, uid, "found_missing_page", 0);
+      const kelvarisGapsUnderstood = await getFlag(db, uid, "kelvaris_gaps_understood", 0);
+      const foundDiagnosticFragment1 = await getFlag(db, uid, "found_diagnostic_fragment_1", 0);
+      const foundDiagnosticFragment2 = await getFlag(db, uid, "found_diagnostic_fragment_2", 0);
+      const othorionFragmentsShown = await getFlag(db, uid, "othorion_fragments_shown", 0);
+      const pipOriginUnderstood = await getFlag(db, uid, "pip_origin_understood", 0);
+      const bossCustodianDefeated = await getFlag(db, uid, "boss_custodian_defeated", 0);
       let caelirVisits = 0;
       let caelirDatesRevealed = 0;
       let caelirBladeRevealed = 0;
@@ -2887,6 +3140,31 @@ The city knows.`,
         seen_tier2_graffiti: !!seenTier2Graffiti,
         seen_rusted_pipe: !!seenRustedPipe,
         seen_foundation_dask: !!seenFoundationDask,
+        found_wall_symbol_veyra: !!foundWallSymbolVeyra,
+        found_wall_symbol_sewer: !!foundWallSymbolSewer,
+        found_wall_symbol_watch: !!foundWallSymbolWatch,
+        wall_symbol_pattern_noticed: !!wallSymbolPatternNoticed,
+        wall_symbol_meaning_revealed: !!wallSymbolMeaningRevealed,
+        found_traders_map_shelf: !!foundTradersMapShelf,
+        has_traders_map: !!hasTradersMap,
+        found_map_match_vault: !!foundMapMatchVault,
+        map_origin_understood: !!mapOriginUnderstood,
+        traders_map_reveal_heard: !!tradersMapRevealHeard,
+        noticed_iteration_jar: !!noticedIterationJar,
+        noticed_oldest_shelf: !!noticedOldestShelf,
+        thalara_jars_asked: !!thalaraJarsAsked,
+        thalara_iterations_understood: !!thalaraIterationsUnderstood,
+        inspected_ledger: !!inspectedLedger,
+        found_dask_sewer_upper: !!foundDaskSewerUpper,
+        found_dask_foundation: !!foundDaskFoundation,
+        kelvaris_dask_asked: !!kelvarisDaskAsked,
+        found_missing_page: !!foundMissingPage,
+        kelvaris_gaps_understood: !!kelvarisGapsUnderstood,
+        found_diagnostic_fragment_1: !!foundDiagnosticFragment1,
+        found_diagnostic_fragment_2: !!foundDiagnosticFragment2,
+        othorion_fragments_shown: !!othorionFragmentsShown,
+        pip_origin_understood: !!pipOriginUnderstood,
+        boss_custodian_defeated: !!bossCustodianDefeated,
         wisdom: row.wisdom,
         charisma: row.charisma,
         intelligence: row.intelligence,
@@ -2987,15 +3265,372 @@ The city knows.`,
           esServices.push({ service_id: "hidden_lore", name: "Hidden Lore", cost: 1, description: "Reveal hidden lore on a relic or artifact.", available, reason: es < 1 ? "Not enough Ember Shards." : items.length === 0 ? "No unrevealed relics or artifacts in your inventory." : null, items });
         }
         if (npc === "othorion") {
+          const pipOriginUnderstood = await getFlag(db, uid, "pip_origin_understood", 0);
           const analysisCount = await getFlag(db, uid, "structural_analyses_purchased", 0);
-          const available = analysisCount < STRUCTURAL_ANALYSIS_SEQUENCE.length && es >= 1;
-          esServices.push({ service_id: "structural_analysis", name: "Structural Analysis", cost: 1, description: "Reveal one hidden sewer room on your map.", available, reason: analysisCount >= STRUCTURAL_ANALYSIS_SEQUENCE.length ? "Othorion has mapped everything he can reach." : es < 1 ? "Not enough Ember Shards." : null });
+          const available = !!pipOriginUnderstood && analysisCount < STRUCTURAL_ANALYSIS_SEQUENCE.length && es >= 1;
+          esServices.push({ service_id: "structural_analysis", name: "Structural Analysis", cost: 1, description: "Reveal one hidden sewer room on your map.", available, reason: !pipOriginUnderstood ? "Othorion has nothing to offer until you've shown him what you've found." : analysisCount >= STRUCTURAL_ANALYSIS_SEQUENCE.length ? "Othorion has mapped everything he can reach." : es < 1 ? "Not enough Ember Shards." : null });
         }
       }
 
       const questResult = await handleQuestDialogue(db, dbGet, dbAll, dbRun, uid, npc, topic, playerContext, getFlag, setFlag);
       if (questResult) {
         return json({ response: questResult.response, can_offer_trial: canOfferTrial, es_services: esServices });
+      }
+
+      // Act 1 Sewer Arc: NPC pull hooks (fire once when depth thresholds met)
+      const caelirBladeFired = await getFlag(db, uid, "caelir_blade_hook_fired", 0);
+      const thalaraSporeFired = await getFlag(db, uid, "thalara_spore_hook_fired", 0);
+      const thalaraSoldReagent = await getFlag(db, uid, "thalara_sold_sewer_reagent", 0);
+      const kelvarisDepthFired = await getFlag(db, uid, "kelvaris_depth_hook_fired", 0);
+      const othorionDepthFired = await getFlag(db, uid, "othorion_depth_hook_fired", 0);
+      const pressureGateOpened = await getFlag(db, uid, "pressure_gate_opened", 0);
+      const bossCustodianDefeated = await getFlag(db, uid, "boss_custodian_defeated", 0);
+
+      if (npc === "weaponsmith" && warnedMidSewer && !caelirBladeFired) {
+        await setFlag(db, uid, "caelir_blade_hook_fired", 1);
+        return json({
+          response: `"Your blade's humming."
+
+He sets down what he's working on.
+
+"That happens when metal sits near deep resonance.
+The alloy remembers."
+
+He picks up the blade, holds it near his ear.
+
+"...I haven't heard that in a long time.
+How far down did you go?"
+
+He doesn't wait for an answer.
+He already knows it was far.`,
+          can_offer_trial: canOfferTrial,
+          es_services: esServices,
+        });
+      }
+      if (npc === "herbalist" && warnedMidSewer && !thalaraSporeFired && thalaraSoldReagent) {
+        await setFlag(db, uid, "thalara_spore_hook_fired", 1);
+        return json({
+          response: `"The spore samples you brought me aren't natural growth."
+
+She holds the jar up to the light.
+
+"Natural spores colonize randomly.
+These are growing in clusters around specific points —
+heat vents, drainage access, places where the stone is warm."
+
+"Almost like something down there is cultivating them.
+Maintaining the conditions."
+
+She sets the jar down carefully.
+
+"I would be curious what you find on the lower levels."
+
+Not a request. An observation.
+She is already writing something down.`,
+          can_offer_trial: canOfferTrial,
+          es_services: esServices,
+        });
+      }
+      if (npc === "bartender" && pressureGateOpened && !kelvarisDepthFired) {
+        await setFlag(db, uid, "kelvaris_depth_hook_fired", 1);
+        return json({
+          response: `"You've been below the third level."
+
+Not a question. He wipes the bar without looking up.
+
+"People who go that far start hearing things."
+
+Pause.
+
+"Not imagining things.
+Hearing things.
+The city has a sound at that depth that it doesn't have up here."
+
+"Come back when you're ready to talk about what you found."
+
+He does not look up until you leave.
+He watches you go.`,
+          can_offer_trial: canOfferTrial,
+          es_services: esServices,
+        });
+      }
+      if (npc === "othorion" && bossCustodianDefeated && !othorionDepthFired) {
+        await setFlag(db, uid, "othorion_depth_hook_fired", 1);
+        return json({
+          response: `When you enter the Crucible, Pip does not point at anything.
+
+He looks at you.
+
+After a moment, he points straight down.
+
+Holds it.
+
+Othorion is watching him.
+
+"That resonance reading shouldn't exist at this depth."
+
+He checks something on the table.
+
+"He's been pointing down since you came in.
+That's new behavior."
+
+He looks at you.
+
+"What did you find."`,
+          can_offer_trial: canOfferTrial,
+          es_services: esServices,
+        });
+      }
+
+      // Lore thread static dialogue (exact reveals from design)
+      const t = (topic || "").toLowerCase().trim();
+      if (npc === "armorsmith" && ["wall_marks", "marks", "symbols"].includes(t)) {
+        if (foundWallSymbolVeyra && foundWallSymbolSewer && foundWallSymbolWatch && !wallSymbolMeaningRevealed) {
+          await setFlag(db, uid, "wall_symbol_meaning_revealed", 1);
+          await setFlag(db, uid, "veyra_trust", 1);
+          return json({
+            response: `*She stops. Looks at the marks. Then at you.*
+
+"You've seen the marks.
+Sewer stone. My walls. The Watch foundation."
+
+"Those aren't guild signs. They're not warnings."
+
+"Every one of them means the same thing."
+
+"Someone sealed something they shouldn't have.
+And they knew it.
+The mark is the apology."
+
+*She is quiet for a long moment.*
+
+"I don't know who started it.
+I just know I keep finding them,
+and every time I do, I add one."`,
+            can_offer_trial: canOfferTrial,
+            es_services: esServices,
+          });
+        }
+      }
+      if (npc === "trader" && ["map", "oddity_shelf", "oddity"].includes(t)) {
+        if (foundTradersMapShelf && !hasTradersMap) {
+          await dbRun(db, "INSERT INTO inventory(user_id, item, qty) VALUES(?,?,1) ON CONFLICT(user_id, item) DO UPDATE SET qty=qty+1", [uid, "has_traders_map"]);
+          await setFlag(db, uid, "has_traders_map", 1);
+          return json({
+            response: `*The trader slides the map across the counter.*
+
+"Not for sale yet. But you've earned a look."
+
+*The map is yours. Streets. Districts. A river. None of it matches the city above. All of it feels familiar.*`,
+            can_offer_trial: canOfferTrial,
+            es_services: esServices,
+          });
+        }
+        if (mapOriginUnderstood && !tradersMapRevealHeard) {
+          await setFlag(db, uid, "traders_map_reveal_heard", 1);
+          return json({
+            response: `"You found it."
+
+Not a question.
+
+"The map is older than the city above it.
+It's a map of what was here before."
+
+"The districts in the sewer — those are the original streets.
+The city was built on top of itself.
+The sewer isn't infrastructure.
+It's the previous version."
+
+*The trader is quiet for a long moment.*
+
+"I've had that map for a long time.
+I give it to people who might understand what they're looking at."
+
+"Most don't come back."`,
+            can_offer_trial: canOfferTrial,
+            es_services: esServices,
+          });
+        }
+      }
+      if (npc === "herbalist" && ["jars", "jar", "labels", "iteration", "oldest_shelf"].includes(t)) {
+        if (noticedOldestShelf && warnedMidSewer && !thalaraJarsAsked) {
+          await setFlag(db, uid, "thalara_jars_asked", 1);
+          await setFlag(db, uid, "thalara_trust", 1);
+          return json({
+            response: `*She doesn't look up immediately.*
+
+"You noticed the labels."
+
+"ITERATION 4 means this is the fourth time I've collected
+a sample from that location.
+The samples change between collections.
+The sewer changes.
+I document the changes."
+
+"BEFORE means I collected that before something happened.
+I don't always know what the something was until later."
+
+*She is quiet for a long moment.*
+
+"The old shelf is mine. The dates are correct.
+I don't have a good explanation for you."`,
+            can_offer_trial: canOfferTrial,
+            es_services: esServices,
+          });
+        }
+        if (thalaraJarsAsked && wallSymbolMeaningRevealed && !thalaraIterationsUnderstood) {
+          await setFlag(db, uid, "thalara_iterations_understood", 1);
+          await setFlag(db, uid, "thalara_trust", 1);
+          return json({
+            response: `"You know about the marks."
+
+"Then you understand that someone has been making the same
+mistakes for a very long time.
+And someone has been documenting them for just as long."
+
+"I don't know which one I am.
+Some iterations, I think I'm the one sealing things.
+Some iterations, I think I'm the one apologizing."
+
+"The jars are how I remember which iteration this is.
+ITERATION 4 means this has happened at least four times.
+Probably more. I don't have records before that."
+
+"BEFORE is the jar I fill right before something changes.
+I don't always know what I'm about to lose.
+But I know the feeling."`,
+            can_offer_trial: canOfferTrial,
+            es_services: esServices,
+          });
+        }
+      }
+      if (npc === "bartender" && ["ledger", "dask", "ledgers"].includes(t)) {
+        const hasDeepSewer = !!bossCustodianDefeated || !!(await getFlag(db, uid, "found_foundation_stone", 0));
+        if (hasDeepSewer && foundDaskFoundation && inspectedLedger && !kelvarisDaskAsked) {
+          await setFlag(db, uid, "kelvaris_dask_asked", 1);
+          return json({
+            response: `*He doesn't reach for the ledger.*
+
+"Dask."
+
+"That entry shouldn't be there.
+The date is wrong by at least a century."
+
+"I didn't write it.
+It's my handwriting."
+
+*He is quiet for a long moment.*
+
+"I don't discuss that entry."`,
+            can_offer_trial: canOfferTrial,
+            es_services: esServices,
+          });
+        }
+        if (foundMissingPage && tradersMapRevealHeard && !kelvarisGapsUnderstood) {
+          await setFlag(db, uid, "kelvaris_gaps_understood", 1);
+          await setFlag(db, uid, "title_ledger_witness", 1);
+          return json({
+            response: `"You found the map."
+
+Not a question. He has seen this before.
+
+"Then you know the city has been here before."
+
+"The ledger has gaps.
+Not missing pages — I've checked.
+Just gaps. Information that should be there and isn't.
+Events that happened but left no record."
+
+"The gaps always cluster around the same points.
+The mechanism. The portal. Certain names."
+
+*He is quiet for a very long moment.*
+
+"Dask is in there twice.
+Once when he arrived.
+Once when—"
+
+*He stops.*
+
+"The second entry shouldn't be possible.
+He wrote it himself.
+I watched him write it.
+The date is a hundred years before I was born."
+
+"I have stopped trying to explain it.
+I just document.
+That's all I can do."`,
+            can_offer_trial: canOfferTrial,
+            es_services: esServices,
+          });
+        }
+      }
+      if (npc === "othorion" && ["fragments", "artifacts", "pip", "fragment"].includes(t)) {
+        const threadCount = [wallSymbolMeaningRevealed, mapOriginUnderstood, thalaraIterationsUnderstood, kelvarisGapsUnderstood].filter(Boolean).length;
+        const hasDeepSewer = !!bossCustodianDefeated || !!arc1Climax;
+        if (othorionFragmentsShown && hasDeepSewer && !pipOriginUnderstood) {
+          await setFlag(db, uid, "pip_origin_understood", 1);
+          await setFlag(db, uid, "othorion_trust", 1);
+          return json({
+            response: `"The original builders left a diagnostic system.
+Distributed. Multiple fragments throughout the structure.
+They were meant to communicate — to aggregate readings,
+identify instability, coordinate a response."
+
+"The others failed.
+One by one.
+I don't know when.
+The records don't go back that far."
+
+"Pip has been operating in isolation for — I don't know how long.
+Centuries, probably.
+He's been flagging anomalies with no one to report to.
+No aggregation. No response protocol."
+
+*Pip is very still.*
+
+"He keeps pointing at things because that's what he was built to do.
+The system assumed someone would be listening.
+No one has been listening for a very long time."
+
+*Long pause.*
+
+"Until you started watching."`,
+            can_offer_trial: canOfferTrial,
+            es_services: esServices,
+          });
+        }
+        if (foundDiagnosticFragment1 && foundDiagnosticFragment2 && threadCount >= 2 && !othorionFragmentsShown) {
+          await setFlag(db, uid, "othorion_fragments_shown", 1);
+          await setFlag(db, uid, "othorion_trust", 1);
+          return json({
+            response: `*He looks at the fragments for a long time.*
+
+*Pip looks at the fragments.
+Then at Othorion.
+Then at the fragments again.*
+
+*Pip raises his arm. Points at the fragments.
+Does not lower his arm.*
+
+"Where did you find these."
+
+Not a question.
+
+"These are the same material.
+Same construction.
+Same resonance signature."
+
+*He picks one up.
+Pip points more urgently.*
+
+"Pip is not unique.
+He is the only one still functional.
+But he is not the only one that was made."`,
+            can_offer_trial: canOfferTrial,
+            es_services: esServices,
+          });
+        }
       }
 
       const response = await getNPCResponse(env, npc, topic, playerContext);
@@ -3982,9 +4617,10 @@ if (path === "/api/combat/state" && method === "GET") {
         await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [playerHp, uid]);
 
         // Set boss_floorN flag when defeating a floor boss
-        const bossFlags = { rat_king: "boss_floor1", sporebound_custodian: "boss_floor2", cistern_leviathan: "boss_floor3", broken_regulator: "boss_floor4", ash_heart_custodian: "boss_floor5" };
+        const bossFlags = { rat_king: "boss_floor1", sporebound_custodian: "boss_floor2", drain_warden: "boss_floor2_defeated", cistern_leviathan: "boss_floor3", broken_regulator: "boss_floor4", ash_heart_custodian: "boss_floor5" };
         const bossFlag = bossFlags[state.enemy_id];
         if (bossFlag) await setFlag(db, uid, bossFlag, 1);
+        if (state.enemy_id === "sporebound_custodian") await setFlag(db, uid, "boss_floor2_defeated", 1);
         if (state.enemy_id === "ash_heart_custodian") await setFlag(db, uid, "boss_custodian_defeated", 1);
 
         const victoryLoc = state.location || "drain_entrance";
@@ -4098,7 +4734,18 @@ if (path === "/api/combat/state" && method === "GET") {
 
         const itemLine = itemLines.length ? ` | **${itemLines.join("**, **")}**` : "";
         let victoryMsg;
-        if (state.enemy_id === "ash_heart_custodian") {
+        if (state.enemy_id === "drain_warden") {
+          victoryMsg = `The Warden does not retreat — it lowers.
+Slowly, like water finding its level, it descends back into the drain.
+
+The subsonic vibration stops.
+
+For the first time since you entered this room,
+the air is still.
+
+Somewhere below — much further below — you hear the iron door groan.`;
+          victoryMsg += `\n\n**+${xpGain} XP** | **+${lootAsh} Ash Marks**${bossRewardLine || ""}${lootItemLine || ""}${itemLine}`;
+        } else if (state.enemy_id === "ash_heart_custodian") {
           victoryMsg = `The Custodian does not fall. It stops.
 
 The grinding hum that has been underneath every sound in this room
@@ -4501,6 +5148,9 @@ Something about the room has changed.`;
       }
       const newBalance = (row.ash_marks || 0) + amount;
       await dbRun(db, "UPDATE characters SET ash_marks=ash_marks+? WHERE user_id=?", [amount, uid]);
+      if (npc_id === "herbalist" && itemForSell?.category === "loot_reagent") {
+        await setFlag(db, uid, "thalara_sold_sewer_reagent", 1);
+      }
       return json({ ok: true, message: `*They take it.*\n\n"${amount} marks."`, amount_received: amount, new_balance: newBalance });
     }
 
@@ -4610,8 +5260,10 @@ Something about the room has changed.`;
       const row = await getPlayerSheet(db, uid);
       if (!row) return err("No character.", 404);
       if (row.location !== NPC_LOCATIONS.armorsmith) return err("Veyra is not here.", 400);
-      const cost = ARMOR_SERVICES[service_id];
+      let cost = ARMOR_SERVICES[service_id];
       if (!cost) return err("Unknown service.", 400);
+      const veyraTrust = await getFlag(db, uid, "veyra_trust", 0);
+      if (veyraTrust) cost = Math.max(0, cost - 2);
       if ((row.ash_marks || 0) < cost) return err(`You need ${cost} Ash Marks. You have ${row.ash_marks || 0}.`, 400);
       const combats = service_id === "shield_brace" ? 3 : 5;
       const flag = service_id === "strap_tighten" ? "buff_strap_tighten_combats_remaining" : service_id === "weight_redistribute" ? "buff_weight_redist_combats_remaining" : "buff_shield_brace_combats_remaining";
@@ -4629,8 +5281,10 @@ Something about the room has changed.`;
       const row = await getPlayerSheet(db, uid);
       if (!row) return err("No character.", 404);
       if (row.location !== NPC_LOCATIONS.herbalist) return err("Thalara is not here.", 400);
-      const cost = THALARA_SERVICES[service_id];
+      let cost = THALARA_SERVICES[service_id];
       if (!cost) return err("Unknown service.", 400);
+      const thalaraIterationsUnderstood = await getFlag(db, uid, "thalara_iterations_understood", 0);
+      if (thalaraIterationsUnderstood && service_id === "deep_lung_draught") cost = 12;
       if ((row.ash_marks || 0) < cost) return err(`You need ${cost} Ash Marks. You have ${row.ash_marks || 0}.`, 400);
       await dbRun(db, "UPDATE characters SET ash_marks=ash_marks-? WHERE user_id=?", [cost, uid]);
       if (service_id === "cleansing_tonic") {

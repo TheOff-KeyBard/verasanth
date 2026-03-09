@@ -135,9 +135,9 @@ Add near `SCENT_ITEMS`:
 // chance = probability this enemy becomes a predator instead of
 // spawning instantly (only applies in their eligible rooms)
 const PREDATOR_ENEMIES = {
-  sewer_horror:      { chance: 0.7, eligible: ['sewer_mid_cistern','sewer_deep_threshold','sewer_deep_foundation'] },
-  hollow_guard:      { chance: 0.5, eligible: ['sewer_mid_flooded','sewer_mid_barracks','sewer_gate'] },
-  gearbound_sentinel:{ chance: 0.4, eligible: ['sewer_deep_vault','sewer_deep_foundation'] },
+  sewer_horror:      { chance: 0.7, eligible: ['drowned_vault','cathedral_floor','sewer_deep_foundation'] },
+  hollow_guard:      { chance: 0.5, eligible: ['flooded_hall','broken_pump_room','sluice_gate'] },
+  gearbound_sentinel:{ chance: 0.4, eligible: ['drowned_vault','sewer_deep_foundation'] },
 };
 ```
 
@@ -417,9 +417,10 @@ In the encounter block, after `rollEncounter` returns true, roll a small
 chance for a multi-enemy spawn:
 
 ```javascript
+// High-tension rooms (actual IDs from data/sewer_nodes.js)
 const AMBUSH_ROOMS = new Set([
-  'sewer_deep_foundation', 'sewer_deep_threshold',
-  'sewer_mid_cistern', 'sewer_mid_flooded',
+  'sewer_deep_foundation', 'cathedral_floor',
+  'flooded_hall', 'submerged_tunnel',
 ]);
 
 const isAmbush = AMBUSH_ROOMS.has(dest) && Math.random() < 0.12; // 12% of encounters
@@ -439,10 +440,10 @@ if (isAmbush) {
 ```javascript
 const AMBUSH_CUES = {
   sewer_deep_foundation: "*The pattern on the floor glows. The room wakes up.*",
-  sewer_deep_threshold:  "*Two shapes detach from the wall simultaneously.*",
-  sewer_mid_cistern:     "*Something erupts from the water as something else drops from above.*",
-  sewer_mid_flooded:     "*Hands burst from the water on both sides.*",
-  default:               "*They were waiting.*",
+  cathedral_floor:       "*Two shapes detach from the wall simultaneously.*",
+  flooded_hall:          "*Something erupts from the water as something else drops from above.*",
+  submerged_tunnel:      "*Hands burst from the water on both sides.*",
+  default:              "*They were waiting.*",
 };
 
 function getAmbushCue(location) {
@@ -547,7 +548,7 @@ async function handleNarrativeEvent(event) {
 - [ ] Highest-bonus item is used (not additive) — one label per encounter
 
 **Predator AI:**
-- [ ] Entering `sewer_mid_cistern` sometimes shows detection cue, not combat
+- [ ] Entering `flooded_hall` sometimes shows detection cue, not combat
 - [ ] Next room entered after detection auto-starts combat (no roll needed)
 - [ ] Moving to tavern or market_square after detection: escape message, no combat
 - [ ] Only one predator tracked at a time

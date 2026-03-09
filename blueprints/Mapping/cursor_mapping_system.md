@@ -112,23 +112,46 @@ const LOCATION_TO_MAP = {
   ashen_sanctuary:       "city_surface",
   sewer_entrance:        "city_surface",
 
-  // Sewer floor 1
-  sewer_upper:           "sewer_floor_1",
-  sewer_den:             "sewer_floor_1",
-  sewer_channel:         "sewer_floor_1",
-  sewer_gate:            "sewer_floor_1",
+  // Sewer floor 1 — The Drains
+  drain_entrance:        "sewer_floor_1",
+  overflow_channel:      "sewer_floor_1",
+  broken_pipe_room:      "sewer_floor_1",
+  vermin_nest:           "sewer_floor_1",
+  workers_alcove:        "sewer_floor_1",
+  rusted_gate:           "sewer_floor_1",
 
-  // Sewer floor 2
-  sewer_deep:            "sewer_floor_2",
-  sewer_mid_flooded:     "sewer_floor_2",
-  sewer_mid_barracks:    "sewer_floor_2",
-  sewer_mid_cistern:     "sewer_floor_2",
-  sewer_mid_drain:       "sewer_floor_2",
+  // Sewer floor 2 — Forgotten Channels
+  fungal_bloom_chamber:  "sewer_floor_2",
+  collapsed_passage:     "sewer_floor_2",
+  old_maintenance_room:  "sewer_floor_2",
+  echoing_hall:          "sewer_floor_2",
+  spore_garden:          "sewer_floor_2",
+  cracked_aqueduct:      "sewer_floor_2",
 
-  // Sewer floor 3
-  sewer_deep_threshold:  "sewer_floor_3",
-  sewer_deep_vault:      "sewer_floor_3",
-  sewer_deep_foundation: "sewer_floor_3",
+  // Sewer floor 3 — Cistern Depths
+  flooded_hall:          "sewer_floor_3",
+  drowned_archive:       "sewer_floor_3",
+  submerged_tunnel:      "sewer_floor_3",
+  broken_pump_room:      "sewer_floor_3",
+  drowned_vault:         "sewer_floor_3",
+  sluice_gate:           "sewer_floor_3",
+
+  // Sewer floor 4 — Mechanist's Spine
+  gear_hall:             "sewer_floor_4",
+  steam_vent_corridor:    "sewer_floor_4",
+  broken_regulator_chamber: "sewer_floor_4",
+  iron_walkway:          "sewer_floor_4",
+  heart_pump:            "sewer_floor_4",
+  pressure_valve_shaft:  "sewer_floor_4",
+
+  // Sewer floor 5 — Sump Cathedral + Foundation
+  ash_pillar_hall:       "sewer_floor_5",
+  whispering_chamber:    "sewer_floor_5",
+  rune_lit_corridor:     "sewer_floor_5",
+  cathedral_floor:       "sewer_floor_5",
+  ash_heart_chamber:     "sewer_floor_5",
+  sump_pit:              "sewer_floor_5",
+  sewer_deep_foundation: "sewer_floor_5",
 };
 ```
 

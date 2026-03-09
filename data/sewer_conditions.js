@@ -14,6 +14,10 @@ export const SEWER_CONDITIONS = [
       enemy_spawn_bonus: { mold_vermin: 1, fungal_shambler: 1 },
       loot_bonus: { glowing_spores: 3, spore_cluster: 2 },
     },
+    description_mods: {
+      fungal_bloom_chamber: " A thick grey bloom coats the walls — fresh, still settling. Something disturbed it recently.",
+      spore_garden: " A thick grey bloom coats the walls — fresh, still settling. Something disturbed it recently.",
+    },
   },
   {
     id: "water_pressure_spike",
@@ -24,6 +28,9 @@ export const SEWER_CONDITIONS = [
       enemy_spawn_bonus: { flood_serpent: 1, drowned_thrall: 1 },
       loot_bonus: { drowned_relic: 2, resonant_scrap: 3 },
       route_blocked: ["submerged_tunnel"],
+    },
+    description_mods: {
+      flooded_hall: " The water is higher than usual — up to the waterline markings on the wall. Movement is slower.",
     },
   },
   {
@@ -55,6 +62,11 @@ export const SEWER_CONDITIONS = [
       enemy_spawn_bonus: { gutter_rat: 3, ash_crawler: 2 },
       loot_bonus: { rat_pelt: 5, slime_residue: 3 },
     },
+    description_mods: {
+      drain_entrance: " The ash floor is churned — dozens of prints, all moving the same direction.",
+      overflow_channel: " The ash floor is churned — dozens of prints, all moving the same direction.",
+      vermin_nest: " The ash floor is churned — dozens of prints, all moving the same direction.",
+    },
   },
   {
     id: "heat_vent_instability",
@@ -64,6 +76,24 @@ export const SEWER_CONDITIONS = [
     effects: {
       enemy_spawn_bonus: { heat_wraith: 3 },
       loot_bonus: { deep_vent_ash: 4, gear_fragment: 2 },
+    },
+    description_mods: {
+      gear_hall: " The air here is hotter than usual. The stone is warm to the touch.",
+      steam_vent_corridor: " The air here is hotter than usual. The stone is warm to the touch.",
+      ash_pillar_hall: " The air here is hotter than usual. The stone is warm to the touch.",
+    },
+  },
+  {
+    id: "mechanism_pulse",
+    name: "Mechanism Pulse",
+    floors: [5],
+    noticeboard_text: "MECHANISM ACTIVE — The foundation hums tonight. Othorion requests readings.",
+    effects: {
+      loot_bonus: { resonant_scrap: 2 },
+    },
+    description_mods: {
+      sewer_deep_foundation: " The origin pattern on the floor is faintly luminous. The lines pulse at long intervals — once every thirty seconds or so. The room is more alive than usual.",
+      rune_lit_corridor: " The lines under your finger are warm. Warmer than the last time you were here.",
     },
   },
 ];

@@ -73,7 +73,8 @@ export const GUILD_ROOMS = {
     objects: {
       rhyla: { desc: "Rhyla Thornshield — compact, powerful, every movement deliberate. Armor of steel plates reinforced with rune-carved stone. A tower shield etched with defensive runes against the wall beside her. Braided beard threaded with iron rings marking past battles. Her assessment of you takes under two seconds. Whatever she concluded, she keeps it.", actions: ["talk", "inspect"] },
       formation_marks: { desc: "Positions worn into the stone floor — for two, four, eight people. The marks have been revised over time; an older set of positions is visible beneath the current ones, slightly different angle. Someone has been teaching people how to hold this specific line for longer than the current Watch has existed.", actions: ["inspect"] },
-      patrol_board: { desc: "Patrol routes, incident logs, deployment maps. In the lower right corner, circled twice in a way that is quieter than the rest of the board — not flagged, not colored, just noted separately. Whatever it describes has not been shared with the wider Watch.", actions: ["inspect", "read"] }
+      patrol_board: { desc: "Patrol routes, incident logs, deployment maps. In the lower right corner, circled twice in a way that is quieter than the rest of the board — not flagged, not colored, just noted separately. Whatever it describes has not been shared with the wider Watch.", actions: ["inspect", "read"] },
+      foundation_seam: { desc: "Worn symbol near the base of a load-bearing wall, partially erased. Same style as the marks in Veyra's shop.", actions: ["inspect"] }
     },
     items: []
   },

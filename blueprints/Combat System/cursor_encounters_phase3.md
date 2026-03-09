@@ -57,10 +57,10 @@ const ROAMER_DEFS = {
   the_hollow_warden: {
     enemy_id:    'hollow_guard',
     name:        'The Hollow Warden',
-    start_room:  'sewer_mid_barracks',
+    start_room:  'broken_pump_room',
     patrol:      [
-      'sewer_mid_barracks','sewer_gate','sewer_mid_flooded',
-      'sewer_mid_cistern','sewer_mid_drain','sewer_mid_barracks',
+      'broken_pump_room','submerged_tunnel','flooded_hall',
+      'drowned_vault','broken_pump_room',
     ],
     // Footstep cues heard in adjacent rooms
     approach_cues: [
@@ -74,10 +74,10 @@ const ROAMER_DEFS = {
   the_cistern_thing: {
     enemy_id:    'sewer_horror',
     name:        'The Cistern Thing',
-    start_room:  'sewer_mid_cistern',
+    start_room:  'drowned_vault',
     patrol:      [
-      'sewer_mid_cistern','sewer_deep_threshold',
-      'sewer_deep_foundation','sewer_deep_threshold','sewer_mid_cistern',
+      'drowned_vault','cathedral_floor',
+      'sewer_deep_foundation','cathedral_floor','drowned_vault',
     ],
     approach_cues: [
       "*The water in the drain shifts. Something large displaced it.*",
@@ -264,7 +264,7 @@ await dbRun(db, `
 const HAZARD_DEFS = {
   gas_pocket: {
     label:      'Sewer Gas',
-    rooms:      ['sewer_mid_drain','sewer_mid_barracks','sewer_channel'],
+    rooms:      ['submerged_tunnel','broken_pump_room','overflow_channel'],
     damage:     { min: 3, max: 8 },
     cue_enter:  "*The air here has a quality that makes your eyes water. Breathe shallow.*",
     cue_damage: "*The gas burns your throat. You take {dmg} damage.*",
@@ -273,7 +273,7 @@ const HAZARD_DEFS = {
   },
   rising_water: {
     label:      'Rising Water',
-    rooms:      ['sewer_mid_flooded','sewer_channel','sewer_upper'],
+    rooms:      ['flooded_hall','overflow_channel','drain_entrance'],
     damage:     { min: 2, max: 5 },
     cue_enter:  "*The water is higher than it should be. The current pulls at your legs.*",
     cue_damage: "*The current knocks you against the wall. {dmg} damage.*",
@@ -284,7 +284,7 @@ const HAZARD_DEFS = {
   },
   fungal_bloom: {
     label:      'Fungal Bloom',
-    rooms:      ['sewer_deep_threshold','sewer_deep_foundation','sewer_mid_cistern'],
+    rooms:      ['cathedral_floor','sewer_deep_foundation','drowned_vault'],
     damage:     { min: 1, max: 4 },
     cue_enter:  "*The walls are thick with pale growth. The spores drift visibly in your torchlight.*",
     cue_damage: "*Spores fill your lungs. {dmg} damage. Something in the bloom pulses.*",
@@ -295,7 +295,7 @@ const HAZARD_DEFS = {
   },
   collapse_risk: {
     label:      'Unstable Ceiling',
-    rooms:      ['sewer_deep_vault','sewer_deep','sewer_den'],
+    rooms:      ['drowned_vault','collapsed_passage','vermin_nest'],
     damage:     { min: 5, max: 14 },
     cue_enter:  "*Dust falls from the ceiling in slow streams. The stone creaks overhead.*",
     cue_damage: "*Stone falls. {dmg} damage. Move fast.*",
@@ -478,9 +478,9 @@ const BOSS_DEFS = {
   rat_king: {
     enemy_id:     'rat_king',
     name:         'The Rat King',
-    spawn_room:   'sewer_den',
+    spawn_room:   'vermin_nest',
     conditions: {
-      kills_in_location: { location: 'sewer_den', min: 3 },
+      kills_in_location: { location: 'vermin_nest', min: 3 },
       // Rat King spawns after 3 kills in the Den specifically
     },
     telegraph: [
@@ -495,7 +495,7 @@ const BOSS_DEFS = {
   the_warden_captain: {
     enemy_id:     'hollow_guard',   // reuse enemy, override stats
     name:         'The Warden Captain',
-    spawn_room:   'sewer_mid_barracks',
+    spawn_room:   'old_maintenance_room',
     hp_override:  80,
     conditions: {
       player_kills_total: { min: 10 },
@@ -512,7 +512,7 @@ const BOSS_DEFS = {
   the_cistern_depth: {
     enemy_id:     'sewer_horror',
     name:         'The Depth',
-    spawn_room:   'sewer_mid_cistern',
+    spawn_room:   'flooded_hall',
     hp_override:  120,
     conditions: {
       player_kills_total: { min: 20 },
@@ -661,11 +661,9 @@ await setFlag(db, uid, locationKey, locationKills);
 const totalKills = parseInt(await getFlag(db, uid, 'total_kills') || 0) + 1;
 await setFlag(db, uid, 'total_kills', totalKills);
 
-// Track depth tier
-const depthTier =
-  state.location.startsWith('sewer_deep') ? 3 :
-  state.location.startsWith('sewer_mid')  ? 2 :
-  state.location.startsWith('sewer_')     ? 1 : 0;
+// Track depth tier (use LOCATION_TO_FLOOR from data/combat.js)
+const floor = LOCATION_TO_FLOOR[state.location] ?? 0;
+const depthTier = floor >= 5 ? 3 : floor >= 3 ? 2 : floor >= 1 ? 1 : 0;
 const currentTier = parseInt(await getFlag(db, uid, 'depth_tier') || 0);
 if (depthTier > currentTier) {
   await setFlag(db, uid, 'depth_tier', depthTier);

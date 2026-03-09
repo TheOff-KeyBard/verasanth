@@ -97,6 +97,14 @@ export const LOOT_ITEMS = {
     unsellable: true,
     quest_item: true,
   },
+  has_traders_map: {
+    name: "Trader's Map",
+    category: "loot_artifact",
+    base_value: 0,
+    lore: "A rolled map of a city — streets, districts, a river — that does not match Verasanth's layout but matches the emotional shape of it. The districts in the sewer are the original streets. The city was built on top of itself.",
+    unsellable: true,
+    quest_item: true,
+  },
 };
 
 /** loot_reagent → refined item (2.5× base_value). Compress: 3× same → 1 refined. */

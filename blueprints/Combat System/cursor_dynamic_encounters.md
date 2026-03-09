@@ -42,68 +42,56 @@ Add this constant near `FIGHTABLE_LOCATIONS`:
 
 ```javascript
 // Base encounter chance (0–100) per location on entry
+// Aligned with actual room IDs from data/sewer_nodes.js and data/combat.js
 const ENCOUNTER_CHANCES = {
   // Floor 1 — The Drains
-  sewer_upper:          35,
-  sewer_den:            50,
-  sewer_channel:        40,
+  overflow_channel:     35,
+  broken_pipe_room:    45,
+  vermin_nest:         50,
+  rusted_gate:         40,
   // Floor 2 — Forgotten Channels
-  sewer_deep:           45,
-  sewer_gate:           55,
+  fungal_bloom_chamber: 45,
+  collapsed_passage:   42,
+  echoing_hall:        48,
+  spore_garden:        50,
+  cracked_aqueduct:    44,
   // Floor 3 — Cistern Depths
-  sewer_mid_flooded:    50,
-  sewer_mid_cistern:    45,
-  sewer_mid_drain:      60,
-  sewer_mid_barracks:   40,
-  // Floor 4/5 — Deep
-  sewer_deep_threshold: 55,
-  sewer_deep_vault:     50,
-  sewer_deep_foundation:65,
+  flooded_hall:        50,
+  submerged_tunnel:    48,
+  broken_pump_room:    52,
+  drowned_vault:       55,
+  sluice_gate:         50,
+  // Floor 4 — Mechanist's Spine
+  gear_hall:           52,
+  steam_vent_corridor: 48,
+  broken_regulator_chamber: 55,
+  iron_walkway:        50,
+  heart_pump:          52,
+  pressure_valve_shaft: 48,
+  // Floor 5 — Sump Cathedral + Foundation
+  ash_pillar_hall:     55,
+  whispering_chamber:  58,
+  rune_lit_corridor:   55,
+  cathedral_floor:    60,
+  ash_heart_chamber:   65,
+  sump_pit:            55,
+  sewer_deep_foundation: 65,
 };
 
-// Sensory cues shown before combat starts — keyed by location prefix
+// Sensory cues — implementation uses prefix matching (e.g. overflow, flooded, cathedral)
+// See data/combat.js ENCOUNTER_CUES for full prefix list
 const ENCOUNTER_CUES = {
-  sewer_upper: [
-    "*Something skitters in the dark ahead.*",
-    "*A low chittering echoes from the walls.*",
-    "*Ash shifts near your feet. Something was just here.*",
-  ],
-  sewer_den: [
-    "*The warmth in this chamber is wrong. Something has been sleeping here.*",
-    "*You hear breathing that isn't yours.*",
-    "*Bones crunch underfoot. Fresh ones.*",
-  ],
-  sewer_channel: [
+  overflow: [
     "*The water ripples near your feet. The current isn't strong enough to do that.*",
     "*Something moves in the black water. It is not the current.*",
     "*A shape drifts below the surface, then holds still.*",
   ],
-  sewer_mid_flooded: [
+  flooded: [
     "*Hands burst from the water.*",
     "*Something rises from the flooded floor.*",
     "*The reflection in the water moves before you do.*",
   ],
-  sewer_mid_cistern: [
-    "*A single bubble rises from the center of the cistern.*",
-    "*Your torchlight catches something circling below the surface.*",
-    "*The echo of your footstep returns wrong — too close, too fast.*",
-  ],
-  sewer_mid_drain: [
-    "*The pull from the drain intensifies. Something is climbing up.*",
-    "*A low vibration travels up through your boots.*",
-    "*Skittering, close, from below.*",
-  ],
-  sewer_mid_barracks: [
-    "*One of the shapes under the cloth moves.*",
-    "*A chair scrapes against stone. Nothing is sitting in it.*",
-    "*The door you came through closes behind you. Slowly.*",
-  ],
-  sewer_deep_threshold: [
-    "*The pattern on the floor glows faintly where your shadow falls.*",
-    "*Something very large shifts in the dark ahead.*",
-    "*The air pressure changes. Something exhaled.*",
-  ],
-  sewer_deep_vault: [
+  drowned: [
     "*One of the stone shelves is empty that wasn't before.*",
     "*The iron door behind you is open again.*",
     "*Something was disturbed here recently. The dust says so.*",
@@ -113,7 +101,6 @@ const ENCOUNTER_CUES = {
     "*The air moves. There is no source for the air movement.*",
     "*Something in this room has been waiting.*",
   ],
-  // Fallback
   default: [
     "*Something moves in the dark.*",
     "*You are not alone here.*",
@@ -505,7 +492,7 @@ Add CSS to make it less visually dominant than exits:
 ## VERIFICATION CHECKLIST
 
 **Movement triggers:**
-- [ ] Moving into `sewer_upper` sometimes auto-starts combat
+- [ ] Moving into `overflow_channel` (or other fightable sewer room) sometimes auto-starts combat
 - [ ] Moving into a non-fightable room (market_square, tavern) never triggers
 - [ ] Sensory cue appears in log before enemy name
 - [ ] 0.9s pause between cue and enemy arrival feels right

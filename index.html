@@ -136,6 +136,13 @@
     letter-spacing: 0.1em;
     opacity: 0.85;
     margin-bottom: 8px;
+  }
+  .condition-indicator {
+    font-size: 0.7rem;
+    color: var(--text-muted, #888);
+    font-style: italic;
+    opacity: 0.8;
+    margin-bottom: 6px;
     font-family: var(--font-title);
     text-transform: uppercase;
     animation: breathe 3s ease-in-out infinite;
@@ -3234,6 +3241,7 @@ const PROGRESSION_LABELS = {
   has_seen_awakening: "Has seen awakening",
   othorion_trust: "Othorion trust",
   seris_arc3_complete: "Seris arc complete",
+  title_ledger_witness: "Ledger Witness",
 };
 
 // ── Audio ────────────────────────────────────────────────────────
@@ -4894,9 +4902,24 @@ function renderHazardWarning(hazard) {
   document.getElementById('room-name').after(el);
 }
 
+function renderConditionIndicator(activeCondition) {
+  const existing = document.getElementById('condition-indicator');
+  if (existing) existing.remove();
+  if (!activeCondition?.name) return;
+  const el = document.createElement('div');
+  el.id = 'condition-indicator';
+  el.className = 'condition-indicator';
+  el.textContent = '[' + activeCondition.name + ' active]';
+  const hazardEl = document.getElementById('hazard-warning');
+  const insertBefore = document.getElementById('room-desc');
+  if (hazardEl) hazardEl.after(el);
+  else document.getElementById('room-name').after(el);
+}
+
 function renderRoom(data) {
   document.getElementById('room-name').textContent = data.name || '—';
   renderHazardWarning(data.hazard || null);
+  renderConditionIndicator(data.active_condition || null);
   document.getElementById('room-desc').innerHTML   = render(data.description || '');
   const district = data.district || '';
   const locationText = district ? (data.name || '—') + ' — ' + district : (data.name || data.location || '—');
