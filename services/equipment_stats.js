@@ -4,6 +4,7 @@
  */
 
 import { EQUIPMENT_STAT_KEYS, EQUIPMENT_DATA, INSTINCT_AFFINITIES } from "../data/equipment.js";
+import { RACES } from "../data/races.js";
 
 /**
  * Merge base stats with bonus stats (additive).
@@ -96,6 +97,30 @@ export function applyInstinctAffinities(aggregatedStats, equippedItemMap, instin
     }
   }
 
+  return result;
+}
+
+/**
+ * Apply racial stat_mods as small flat bonuses to overlapping equipment stat keys.
+ */
+export function applyRaceAffinities(aggregatedStats, instinct, race) {
+  const raceDef = RACES[race];
+  if (!raceDef) return aggregatedStats;
+  const result = { ...aggregatedStats };
+  const statMap = {
+    strength: { melee_power: 1 },
+    dexterity: { dodge: 1, initiative: 1 },
+    intelligence: { spell_power: 1 },
+    wisdom: { healing_power: 1 },
+    constitution: { max_hp: 2 },
+  };
+  for (const [raceStat, val] of Object.entries(raceDef.stat_mods || {})) {
+    const mapping = statMap[raceStat];
+    if (!mapping || val <= 0) continue;
+    for (const [equipStat, multiplier] of Object.entries(mapping)) {
+      result[equipStat] = (result[equipStat] ?? 0) + val * multiplier;
+    }
+  }
   return result;
 }
 

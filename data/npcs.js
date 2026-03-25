@@ -41,12 +41,12 @@ export const NPC_TOPICS = {
   trader:      ["city","shop","map","oddity_shelf","oddity","items","kelvaris","sewer","cistern","crawlers","past","yourself","grommash"],
   othorion:    ["sewer","cistern","crawlers","city","dask","sanctuary","board","resonance","pip","working","measurements","anomaly","fungi","ash","fragments","artifacts"],
   warden:      ["city","justice","sewer","bounty","seris","othorion","thalara","ledger","arrest","portal","cells"],
-  vaelith:     ["archive","fire","corruption","artifacts","sewers","sanctuary","covenant","city","dask","board","garruk","halden","lirael","serix","rhyla"],
-  garruk:      ["training","discipline","expedition","sewers","city","board","vaelith","halden","lirael","serix","rhyla"],
-  halden:      ["healing","sanctum","city","hope","corruption","sewers","board","vaelith","garruk","lirael","serix","rhyla"],
-  lirael:      ["market","information","city","origins","sewers","board","vaelith","garruk","halden","serix","rhyla"],
-  serix:       ["shadow","covenant","corruption","ritual","city","sewers","board","vaelith","garruk","halden","lirael","rhyla"],
-  rhyla:       ["watch","order","patrols","city","foundations","sewers","board","vaelith","garruk","halden","lirael","serix"],
+  vaelith:     ["inquiry","patterns","silent_room","guild","city","dask","sewer","lore","archive","fire","corruption","artifacts","sewers","sanctuary","covenant","board","garruk","halden","lirael","serix","rhyla"],
+  garruk:      ["the_line","scars","oathfire","guild","city","combat","sewer","training","discipline","expedition","sewers","board","vaelith","halden","lirael","serix","rhyla"],
+  halden:      ["unseen_hand","kindness","quiet_mirror","guild","city","sanctuary","healing","sanctum","hope","corruption","sewers","board","vaelith","garruk","lirael","serix","rhyla"],
+  lirael:      ["three_doors","profit","ledger_of_names","guild","city","trade","market","information","origins","sewers","board","vaelith","garruk","halden","serix","rhyla"],
+  serix:       ["ember_weighs","ash_blood","ashbound_circle","guild","city","ritual","shadow","covenant","corruption","sewers","board","vaelith","garruk","halden","lirael","rhyla"],
+  rhyla:       ["faultline","patterns_stabilized","long_watch","guild","city","structure","watch","order","patrols","foundations","sewers","board","vaelith","garruk","halden","lirael","serix"],
 };
 
 

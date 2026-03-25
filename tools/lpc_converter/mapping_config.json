@@ -1,0 +1,179 @@
+{
+  "source": {
+    "path": "C:\\Users\\Ethre\\Downloads\\LPC Women's Shirt Pack",
+    "path_fallbacks": [
+      "LPC Women's Shirt Pack",
+      "LPC Women&#039;s Shirt Pack"
+    ]
+  },
+  "output": {
+    "path": "LPC_Womens_Shirt_Pack_CGP",
+    "structure": "dlc/lpc/[Face|SV|TV|TVD]/female/",
+    "description": "Character Generator Plus format: flat files in dlc/lpc/{Face,SV,TV,TVD}/female/ with naming [Prefix]_[Part]_p[number].png"
+  },
+  "cgp": {
+    "start_part_number": {
+      "TV_Clothing": 1034,
+      "FG_Clothing": 1034,
+      "SV_Clothing": 1034,
+      "TVD_Clothing": 1034,
+      "TV_Body": 1002
+    },
+    "animation_to_cgp": {
+      "walk": ["TV", "SV"],
+      "_preview": "Face",
+      "hurt": "TVD"
+    }
+  },
+  "animation_mapping": {
+    "idle": "idle",
+    "walk": "walk",
+    "magic": "spellcast",
+    "thrust": "thrust",
+    "swing": "slash",
+    "shoot": "shoot",
+    "hurt": "hurt",
+    "_preview": "preview"
+  },
+  "component_mapping": {
+    "Female Bases": {
+      "target_component": "body",
+      "target_name": "female_base",
+      "layer": "base"
+    },
+    "Female Blouse": {
+      "target_component": "chest",
+      "target_name": "female_blouse",
+      "layer": "clothing"
+    },
+    "Female Corset": {
+      "target_component": "chest",
+      "target_name": "female_corset",
+      "layer": "clothing"
+    },
+    "Female Long-Sleeve Blouse": {
+      "target_component": "chest",
+      "target_name": "female_long_sleeve_blouse",
+      "layer": "clothing"
+    },
+    "Female Long-Sleeve Shirt": {
+      "target_component": "chest",
+      "target_name": "female_long_sleeve_shirt",
+      "layer": "clothing"
+    },
+    "Female Pirate Shirt": {
+      "target_component": "chest",
+      "target_name": "female_pirate_shirt",
+      "layer": "clothing"
+    },
+    "Female Scoop Neck": {
+      "target_component": "chest",
+      "target_name": "female_scoop_neck",
+      "layer": "clothing"
+    },
+    "Female Sleeveless Shirt": {
+      "target_component": "chest",
+      "target_name": "female_sleeveless_shirt",
+      "layer": "clothing"
+    },
+    "Sleeveless Shirt": {
+      "target_component": "chest",
+      "target_name": "sleeveless_shirt",
+      "layer": "clothing"
+    }
+  },
+  "color_mapping": {
+    "Black": "black",
+    "Blue": "blue",
+    "Blue Gray": "blue_gray",
+    "Forest": "forest",
+    "Gray": "gray",
+    "Green": "green",
+    "Lavender": "lavender",
+    "Leather": "leather",
+    "Maroon": "maroon",
+    "Navy": "navy",
+    "Orange": "orange",
+    "Pink": "pink",
+    "Purple": "purple",
+    "Red": "red",
+    "Sky": "sky",
+    "Tan": "tan",
+    "Teal": "teal",
+    "Walnut": "walnut",
+    "White": "white",
+    "Yellow": "yellow"
+  },
+  "exclude_patterns": [".meta", ".DS_Store"],
+  "nested_acc_packs": {
+    "helmet": {"part": "AccA", "part_start": 1001},
+    "accessory": {"part": "AccA", "part_start": 1100},
+    "visor": {"part": "AccA", "part_start": 1200}
+  },
+  "folder_presets": {
+    "MHelmets": {"part": "AccA", "gender": "male", "pattern": "*.png"},
+    "FHelmets": {"part": "AccA", "gender": "female", "pattern": "*.png"},
+    "MHair": {"part": "RearHair1", "gender": "male", "pattern": "*.png", "suffix": "_c1_m003"},
+    "FHair": {"part": "RearHair1", "gender": "female", "pattern": "*.png", "suffix": "_c1_m003"},
+    "MVisor": {"part": "AccA", "gender": "male", "pattern": "*.png"},
+    "FVisor": {"part": "AccA", "gender": "female", "pattern": "*.png"},
+    "MAccessory": {"part": "AccA", "gender": "male", "pattern": "*.png"},
+    "FAccessory": {"part": "AccA", "gender": "female", "pattern": "*.png"}
+  },
+  "flat_packs": {
+    "output_variation_icons": true,
+    "output_gender": "teen",
+    "body_start": 1002,
+    "gender_from_filename": {
+      "-male": "male",
+      "-female": "female"
+    },
+    "part_starts": {
+      "Body": 1002,
+      "AccA": 1001,
+      "RearHair1": 1001
+    },
+    "part_suffix": {
+      "RearHair1": "_c1_m003"
+    },
+    "file_patterns": [
+      {
+        "pattern": "child_walk_*.png",
+        "part": "Body",
+        "outputs": ["TV", "SV", "TVD"]
+      },
+      {
+        "pattern": "*-male.png",
+        "part": "AccA",
+        "outputs": ["Face", "SV", "TV", "TVD"],
+        "part_start": 1001,
+        "gender_from_filename": true
+      },
+      {
+        "pattern": "*-female.png",
+        "part": "AccA",
+        "outputs": ["Face", "SV", "TV", "TVD"],
+        "part_start": 1001,
+        "gender_from_filename": true
+      },
+      {
+        "pattern": "*hair*.png",
+        "part": "RearHair1",
+        "outputs": ["Face", "SV", "TV", "TVD"],
+        "part_start": 1001,
+        "suffix": "_c1_m003",
+        "gender_from_filename": false,
+        "output_gender": "female"
+      },
+      {
+        "pattern": "pembesac*.png",
+        "part": "RearHair1",
+        "outputs": ["Face", "SV", "TV", "TVD"],
+        "part_start": 1001,
+        "suffix": "_c1_m003",
+        "gender_from_filename": false,
+        "output_gender": "female"
+      }
+    ]
+  }
+}

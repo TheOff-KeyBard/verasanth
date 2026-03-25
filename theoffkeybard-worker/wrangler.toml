@@ -1,0 +1,14 @@
+name = "theoffkeybard-verasanth-api"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# Set SESSION_SECRET in dashboard or .dev.vars (required).
+# After `wrangler d1 create verasanth`, paste database_id below.
+[[d1_databases]]
+binding = "DB"
+database_name = "verasanth"
+database_id = "<to be filled after d1 create>"
+
+[vars]
+# Comma-separated origins, e.g. https://theoffkeybard.com,http://localhost:3000
+ALLOWED_ORIGINS = "http://localhost:3000,https://theoffkeybard.com"

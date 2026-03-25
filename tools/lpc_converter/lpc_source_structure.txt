@@ -1,0 +1,169 @@
+Source: C:\Users\Ethre\Downloads\LPC Women&#039;s Shirt Pack
+============================================================
+
+Female Bases/
+  Coffee/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Comet/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Copper/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Dove/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Gold/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Gray/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Ivory/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Sienna/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+
+Female Blouse/
+  Black/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Blue/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Blue Gray/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Forest/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Gray/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Green/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Lavender/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Leather/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Maroon/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Navy/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Orange/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Pink/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Purple/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Red/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Sky/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Tan/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Teal/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Walnut/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  White/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Yellow/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+
+Female Corset/
+  Black/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Blue/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Blue Gray/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Forest/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Gray/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Green/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Lavender/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Leather/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Maroon/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Navy/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Orange/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Pink/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Purple/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Red/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Sky/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Tan/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Teal/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Walnut/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  White/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Yellow/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+
+Female Long-Sleeve Blouse/
+  Black/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Blue/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Blue Gray/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Forest/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Gray/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Green/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Lavender/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Leather/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Maroon/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Navy/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Orange/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Pink/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Purple/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Red/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Sky/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Tan/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Teal/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Walnut/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  White/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Yellow/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+
+Female Long-Sleeve Shirt/
+  Black/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Blue/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Blue Gray/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Forest/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Gray/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Green/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Lavender/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Leather/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Maroon/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Navy/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Orange/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Pink/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Purple/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Red/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Sky/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Tan/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Teal/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Walnut/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  White/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Yellow/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+
+Female Pirate Shirt/
+  Black/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Blue/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Blue Gray/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Forest/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Gray/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Green/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Lavender/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Leather/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Maroon/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Navy/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Orange/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Pink/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Purple/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Red/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Sky/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Tan/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Teal/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Walnut/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  White/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Yellow/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+
+Female Scoop Neck/
+  Black/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Blue/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Blue Gray/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Forest/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Gray/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Green/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Lavender/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Leather/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Maroon/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Navy/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Orange/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Pink/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Purple/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Red/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Sky/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Tan/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Teal/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Walnut/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  White/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Yellow/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+
+Female Sleeveless Shirt/
+  Black/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Blue/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Blue Gray/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Forest/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Gray/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Green/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Lavender/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Leather/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Maroon/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Navy/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Orange/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Pink/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Purple/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Red/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Sky/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Tan/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Teal/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Walnut/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  White/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+  Yellow/: _preview.png, hurt.png, idle.png, magic.png, shoot.png, swing.png, thrust.png, walk.png
+
+Sleeveless Shirt/
+

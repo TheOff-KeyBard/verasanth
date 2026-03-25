@@ -1,8 +1,22 @@
 import { COMBAT_DATA, LOCATION_TO_FLOOR } from "../data/combat.js";
+import { EQUIPMENT_DATA } from "../data/equipment.js";
 
 export function statMod(v) { return Math.floor((v - 10) / 2); }
 
 export function rollDie(sides) { return Math.floor(Math.random() * sides) + 1; }
+
+/** Weapon damage die sides from main-hand equipment (EQUIPMENT_DATA), or null if unknown. */
+export function weaponDieSidesFromEquippedWeapon(equippedItemMap) {
+  const id = equippedItemMap?.weapon_main;
+  if (!id || !EQUIPMENT_DATA[id]) return null;
+  const def = EQUIPMENT_DATA[id];
+  const st = def.sub_type || "";
+  if (st === "wand" || st === "dagger") return 6;
+  if (def.tags?.includes("light_blade")) return 6;
+  if (st === "staff" || st === "two_handed" || def.tags?.includes("two_handed")) return 10;
+  if (st === "sword" || st === "mace" || st === "spear") return 8;
+  return 6;
+}
 
 export function maxPlayerHp(con, classStage = 0) { return 10 + statMod(con) * 3 + (classStage ?? 0) * 4; }
 
@@ -179,15 +193,29 @@ export function tickStatuses(statuses) {
 /**
  * Resolve player action — ability or normal attack. Uses INSTINCT_DEFS.
  * @param {object} upgrades - Optional. If upgrades.level_5 is a function, use it instead of def.primary.effect.
+ * @param {object} equipStats - Aggregated equipment stats (melee_power, accuracy, spell_power, etc.)
+ * @param {object|null} equippedItemMap - Slot → item id; used to derive weapon die from EQUIPMENT_DATA.
  */
-export function resolvePlayerAction(stats, enemy, useAbility, instinct, state, upgrades = null) {
+export function resolvePlayerAction(stats, enemy, useAbility, instinct, state, upgrades = null, equipStats = {}, equippedItemMap = null) {
   const strMod = statMod(stats.strength);
   const def = INSTINCT_DEFS[instinct];
-  const weaponDie = state?.weapon_die ?? 6;
+  const eq = equipStats || {};
+  let weaponDie = state?.weapon_die;
+  if (equippedItemMap?.weapon_main && EQUIPMENT_DATA[equippedItemMap.weapon_main]) {
+    weaponDie = weaponDieSidesFromEquippedWeapon(equippedItemMap) ?? weaponDie ?? 6;
+  } else if (weaponDie == null) {
+    weaponDie = 6;
+  }
 
   if (useAbility && def) {
     const effectFn = typeof upgrades?.level_5 === "function" ? upgrades.level_5 : def.primary.effect;
     const result = effectFn(stats, enemy, state);
+    if (instinct === "ember_touched" && result.dmg != null) {
+      result.dmg += eq.spell_power ?? 0;
+    }
+    if (instinct === "hearthborn" && result.heal != null) {
+      result.heal += eq.healing_power ?? 0;
+    }
     const narrative =
       typeof def.primary.narrative === "function"
         ? def.primary.narrative(result.dmg ?? result.heal, result.wounded)
@@ -195,10 +223,18 @@ export function resolvePlayerAction(stats, enemy, useAbility, instinct, state, u
     return { ...result, narrative, ability: true };
   }
 
-  let roll = rollDie(20) + strMod + (state?.accuracy_bonus ?? 0);
+  const accBonus = (eq.accuracy ?? 0) + (state?.accuracy_bonus ?? 0);
+  const die1 = rollDie(20);
   const isFade = instinct === "shadowbound" && !state?.fade_used;
+  let natForCrit = die1;
+  let roll = die1 + strMod + accBonus;
   if (isFade) {
-    roll = Math.max(roll, rollDie(20) + strMod);
+    const die2 = rollDie(20);
+    const r2 = die2 + strMod + accBonus;
+    if (r2 > roll) {
+      roll = r2;
+      natForCrit = die2;
+    }
   }
 
   const inStealth = (state?.statuses?.stealth ?? 0) > 0;
@@ -206,15 +242,26 @@ export function resolvePlayerAction(stats, enemy, useAbility, instinct, state, u
   let dmg = 0,
     narrative = "";
 
+  const critNeed = Math.max(15, 18 - Math.floor((eq.crit_chance ?? 0) / 5));
+  const critMult = 1.5 + (eq.crit_damage ?? 0) / 10;
+  const isCrit = roll >= defense && natForCrit >= critNeed;
+
   if (roll >= defense) {
-    dmg = rollDie(weaponDie) + strMod;
-    dmg = Math.max(1, dmg);
+    let baseDmg = rollDie(weaponDie) + strMod + (eq.melee_power ?? 0);
+    baseDmg = Math.max(1, baseDmg);
+    if (isCrit) {
+      baseDmg = Math.max(1, Math.floor(baseDmg * critMult));
+      narrative = `**Critical hit!** `;
+    } else {
+      narrative = "";
+    }
+    dmg = baseDmg;
 
     if (inStealth) {
       dmg = Math.floor(dmg * STATUS_DEFS.stealth.bonus_dmg_multiplier);
-      narrative = `You strike from shadow for **${dmg}** damage.`;
+      narrative += `You strike from shadow for **${dmg}** damage.`;
     } else {
-      narrative = `You strike for **${dmg}** damage.`;
+      narrative += `You strike for **${dmg}** damage.`;
     }
 
     if (instinct === "ember_touched" && (state?.enemy_statuses?.burning ?? 0) > 0) {
@@ -236,9 +283,21 @@ export function resolvePlayerAction(stats, enemy, useAbility, instinct, state, u
 
 /**
  * Enemy attack — status-aware. Uses playerStatuses and enemyStatuses.
- * Returns { dmg, hit } — dmg is 0 on miss or when staggered.
+ * @param {number} shieldBonus - Legacy: added to DEX-based avoid threshold (e.g. tier shield from combat start).
+ * @param {object} equipStats - Equipment defense, dodge, block_value.
+ * @param {object|null} equippedItemMap - Used to confirm shield for block_value.
+ * Returns { dmg, hit, armor_absorbed? } — dmg is 0 on miss or when staggered.
  */
-export function resolveEnemyAttack(enemy, stats, playerStatuses = {}, enemyStatuses = {}, shieldBonus = 0) {
+export function resolveEnemyAttack(
+  enemy,
+  stats,
+  playerStatuses = {},
+  enemyStatuses = {},
+  shieldBonus = 0,
+  equipStats = {},
+  equippedItemMap = null,
+) {
+  const eq = equipStats || {};
   const defMod = statMod(stats.dexterity) + shieldBonus;
 
   if ((enemyStatuses?.staggered ?? 0) > 0) return { dmg: 0, hit: false };
@@ -255,7 +314,10 @@ export function resolveEnemyAttack(enemy, stats, playerStatuses = {}, enemyStatu
     roll = Math.min(roll, rollDie(20) + Math.floor(((enemy.accuracy ?? 65) - 50) / 5));
   }
 
-  const hitThreshold = 10 + defMod;
+  let hitThreshold = 10 + defMod + (eq.defense ?? 0);
+  if ((eq.dodge ?? 0) > 0) {
+    hitThreshold += Math.floor(eq.dodge / 2);
+  }
   if (roll < hitThreshold) return { dmg: 0, hit: false };
 
   const d = enemy.damage ?? { min: 3, max: 5 };
@@ -275,12 +337,30 @@ export function resolveEnemyAttack(enemy, stats, playerStatuses = {}, enemyStatu
     dmg = Math.max(0, Math.floor(dmg * (1 - 0.25)));
   }
 
-  return { dmg, hit: true };
+  const offId = equippedItemMap?.weapon_offhand;
+  const offDef = offId ? EQUIPMENT_DATA[offId] : null;
+  const shieldEquipped =
+    offDef && (offDef.sub_type === "shield" || offDef.sub_type === "buckler");
+  if (shieldEquipped && (eq.block_value ?? 0) > 0) {
+    dmg = Math.max(0, dmg - eq.block_value);
+  }
+
+  let armorAbsorbed = 0;
+  if ((eq.defense ?? 0) > 0) {
+    const beforeArmor = dmg;
+    let red = Math.floor(eq.defense / 2);
+    const cap = Math.floor(beforeArmor * 0.5);
+    red = Math.min(red, cap);
+    dmg = Math.max(0, beforeArmor - red);
+    armorAbsorbed = red;
+  }
+
+  return { dmg, hit: true, armor_absorbed: armorAbsorbed };
 }
 
 /** Legacy enemyAttack — delegates to resolveEnemyAttack for backwards compat */
 export function enemyAttack(enemy, stats, shieldBonus = 0) {
-  return resolveEnemyAttack(enemy, stats, {}, {}, shieldBonus);
+  return resolveEnemyAttack(enemy, stats, {}, {}, shieldBonus, {}, null);
 }
 
 /**

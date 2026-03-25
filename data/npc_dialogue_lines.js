@@ -1,3 +1,10 @@
+// LEGACY — NPC_DIALOGUE_LINES used by services/npc_dialogue.js
+// for non-Phase-A NPC static response pool (30% path in getNPCResponse).
+// PIP_REACTIONS used by index.js — not part of dialogue refactor.
+// Do not remove until non-Phase-A NPCs are migrated to authored system.
+// Phase A NPCs (bartender, weaponsmith, armorsmith, herbalist, trader,
+// curator, othorion, warden) no longer use this file after Fix 1.
+
 /**
  * Static dialogue lines from verasanth_expanded_npc_dialogue.md
  * Used as context-aware pools before LLM fallback in getNPCResponse

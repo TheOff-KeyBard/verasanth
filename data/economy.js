@@ -7,25 +7,13 @@
  * Before adding any item: verify sell_price(item, any_vendor) < item.price at cheapest vendor.
  */
 
+import { EQUIPMENT_DATA } from "./equipment.js";
+
 // --- VENDOR_STOCK ---
-// Map: alchemist → herbalist (NPC_LOCATIONS). trader = Still Scale.
+// weaponsmith / armorsmith: see vendor_catalog.js (EQUIPMENT_DATA). Herbalist + trader remain here for getItemForSell / legacy shop.
 export const VENDOR_STOCK = {
-  weaponsmith: [
-    { id: "rusted_blade",      name: "Rusted Blade",       price: 15,  base_value: 10,  type: "weapon",  category: "weapon" },
-    { id: "worn_shortsword",   name: "Worn Shortsword",    price: 28,  base_value: 18,  type: "weapon",  category: "weapon" },
-    { id: "worn_longsword",    name: "Worn Longsword",     price: 35,  base_value: 22,  type: "weapon",  category: "weapon" },
-    { id: "ash_wrapped_spear", name: "Ash-Wrapped Spear",  price: 42,  base_value: 28,  type: "weapon",  category: "weapon" },
-    { id: "iron_handaxe",      name: "Iron Handaxe",       price: 38,  base_value: 25,  type: "weapon",  category: "weapon" },
-    { id: "iron_dagger",       name: "Iron Dagger",        price: 22,  base_value: 14,  type: "weapon",  category: "weapon" },
-  ],
-  armorsmith: [
-    { id: "padded_vest",        name: "Padded Vest",        price: 18,  base_value: 12,  type: "armor",  category: "armor" },
-    { id: "leather_jerkin",     name: "Leather Jerkin",     price: 30,  base_value: 20,  type: "armor",  category: "armor" },
-    { id: "chain_shirt",        name: "Chain Shirt",        price: 55,  base_value: 36,  type: "armor",  category: "armor" },
-    { id: "reinforced_leather", name: "Reinforced Leather", price: 45,  base_value: 30,  type: "armor",  category: "armor" },
-    { id: "wooden_buckler",     name: "Wooden Buckler",     price: 20,  base_value: 13,  type: "shield", category: "shield" },
-    { id: "iron_shield",        name: "Iron Shield",        price: 50,  base_value: 33,  type: "shield", category: "shield" },
-  ],
+  weaponsmith: [],
+  armorsmith: [],
   herbalist: [
     { id: "ash_salve",           name: "Ash Salve",           price: 12, base_value: 8,  type: "consumable", category: "consumable" },
     { id: "ember_draught",       name: "Ember Draught",       price: 20, base_value: 14, type: "consumable", category: "consumable" },
@@ -63,6 +51,14 @@ export function getItemForSell(itemId, itemData = {}) {
   if (loot) {
     if (loot.unsellable) return null;
     return { ...loot, base_value: loot.base_value };
+  }
+  const eq = EQUIPMENT_DATA[itemId];
+  if (eq) {
+    let category = "armor";
+    if (eq.slot === "weapon_main") category = "weapon";
+    else if (eq.slot === "weapon_offhand" && (eq.sub_type === "shield" || eq.sub_type === "buckler")) category = "shield";
+    else if (eq.slot === "weapon_offhand") category = "weapon";
+    return { base_value: eq.value_am, category, name: eq.name };
   }
   for (const stock of Object.values(VENDOR_STOCK)) {
     const entry = stock.find((s) => s.id === itemId);

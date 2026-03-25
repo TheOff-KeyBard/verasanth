@@ -1,4 +1,5 @@
 import { SEWER_NODES } from "./sewer_nodes.js";
+import { SCAR_NODES } from "./scar_rooms.js";
 import { CRUCIBLE_ROOM } from "./crucible.js";
 import { GUILD_ROOMS } from "./guild_rooms.js";
 
@@ -24,6 +25,11 @@ const NORTH_ROAD_PATCHED = {
   ...WORLD_BASE.north_road,
   exits: { ...WORLD_BASE.north_road.exits, northwest: "threshold_road" },
 };
+const DRAIN_ENTRANCE_SCAR = {
+  ...SEWER_NODES.drain_entrance,
+  exits: { ...SEWER_NODES.drain_entrance.exits, down: "sewer_deep" },
+};
+
 export const WORLD = {
   ...WORLD_BASE,
   crucible: CRUCIBLE_ROOM,
@@ -34,6 +40,8 @@ export const WORLD = {
   north_road: NORTH_ROAD_PATCHED,
   ...GUILD_ROOMS,
   ...SEWER_NODES,
+  drain_entrance: DRAIN_ENTRANCE_SCAR,
+  ...SCAR_NODES,
 };
 
 export const FIRST_VISIT_INTROS = {

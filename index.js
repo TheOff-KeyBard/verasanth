@@ -15,9 +15,18 @@ import { STATUS_EFFECTS } from "./data/status_effects.js";
 import { NPC_LOCATIONS, NPC_NAMES, NPC_TOPICS, BARTENDER_FEE } from "./data/npcs.js";
 import { SERIS_NOTICES, FLAVOR_NOTICES, ANONYMOUS_NOTICES, IMPOSSIBLE_TEMPLATES, BOARD_NPC_REACTIONS } from "./data/board.js";
 import { SERIS_INTEREST_ITEMS, getSellValue, displayNameToKey, TIER_BASE_VALUES } from "./data/seris.js";
-import { VENDOR_STOCK, VENDOR_NPCS, CAELIR_STOCK, VEYRA_STOCK } from "./data/vendor_stock.js";
+import { VENDOR_STOCK, VENDOR_NPCS, CAELIR_STOCK, VEYRA_STOCK, getShopBrowseRows } from "./data/vendor_stock.js";
 import { VENDOR_STOCK as ECON_VENDOR_STOCK, getSellPrice as econGetSellPrice, getItemForSell, rollCashLoot, rollItemDrop, LOOT_ITEMS, REFINED_REAGENTS } from "./data/economy.js";
 import { getNPCResponse, boardNPCReaction } from "./services/npc_dialogue.js";
+import {
+  handleNpcOptionsGet,
+  handleNpcSelectPost,
+  tryAuthoredTalkFromTopic,
+  isPhaseAGameNpc,
+  resolveAuthoredGreeting,
+  incrementPhaseAVisit,
+} from "./services/authored_dialogue.js";
+import { DIALOGUE_REGISTRY, GAME_NPC_TO_CANONICAL } from "./data/dialogue/index.js";
 import { PIP_REACTIONS } from "./data/npc_dialogue_lines.js";
 import { statMod, rollDie, maxPlayerHp, randomEnemy, resolvePlayerAction, resolveEnemyAttack, tickStatusEffects, tickStatuses, resolveEnemyTrait, getTraitDamageModifier, getStatusEffectOnHit, getTraitOnHitEffect, INSTINCT_DEFS } from "./services/combat.js";
 import { resolveUpgradeAbility } from "./services/upgrade_resolver.js";
@@ -31,8 +40,9 @@ import { QUEST_BY_ID } from "./data/quests.js";
 import { rotateSewerCondition } from "./services/sewer_rotation.js";
 import { LEGACY_SLOT_MAP, EQUIPMENT_SLOTS, EQUIPMENT_DATA, INSTINCT_AFFINITIES } from "./data/equipment.js";
 import { getEquipmentSlot, resolveLegacySlot, isValidEquipmentSlot, canEquipItem, equipItem, unequipItem, getEquippedItemMap, getAffinityHint, getCharacterLevel } from "./services/equipment.js";
-import { aggregateEquipmentStats, applyInstinctAffinities, getItemEffectiveStats } from "./services/equipment_stats.js";
+import { aggregateEquipmentStats, applyInstinctAffinities, applyRaceAffinities, getItemEffectiveStats } from "./services/equipment_stats.js";
 import { GUILD_LOCATIONS, getInitialTrialState, getTrialIntro, getTrialActions, handleTrialAction, getTrialStatusBar, ACTION_LABELS } from "./services/trials.js";
+import { handleGuildTrial } from "./services/guild_trials.js";
 
 // ─────────────────────────────────────────────────────────────
 // ECONOMY HELPERS
@@ -439,6 +449,16 @@ function validatePointBuy(stats) {
 
 /** Returns 'weapon' | 'armor' | 'shield' | null for equippable items. */
 function getItemSlot(itemId, displayName) {
+  const eqSlot = getEquipmentSlot(itemId);
+  if (eqSlot === "weapon_main") return "weapon";
+  if (eqSlot === "weapon_offhand") {
+    const d = EQUIPMENT_DATA[itemId];
+    if (d && (d.sub_type === "shield" || d.sub_type === "buckler")) return "shield";
+    return "weapon";
+  }
+  if (eqSlot && ["chest", "head", "hands", "legs", "feet", "cloak", "ring_1", "ring_2", "charm", "relic"].includes(eqSlot)) {
+    return "armor";
+  }
   const name = (displayName || itemId || "").toLowerCase();
   const vendorWeapon = CAELIR_STOCK.find(e => e.id === itemId);
   if (vendorWeapon) return "weapon";
@@ -560,6 +580,38 @@ async function setFlag(db, uid, flag, value = 1) {
     "INSERT INTO player_flags(user_id,flag,value) VALUES(?,?,?) ON CONFLICT(user_id,flag) DO UPDATE SET value=excluded.value",
     [uid, flag.toLowerCase(), Number(value)]
   );
+}
+
+function buildAuthoredDialogueDeps(db, uid) {
+  return {
+    db,
+    dbGet,
+    dbRun,
+    uid,
+    getFlag,
+    setFlag,
+    getPlayerSheet,
+    addItemToInventory,
+  };
+}
+
+const GUILD_TO_NPC = {
+  ashen_archive: "vaelith",
+  broken_banner: "garruk",
+  quiet_sanctum: "halden",
+  veil_market: "lirael",
+  umbral_covenant: "serix",
+  stone_watch: "rhyla",
+};
+
+async function getGuildStanding(db, uid, guild) {
+  const npc = GUILD_TO_NPC[guild] || guild;
+  return await getFlag(db, uid, `guild_standing_${npc}`, 0);
+}
+
+async function setGuildStanding(db, uid, guild, level) {
+  const npc = GUILD_TO_NPC[guild] || guild;
+  await setFlag(db, uid, `guild_standing_${npc}`, level);
 }
 
 async function addItemToInventory(db, uid, itemId, qty = 1) {
@@ -834,6 +886,13 @@ async function initDb(db) {
     user_id INTEGER NOT NULL REFERENCES players(user_id),
     flag TEXT NOT NULL, value INTEGER DEFAULT 1,
     PRIMARY KEY(user_id, flag))`);
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS npc_trust (
+    user_id INTEGER NOT NULL REFERENCES players(user_id),
+    npc_id TEXT NOT NULL,
+    score INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY(user_id, npc_id))`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_npc_trust_player ON npc_trust(user_id, npc_id)`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_player_flags_player ON player_flags(user_id, flag)`);
   await dbRun(db, `CREATE TABLE IF NOT EXISTS inventory (
     user_id INTEGER NOT NULL REFERENCES players(user_id),
     item TEXT NOT NULL, qty INTEGER DEFAULT 1,
@@ -1733,6 +1792,14 @@ if (path === "/api/admin/command" && method === "POST") {
           description += " The gate ahead is sealed. Beyond it, something older waits.";
         }
       }
+      // Scar: dynamic west exit from scar_outer_vein when first_echo_triggered
+      if (loc === "scar_outer_vein") {
+        const echoTriggered = await getFlag(db, uid, "first_echo_triggered");
+        if (echoTriggered) {
+          exits = [...exits, "west"];
+          exit_map.west = "scar_root_passage";
+        }
+      }
       const blocked = await getBlockedRoutes(db);
       for (const e of [...exits]) {
         if (blocked.includes(exit_map[e])) {
@@ -1830,6 +1897,7 @@ if (path === "/api/admin/command" && method === "POST") {
       }
 
       const typedExits = normalizeExits(exit_map);
+      const wardenActive = await getFlag(db, uid, "warden_active");
       const locPayload = {
         location: loc, name: room.name, district: room.district || "", description,
         exits: typedExits,
@@ -1840,12 +1908,134 @@ if (path === "/api/admin/command" && method === "POST") {
         in_combat: roamerEncounter ? true : inCombat,
         fightable: FIGHTABLE_LOCATIONS.has(loc),
         death_drops_present: deathDrops.length > 0,
+        warden_active: !!wardenActive,
       };
       if (roamerEncounter) locPayload.encounter = roamerEncounter;
       if (hazardInRoom) locPayload.hazard = hazardInRoom;
       if (room.pvpve) locPayload.pvpve = room.pvpve;
       if (activeCondition) locPayload.active_condition = activeCondition;
       return json(locPayload);
+    }
+
+    // ── POST: Warden Flee (Scar escape sequence) ──
+    // Order: 1) Advance Warden, 2) Move player, 3) Compare positions. Route performs move internally.
+    if (path === "/api/warden/flee" && method === "POST") {
+      const { direction } = body;
+      if (!direction || typeof direction !== "string") return err("direction required.", 400);
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const wardenActive = await getFlag(db, uid, "warden_active");
+      if (!wardenActive) return err("No pursuit active.", 400);
+
+      const wardenLocation = await getFlag(db, uid, "warden_location", 0);
+      const wardenRooms = ["scar_fragment_chamber", "scar_antechamber", "scar_deep_membrane"];
+      const newWardenLoc = Math.min(wardenLocation + 1, 2);
+      await setFlag(db, uid, "warden_location", newWardenLoc);
+      const wardenCurrentRoom = wardenRooms[newWardenLoc] ?? wardenRooms[2];
+
+      const room = WORLD[row.location];
+      if (!room) return err("You cannot flee from here.", 400);
+      let dest = room.exits?.[direction];
+      if (row.location === "scar_outer_vein" && direction === "west") {
+        const echoTriggered = await getFlag(db, uid, "first_echo_triggered");
+        if (echoTriggered) dest = "scar_root_passage";
+      }
+      const blocked = await getBlockedRoutes(db);
+      if (dest && blocked.includes(dest)) return err("The passage is impassable.", 400);
+      if (!dest) return err(`You can't go ${direction} from here.`, 400);
+      if (!WORLD[dest]) return err("That path leads nowhere.", 400);
+
+      await dbRun(db, "UPDATE players SET location=? WHERE user_id=?", [dest, uid]);
+
+      // Compare Warden room vs player's NEW location (after move)
+      if (wardenCurrentRoom === dest) {
+        const hp = await getPlayerHp(db, uid, row);
+        const damage = Math.floor(Math.random() * 10) + 8;
+        const newHp = Math.max(hp.current - damage, 1);
+        await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [newHp, uid]);
+        const destRoom = WORLD[dest];
+        let caughtExitMap = { ...(destRoom?.exits || {}) };
+        if (dest === "scar_outer_vein") {
+          const echoTriggered = await getFlag(db, uid, "first_echo_triggered");
+          if (echoTriggered) caughtExitMap.west = "scar_root_passage";
+        }
+        return json({
+          ok: true,
+          caught: true,
+          warden_active: true,
+          damage,
+          hp: { current: newHp, max: hp.max },
+          message: `*The Warden reaches you. It does not strike — it claws for the fragment. Something in the impact tears through you.*\n\n*You take ${damage} damage. Move. Now.*`,
+          location: dest,
+          name: destRoom?.name,
+          district: destRoom?.district || "",
+          description: destRoom?.description,
+          exits: normalizeExits(caughtExitMap),
+          exit_map: caughtExitMap,
+          objects: Object.keys(destRoom?.objects || {}),
+          items: [],
+          npcs: [],
+          fightable: false,
+          death_drops_present: false,
+        });
+      }
+
+      if (dest === "scar_breach" || dest === "sewer_deep") {
+        await setFlag(db, uid, "warden_active", 0);
+        await setFlag(db, uid, "warden_location", 0);
+        await setFlag(db, uid, "warden_escaped", 1);
+        const destRoom = WORLD[dest];
+        const destExitMap = { ...(destRoom?.exits || {}) };
+        return json({
+          ok: true,
+          escaped: true,
+          warden_active: false,
+          message: `*You are through the breach. The hole is too narrow. The Warden slows — presses against the opening — and stops.*\n\n*On the other side of the wall, a sound like something vast being denied. Then silence.*\n\n*The fragment pulses once, quietly, against your chest. You are in the sewer. You are alive. The fragment is warm.*`,
+          location: dest,
+          name: destRoom?.name,
+          district: destRoom?.district || "",
+          description: destRoom?.description,
+          exits: normalizeExits(destExitMap),
+          exit_map: destExitMap,
+          objects: Object.keys(destRoom?.objects || {}),
+          items: [],
+          npcs: [],
+          fightable: false,
+          death_drops_present: false,
+        });
+      }
+
+      const WARDEN_PURSUE_MESSAGES = [
+        "*Behind you, the sound of tissue tearing and resealing — the Warden is moving through the membrane.*",
+        "*The spore-veins flare white as the Warden passes through them. It is gaining.*",
+        "*The floor trembles. Something large is moving fast through the passage behind you.*",
+        "*You hear the Warden's biological mass compress to fit the corridor. It does not slow down.*",
+      ];
+      const pursueMsg = WARDEN_PURSUE_MESSAGES[Math.floor(Math.random() * WARDEN_PURSUE_MESSAGES.length)];
+      const destRoom = WORLD[dest];
+      let destExitMap = { ...(destRoom?.exits || {}) };
+      if (dest === "scar_outer_vein") {
+        const echoTriggered = await getFlag(db, uid, "first_echo_triggered");
+        if (echoTriggered) destExitMap.west = "scar_root_passage";
+      }
+      return json({
+        ok: true,
+        caught: false,
+        escaped: false,
+        warden_active: true,
+        message: pursueMsg,
+        location: dest,
+        name: destRoom?.name,
+        district: destRoom?.district || "",
+        description: destRoom?.description,
+        exits: normalizeExits(destExitMap),
+        exit_map: destExitMap,
+        objects: Object.keys(destRoom?.objects || {}),
+        items: [],
+        npcs: [],
+        fightable: false,
+        death_drops_present: false,
+      });
     }
 
     // ── POST: Move ──
@@ -2009,6 +2199,10 @@ if (path === "/api/admin/command" && method === "POST") {
       // Depth flag (sewer floors 2–5)
       if (SEWER_LEVEL_2.includes(dest) || SEWER_LEVEL_3.includes(dest) || SEWER_LEVEL_4.includes(dest) || SEWER_LEVEL_5.includes(dest)) {
         await setFlag(db, uid, "warned_mid_sewer", 1);
+      }
+      if (row.location === "market_square" && dest === "sewer_entrance") {
+        const se = await getFlag(db, uid, "sewer_expeditions", 0);
+        await setFlag(db, uid, "sewer_expeditions", se + 1);
       }
       if (dest === "market_square") {
         await setFlag(db, uid, "has_seen_market_square", 1);
@@ -2691,6 +2885,9 @@ if (path === "/api/admin/command" && method === "POST") {
       if (target === "oddity_shelf" && loc === "still_scale") {
         await setFlag(db, uid, "found_traders_map_shelf", 1);
       }
+      if ((target === "cracked_pipes" && loc === "broken_pipe_room") || (target === "overflow_pipe" && loc === "overflow_channel")) {
+        await setFlag(db, uid, "collected_structural_scrap", 1);
+      }
       if (target === "wall_orders" && loc === "old_maintenance_room") {
         const foundFrag1 = await getFlag(db, uid, "found_dask_fragment_1", 0);
         if (!foundFrag1) {
@@ -2928,6 +3125,7 @@ The city knows.`,
       const hasFlag = await getFlag(db, uid, entry.flag);
       if (hasFlag) return err("Nothing to find.", 404);
       await setFlag(db, uid, entry.flag, 1);
+      if (key === "collapsed_passage:debris_pile") await setFlag(db, uid, "collected_structural_scrap", 1);
       const invRow = await dbGet(db, "SELECT item,qty FROM inventory WHERE user_id=? AND item=?", [uid, entry.item]);
       const displayName = entry.display_name || entry.item;
       if (invRow) {
@@ -3000,6 +3198,51 @@ The city knows.`,
         await setRelationship(db, dbRun, uid, mid, "neutral", 0);
       }
       return json({ ok: true, message: "You have left the party." });
+    }
+
+    // ── POST: Guild Trial (Standing 2–4 mastery) ──
+    if (path === "/api/guild/trial" && method === "POST") {
+      const { guild, trial, choice } = body;
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+
+      const standing = await getGuildStanding(db, uid, guild);
+      const instinct = (row.instinct || "").toLowerCase();
+
+      const GUILD_INSTINCT = {
+        ashen_archive: "shadowbound",
+        broken_banner: "ironblood",
+        quiet_sanctum: "hearthborn",
+        veil_market: "streetcraft",
+        umbral_covenant: "ember_touched",
+        stone_watch: "warden",
+      };
+
+      if (GUILD_INSTINCT[guild] !== instinct) {
+        return err("Your instinct does not align with this guild.");
+      }
+
+      const result = await handleGuildTrial(db, uid, guild, trial, choice, standing, row, {
+        getFlag,
+        setFlag,
+        getGuildStanding,
+        setGuildStanding,
+      });
+      return json(result);
+    }
+
+    // ── GET/POST: Authored NPC dialogue (Phase A) ──
+    const npcOptMatch = path.match(/^\/api\/npc\/([^/]+)\/options$/);
+    if (npcOptMatch && method === "GET" && uid) {
+      const r = await handleNpcOptionsGet(buildAuthoredDialogueDeps(db, uid), npcOptMatch[1]);
+      if (r.error) return err(r.error, r.status);
+      return json(r);
+    }
+    const npcSelMatch = path.match(/^\/api\/npc\/([^/]+)\/select$/);
+    if (npcSelMatch && method === "POST" && uid) {
+      const r = await handleNpcSelectPost(buildAuthoredDialogueDeps(db, uid), npcSelMatch[1], body);
+      if (r.error) return err(r.error, r.status);
+      return json(r);
     }
 
     // ── POST: Talk ──
@@ -3120,6 +3363,15 @@ The city knows.`,
       const guildStandingLirael = await getFlag(db, uid, "guild_standing_lirael") || 0;
       const guildStandingSerix = await getFlag(db, uid, "guild_standing_serix") || 0;
       const guildStandingRhyla = await getFlag(db, uid, "guild_standing_rhyla") || 0;
+      const combatVictories = await getFlag(db, uid, "combat_victories", 0);
+      const sewerExpeditions = await getFlag(db, uid, "sewer_expeditions", 0);
+      const itemsSoldTotal = await getFlag(db, uid, "curator_items_sold", 0);
+      const emberConsumablesUsed = await getFlag(db, uid, "ember_consumables_used", 0);
+      const nearDeathCount = await getFlag(db, uid, "near_death_count", 0);
+      const threatsCleared = await getFlag(db, uid, "threats_cleared", 0);
+      const anomalyReported = await getFlag(db, uid, "anomaly_reported", 0);
+      const foundFoundationStoneFlag = await getFlag(db, uid, "found_foundation_stone", 0);
+      const collectedStructuralScrap = await getFlag(db, uid, "collected_structural_scrap", 0);
       const arc1Climax = await getFlag(db, uid, "arc1_climax_reached", 0);
       const hasResonance = await dbGet(db, "SELECT 1 FROM inventory WHERE user_id=? AND item='ashbound_resonance' AND qty>0", [uid]);
 
@@ -3137,6 +3389,23 @@ The city knows.`,
           serix: guildStandingSerix,
           rhyla: guildStandingRhyla,
         },
+        guild_standings: {
+          ashen_archive: guildStandingVaelith,
+          broken_banner: guildStandingGarruk,
+          quiet_sanctum: guildStandingHalden,
+          veil_market: guildStandingLirael,
+          umbral_covenant: guildStandingSerix,
+          stone_watch: guildStandingRhyla,
+        },
+        combat_victories: combatVictories,
+        sewer_expeditions: sewerExpeditions,
+        items_sold_total: itemsSoldTotal,
+        ember_consumables: emberConsumablesUsed,
+        near_death_count: nearDeathCount,
+        threats_cleared: threatsCleared,
+        anomaly_reported: !!anomalyReported,
+        found_foundation: !!foundFoundationStoneFlag,
+        collected_structural_scrap: !!collectedStructuralScrap,
         alignment: morality >= 40 ? "light" : morality <= -40 ? "dark" : "neutral",
         archetype: row.archetype ?? "Survivor",
         mercy_score: row.alignment_morality ?? row.mercy_score ?? 0,
@@ -3643,6 +3912,65 @@ Pip points more urgently.*
 "Pip is not unique.
 He is the only one still functional.
 But he is not the only one that was made."`,
+            can_offer_trial: canOfferTrial,
+            es_services: esServices,
+          });
+        }
+      }
+
+      const topicTrim = String(topic || "").trim();
+      if (isPhaseAGameNpc(npc)) {
+        if (!topicTrim) {
+          const canon = GAME_NPC_TO_CANONICAL[npc];
+          const dlg = DIALOGUE_REGISTRY[canon];
+          if (dlg) {
+            const gr = await resolveAuthoredGreeting(dlg, db, uid, getFlag, dbGet);
+            await incrementPhaseAVisit(db, uid, npc, getFlag, setFlag, row);
+            await assignNextQuestIfAvailable(db, dbGet, dbAll, dbRun, uid, npc, getFlag);
+            return json({
+              response: gr,
+              can_offer_trial: canOfferTrial,
+              es_services: esServices,
+            });
+          }
+        } else {
+          const authored = await tryAuthoredTalkFromTopic(
+            buildAuthoredDialogueDeps(db, uid),
+            npc,
+            topicTrim,
+          );
+          if (authored) {
+            await assignNextQuestIfAvailable(db, dbGet, dbAll, dbRun, uid, npc, getFlag);
+            return json({
+              response: authored.response,
+              can_offer_trial: canOfferTrial,
+              es_services: esServices,
+              dialogue_followup: authored.followup,
+              dialogue_fallback: authored.fallback,
+              dialogue_option_id: authored.option_id ?? null,
+            });
+          }
+          const dlgAfterAuthored = DIALOGUE_REGISTRY[GAME_NPC_TO_CANONICAL[npc]];
+          if (dlgAfterAuthored) {
+            await incrementPhaseAVisit(db, uid, npc, getFlag, setFlag, row);
+            await assignNextQuestIfAvailable(db, dbGet, dbAll, dbRun, uid, npc, getFlag);
+            return json({
+              response: dlgAfterAuthored.fallback || "…",
+              can_offer_trial: canOfferTrial,
+              es_services: esServices,
+            });
+          }
+        }
+      }
+
+      // Phase A + authored module: never call Claude (safety net if any path above missed a return).
+      if (isPhaseAGameNpc(npc)) {
+        const dlgPhaseA = DIALOGUE_REGISTRY[GAME_NPC_TO_CANONICAL[npc]];
+        if (dlgPhaseA) {
+          await incrementPhaseAVisit(db, uid, npc, getFlag, setFlag, row);
+          await assignNextQuestIfAvailable(db, dbGet, dbAll, dbRun, uid, npc, getFlag);
+          return json({
+            response: dlgPhaseA.fallback || "…",
             can_offer_trial: canOfferTrial,
             es_services: esServices,
           });
@@ -4258,7 +4586,13 @@ if (path === "/api/combat/state" && method === "GET") {
       const state    = JSON.parse(csRow.state_json);
       const instinct = (row.instinct || "").toLowerCase();
       const enemy    = COMBAT_DATA.enemies[state.enemy_id];
-      const stats    = { strength: row.strength, dexterity: row.dexterity, constitution: row.constitution };
+      const stats    = {
+        strength: row.strength,
+        dexterity: row.dexterity,
+        constitution: row.constitution,
+        intelligence: row.intelligence,
+        wisdom: row.wisdom,
+      };
 
       if (!enemy) return err("Combat state invalid. Flee to reset.");
 
@@ -4267,6 +4601,10 @@ if (path === "/api/combat/state" && method === "GET") {
           await dbRun(db, "DELETE FROM combat_state WHERE user_id=?", [uid]);
         } catch {}
         await updateAlignment(db, uid, 0, -1, instinct);
+        if (state.player_hp >= 1 && state.player_hp <= 2) {
+          const ndc = await getFlag(db, uid, "near_death_count", 0);
+          await setFlag(db, uid, "near_death_count", ndc + 1);
+        }
         return json({
           result: "fled",
           player_hp: state.player_hp,
@@ -4301,10 +4639,7 @@ if (path === "/api/combat/state" && method === "GET") {
           .filter((b) => (b.turns_remaining ?? 0) > 0);
       }
 
-      // Equipment stat bonuses (add ON TOP of tier values)
       const equippedItemMap = await getEquippedItemMap(db, dbAll, uid);
-      const baseEquipStats = aggregateEquipmentStats(equippedItemMap);
-      const equippedStats = applyInstinctAffinities(baseEquipStats, equippedItemMap, instinct);
       const activeBonuses = {};
       for (const buff of (state.active_buffs || [])) {
         activeBonuses[buff.stat] = (activeBonuses[buff.stat] || 0) + (buff.value ?? 0);
@@ -4330,6 +4665,20 @@ if (path === "/api/combat/state" && method === "GET") {
       if (inSewer && scoutAccuracy > 0) activeBonuses.accuracy = (activeBonuses.accuracy || 0) + 2;
       if (inSewer && scoutResistance > 0) state.scout_resistance_active = true;
 
+      const baseEquipStats = aggregateEquipmentStats(equippedItemMap);
+      let equipStats = applyRaceAffinities(
+        applyInstinctAffinities(baseEquipStats, equippedItemMap, instinct),
+        row.instinct,
+        row.race || "human",
+      );
+      for (const [k, v] of Object.entries(activeBonuses)) {
+        if (typeof v !== "number") continue;
+        const key = k === "block" ? "block_value" : k;
+        if (["melee_power", "spell_power", "accuracy", "defense", "dodge", "block_value", "healing_power"].includes(key)) {
+          equipStats[key] = (equipStats[key] ?? 0) + v;
+        }
+      }
+
       // 1. Tick status effects (bleed/poison/fire_touch)
       const statusDmg = tickStatusEffects(state);
       let playerHp = state.player_hp - statusDmg;
@@ -4344,8 +4693,7 @@ if (path === "/api/combat/state" && method === "GET") {
 
       const armorBreakReduction = state.armor_break_effects.reduce((s, e) => s + (e.defense_reduction ?? 0), 0);
       const baseTierArmor = Math.max(0, (state.armor_reduction ?? 0) - armorBreakReduction);
-      const equipDefense = (equippedStats.defense || 0) + (activeBonuses.defense || 0);
-      let effectiveArmor = baseTierArmor + equipDefense;
+      let effectiveArmor = baseTierArmor;
 
       // Passive: battle_hardened, stone_guard, quiet_prayer
       const playerHpPercent = (state.player_hp_max ?? 1) > 0 ? (state.player_hp ?? 0) / state.player_hp_max : 0;
@@ -4381,25 +4729,13 @@ if (path === "/api/combat/state" && method === "GET") {
           if (state.ability_used) return err(`${level5Upgrade.display_name} has already been used this combat.`, 400);
           attack = resolveUpgradeAbility(level5Upgrade, row, state, enemy, equippedItemMap);
           state.ability_used = true;
-      } else {
-        state.accuracy_bonus = activeBonuses.accuracy ?? 0;
-        attack = resolvePlayerAction(stats, enemy, true, instinct, state, undefined);
+        } else {
+          state.accuracy_bonus = activeBonuses.accuracy ?? 0;
+          attack = resolvePlayerAction(stats, enemy, true, instinct, state, undefined, equipStats, equippedItemMap);
         }
       } else {
         state.accuracy_bonus = activeBonuses.accuracy ?? 0;
-        attack = resolvePlayerAction(stats, enemy, false, instinct, state, undefined);
-      }
-
-      // Add equipment + buff attack bonus (melee_power or spell_power) — NOT for Level 5 upgrade abilities
-      const usedUpgradeAbility = useAbility && level5Upgrade;
-      if (!usedUpgradeAbility && !attack.heal && attack.dmg != null && attack.dmg > 0) {
-        const weaponMainId = equippedItemMap?.weapon_main;
-        const weaponDef = weaponMainId ? EQUIPMENT_DATA[weaponMainId] : null;
-        const isSpellWeapon = weaponDef && ["wand", "staff"].includes(weaponDef.sub_type || "");
-        const atkBonus = isSpellWeapon
-          ? ((equippedStats.spell_power || 0) + (activeBonuses.spell_power || 0))
-          : ((equippedStats.melee_power || 0) + (activeBonuses.melee_power || 0));
-        attack.dmg = (attack.dmg || 0) + atkBonus;
+        attack = resolvePlayerAction(stats, enemy, false, instinct, state, undefined, equipStats, equippedItemMap);
       }
 
       if (attack.fade_triggered) state.fade_used = true;
@@ -4483,7 +4819,7 @@ if (path === "/api/combat/state" && method === "GET") {
       let enemyDmg = 0;
       let enemyHit = false;
       let enemySkippedStagger = false;
-      let dodged = false;
+      let lastEnemyAttackResult = null;
       const skipRetaliation = attack.skip_retaliation ?? attack.skipRetaliation ?? false;
       const staggered = (state.enemy_statuses?.staggered ?? 0) > 0;
       const stunned = (state.enemy_statuses?.stun ?? 0) > 0;
@@ -4506,14 +4842,18 @@ if (path === "/api/combat/state" && method === "GET") {
               hit: traitResult.replacementAttack.hit,
             };
           } else {
-            const offhandId = equippedItemMap?.weapon_offhand;
-            const offhandDef = offhandId ? EQUIPMENT_DATA[offhandId] : null;
-            const isShield = offhandDef && ["shield", "buckler"].includes(offhandDef.sub_type || "");
-            const effectiveShieldBonus = isShield
-              ? ((state.shield_bonus ?? 0) + (equippedStats.block_value || 0))
-              : (state.shield_bonus ?? 0);
-            attackResult = resolveEnemyAttack(enemy, stats, state.statuses, state.enemy_statuses, effectiveShieldBonus);
+            const legacyShield = state.shield_bonus ?? 0;
+            attackResult = resolveEnemyAttack(
+              enemy,
+              stats,
+              state.statuses,
+              state.enemy_statuses,
+              legacyShield,
+              equipStats,
+              equippedItemMap,
+            );
           }
+          lastEnemyAttackResult = attackResult;
           enemyDmg = attackResult.dmg ?? 0;
           enemyHit = attackResult.hit ?? false;
 
@@ -4536,14 +4876,6 @@ if (path === "/api/combat/state" && method === "GET") {
             const absorbed = Math.min(enemyDmg, shieldVal);
             enemyDmg = Math.max(0, enemyDmg - absorbed);
             if (typeof shieldEntry === "object") shieldEntry.value = Math.max(0, shieldEntry.value - absorbed);
-          }
-
-          // Dodge check
-          const dodgeChance = (equippedStats.dodge || 0) + (activeBonuses.dodge || 0);
-          dodged = dodgeChance > 0 && Math.random() * 100 < dodgeChance;
-          if (dodged && enemyHit) {
-            enemyDmg = 0;
-            enemyHit = false;
           }
 
           if (instinct === "warden" && playerHp < state.player_hp_max * 0.5) enemyDmg = Math.max(0, enemyDmg - 1);
@@ -4643,6 +4975,17 @@ if (path === "/api/combat/state" && method === "GET") {
         if (victoryLoc === "vermin_nest") await setFlag(db, uid, "nest_cleared_floor1", 1);
         await recordEnemyKill(db, dbAll, dbRun, uid, state.enemy_id);
         await setFlag(db, uid, "post_fight_noise", 1);
+
+        const cv = await getFlag(db, uid, "combat_victories", 0);
+        await setFlag(db, uid, "combat_victories", cv + 1);
+        if (FIGHTABLE_LOCATIONS.has(victoryLoc)) {
+          const tc = await getFlag(db, uid, "threats_cleared", 0);
+          await setFlag(db, uid, "threats_cleared", tc + 1);
+        }
+        if (playerHp >= 1 && playerHp <= 2) {
+          const ndc = await getFlag(db, uid, "near_death_count", 0);
+          await setFlag(db, uid, "near_death_count", ndc + 1);
+        }
 
         // Phase 3: Kill tracking for boss spawn conditions
         const killsInLoc = await getFlag(db, uid, `kills_in_${victoryLoc}`, 0);
@@ -4826,7 +5169,7 @@ Something about the room has changed.`;
       await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [playerHp, uid]);
 
       let msg = attack.narrative;
-      if (equippedStats.dual_wield && !attack.heal && (attack.dmg ?? 0) > 0) {
+      if (equipStats.dual_wield && !attack.heal && (attack.dmg ?? 0) > 0) {
         const offhandId = equippedItemMap?.weapon_offhand;
         const offhandDef = offhandId ? EQUIPMENT_DATA[offhandId] : null;
         const offhandPower = offhandDef?.stat_modifiers?.melee_power || 0;
@@ -4836,8 +5179,11 @@ Something about the room has changed.`;
       if (statusDmg > 0) msg += `\n\n*Bleed/poison/fire — ${statusDmg} damage.*`;
       if (state.summoned_minion) msg += `\n\n*${enemy.name} summons something from the ash. A Gutter Rat emerges.*`;
       else if (enemySkippedStagger) msg += `\n\n*${enemy.name} staggers — it loses its turn.*`;
-      else if (dodged) msg += `\n\n*You sidestep the attack.*`;
-      else msg += `\n\n*${enemy.name} retaliates — ${enemyDmg > 0 ? `${enemyDmg} damage.` : "misses."}*`;
+      else {
+        const absorbed = lastEnemyAttackResult?.armor_absorbed ?? 0;
+        const absorbTxt = absorbed > 0 ? ` (${absorbed} absorbed)` : "";
+        msg += `\n\n*${enemy.name} retaliates — ${enemyDmg > 0 ? `${enemyDmg} damage${absorbTxt}.` : "misses."}*`;
+      }
       if (fallRiskMsg) msg += fallRiskMsg;
 
       return json({
@@ -5105,7 +5451,8 @@ Something about the room has changed.`;
       if (!npc_id) return err("Missing npc_id.", 400);
       const npcLoc = NPC_LOCATIONS[npc_id];
       if (!npcLoc || npcLoc !== row.location) return err("Vendor is not here.", 400);
-      const items = ECON_VENDOR_STOCK[npc_id];
+      const catalogRows = getShopBrowseRows(npc_id);
+      const items = catalogRows?.length ? catalogRows : ECON_VENDOR_STOCK[npc_id];
       if (!items) return err("Unknown vendor.", 404);
       return json({ items });
     }
@@ -5310,6 +5657,8 @@ Something about the room has changed.`;
       const combats = service_id === "ember_tonic" ? 5 : 8;
       const flag = service_id === "ember_tonic" ? "buff_ember_tonic_combats_remaining" : "buff_deep_lung_combats_remaining";
       await setFlag(db, uid, flag, combats);
+      const ec = await getFlag(db, uid, "ember_consumables_used", 0);
+      await setFlag(db, uid, "ember_consumables_used", ec + 1);
       return json({ ok: true, message: `*Thalara measures and mixes.*\n\n"Should hold for a few fights."`, new_balance: (row.ash_marks || 0) - cost });
     }
 
@@ -5584,6 +5933,7 @@ Something about the room has changed.`;
 
         const sold = await getFlag(db, uid, "curator_items_sold");
         await setFlag(db, uid, "curator_items_sold", (sold || 0) + sellQty);
+        if (itemId === "refined_pale_growth" || itemId === "refined_spore_extract") await setFlag(db, uid, "sold_refined_reagent", 1);
 
         if (interest) {
           if (interest.arcAdvance && interest.arcStage === 1) await setFlag(db, uid, "seris_arc1_active", 1);
@@ -5621,6 +5971,8 @@ Something about the room has changed.`;
         if (!VENDOR_NPCS[npcId]?.sell) return err("You can't sell to that NPC.", 400);
         const base = (itemDef ? itemDef.value : TIER_BASE_VALUES[Math.min(tier || 1, 6)] ?? 10);
         const value = Math.max(1, Math.floor(base * 0.5)) * sellQty;
+
+        if (itemId === "refined_pale_growth" || itemId === "refined_spore_extract") await setFlag(db, uid, "sold_refined_reagent", 1);
 
         if (invRow.qty <= sellQty) {
           await dbRun(db, "DELETE FROM inventory WHERE user_id=? AND item=?", [uid, itemId]);

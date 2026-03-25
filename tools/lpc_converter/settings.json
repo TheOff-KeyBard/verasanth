@@ -1,0 +1,17 @@
+{
+  "last_source": "D:/Game Assets/lpc-helmets",
+  "output_folder": "D:/Game Assets/lpc-helmets",
+  "cgp_path": "C:\\Steam Games\\steamapps\\common\\CharacterGeneratorPlus",
+  "output_mode": "cgp",
+  "skip_existing": true,
+  "source_folders": [
+    "D:/Game Assets/lpc-helmets",
+    "D:/Game Assets/expansion_pack-0.04",
+    "D:/Game Assets/Children",
+    "D:/Game Assets/FHair",
+    "D:/Game Assets/FHelmets",
+    "D:/Game Assets/LPC Women&#039;s Shirt Pack",
+    "D:/Game Assets/lpc_entry",
+    "D:/Game Assets/MHelmets"
+  ]
+}

@@ -145,6 +145,14 @@
     opacity: 0.85;
     margin-bottom: 8px;
   }
+  .warden-indicator {
+    font-size: 0.75rem;
+    color: var(--danger, #c44);
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    opacity: 0.9;
+    margin-bottom: 8px;
+  }
   .condition-indicator {
     font-size: 0.7rem;
     color: var(--text-muted, #888);
@@ -259,22 +267,6 @@
   .travel-btn {
     min-width: 7rem;
     letter-spacing: 0.03em;
-  }
-  #go-section {
-    margin-top: 0.6rem;
-  }
-  .go-input {
-    width: 100%;
-    max-width: 20rem;
-    padding: 0.4rem 0.6rem;
-    background: var(--bg-dark);
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-family: inherit;
-    font-size: 0.9rem;
-  }
-  .go-input::placeholder {
-    color: var(--text-dim);
   }
   .enter-btn {
     border-color: var(--border-warm, #4a3a2a);
@@ -1276,6 +1268,14 @@
 
   #dialogue-response strong {
     color: var(--ember-glow);
+  }
+
+  #dialogue-authored {
+    padding: 10px 20px 0;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
   }
 
   #dialogue-topics {
@@ -2911,10 +2911,6 @@
         <div class="button-row" id="enter-row"></div>
       </div>
 
-      <div id="go-section" style="display:none">
-        <input type="text" id="go-input" class="go-input" placeholder="Go to... (tavern, market, archive...)" autocomplete="off" />
-      </div>
-
       <div id="objects-section" style="display:none">
         <div class="section-label">Inspect</div>
         <div class="button-row" id="objects-row"></div>
@@ -3072,6 +3068,7 @@
       <button id="dialogue-close" onclick="closeDialogue()">✕</button>
     </div>
     <div id="dialogue-response"></div>
+    <div id="dialogue-authored" style="display:none"></div>
     <div id="dialogue-topics"></div>
     <div id="sell-panel" style="display:none"></div>
   </div>
@@ -3299,6 +3296,8 @@ const API = '';  // use relative paths (same origin)
 
 // Current location (set in renderRoom) for noticeboard and local chat
 let currentGameLocation = '';
+let currentWardenActive = false;
+let currentExitMap = {};
 let currentNoticeboardLocation = '';
 
 // ── Dangerous locations (exit button warning + map node stroke) ───
@@ -3499,6 +3498,26 @@ document.addEventListener('click', () => {
 // ── State ────────────────────────────────────────────────────────
 let vToken = localStorage.getItem('v_token') || '';
 let currentNPC = '';
+/** Phase A NPC dialogue: ES/trial chrome from last /api/talk open */
+let lastDialogueUiMeta = { canOfferTrial: false, esServices: [] };
+/** { optionId, followup } when server returned a follow-up line */
+let authoredPending = null;
+const PHASE_A_NPC_IDS = {
+  bartender: true,
+  weaponsmith: true,
+  armorsmith: true,
+  herbalist: true,
+  curator: true,
+  trader: true,
+  othorion: true,
+  warden: true,
+  garruk: true,
+  halden: true,
+  lirael: true,
+  serix: true,
+  rhyla: true,
+  vaelith: true,
+};
 let npcTopics  = {};
 let combatState = null;
 let lingerTimer = null;
@@ -3535,6 +3554,12 @@ const NPC_NAMES = {
   curator:     'Seris Vantrel',
   othorion:    'Othorion Naxir',
   warden:      'Grommash Nazgrel',
+  vaelith:     'Vaelith Xyrelle',
+  garruk:      'Garruk Stonehide',
+  halden:      'Brother Halden Marr',
+  lirael:      'Lirael Quickstep',
+  serix:       'Serix Vaunt',
+  rhyla:       'Rhyla Thornshield',
 };
 
 const TOPIC_LABELS = {
@@ -3564,6 +3589,116 @@ const TOPIC_LABELS = {
   grommash:'Grommash',
   atelier:'The Atelier',
   yourself:'Yourself', me:'Yourself',
+  inquiry:'The Veiled Inquiry', patterns:'Patterns', silent_room:'The Silent Room',
+  the_line:'The Line', scars:'Scars', oathfire:'The Oathfire',
+  unseen_hand:'The Unseen Hand', kindness:'Kindness', quiet_mirror:'The Quiet Mirror',
+  three_doors:'The Three Doors', profit:'Profit', ledger_of_names:'The Ledger of Names',
+  ember_weighs:'The Ember Weighs', ash_blood:'Ash in the Blood', ashbound_circle:'The Ashbound Circle',
+  faultline:'The Faultline', patterns_stabilized:'Patterns Stabilized', long_watch:'The Long Watch',
+  guild:'The Guild', city:'The City', combat:'Combat', trade:'Trade', ritual:'Ritual', structure:'Structure',
+  sanctuary:'The Sanctuary',
+};
+
+const TRIAL_CHOICES = {
+  vaelith: {
+    inquiry: [
+      { value: 'oldest_source', label: 'The oldest source' },
+      { value: 'corroborated_account', label: 'The corroborated account' },
+      { value: 'dissenting_record', label: 'The dissenting record' },
+    ],
+    silent_room: [
+      { value: 'reveal', label: 'Name the truth' },
+      { value: 'deflect', label: 'Deflect' },
+      { value: 'lie', label: 'Lie' },
+    ],
+  },
+  garruk: {
+    the_line: [
+      { value: 'protect_novices', label: 'Protect the novices' },
+      { value: 'abandon_to_complete', label: 'Abandon them to complete the task' },
+      { value: 'take_burden', label: 'Take the burden yourself' },
+    ],
+    oathfire: [
+      { value: 'person', label: 'A person' },
+      { value: 'principle', label: 'A principle' },
+      { value: 'place', label: 'A place' },
+      { value: 'yourself', label: 'Yourself' },
+    ],
+  },
+  halden: {
+    unseen_hand: [
+      { value: 'help_first', label: 'Help the first person' },
+      { value: 'help_second', label: 'Help the second person' },
+      { value: 'help_neither_find_another_way', label: 'Find another way' },
+    ],
+    quiet_mirror: [
+      { value: 'name_something', label: 'Name something' },
+      { value: 'say_nothing', label: 'Say nothing' },
+      { value: 'say_not_yet', label: 'Not yet' },
+    ],
+  },
+  lirael: {
+    three_doors: [
+      { value: 'risky_trade', label: 'The risky trade' },
+      { value: 'gray_information', label: 'The information exchange' },
+      { value: 'safe_job', label: 'The safe job' },
+    ],
+    ledger_of_names: [
+      { value: 'vouch_kelvaris', label: 'Kelvaris' },
+      { value: 'vouch_caelir', label: 'Caelir' },
+      { value: 'vouch_seris', label: 'Seris Vantrel' },
+    ],
+  },
+  serix: {
+    ember_weighs: [
+      { value: 'offer_memory', label: 'Offer a memory' },
+      { value: 'offer_item', label: 'Offer an item' },
+      { value: 'offer_vow', label: 'Offer a vow' },
+    ],
+    ashbound_circle: [
+      { value: 'change_fear', label: 'Your fear' },
+      { value: 'change_past', label: 'Something in the past' },
+      { value: 'change_nature', label: 'Your nature' },
+      { value: 'change_nothing', label: 'Nothing' },
+    ],
+  },
+  rhyla: {
+    faultline: [
+      { value: 'inspect_gate', label: 'The gate' },
+      { value: 'inspect_wall', label: 'The wall fault' },
+      { value: 'inspect_drain', label: 'The drain' },
+    ],
+    long_watch: [
+      { value: 'protect_the_weak', label: 'The weak' },
+      { value: 'protect_the_structure', label: 'The structure' },
+      { value: 'protect_the_truth', label: 'The truth' },
+      { value: 'protect_nothing_yet', label: "I don't know yet" },
+    ],
+  },
+};
+
+const TOPIC_TO_TRIAL = {
+  inquiry: 'veiled_inquiry', silent_room: 'silent_room',
+  the_line: 'the_line', oathfire: 'oathfire',
+  unseen_hand: 'unseen_hand', quiet_mirror: 'quiet_mirror',
+  three_doors: 'three_doors', ledger_of_names: 'ledger_of_names',
+  ember_weighs: 'ember_weighs', ashbound_circle: 'ashbound_circle',
+  faultline: 'faultline', long_watch: 'long_watch',
+};
+
+const NPC_TO_GUILD = {
+  vaelith: 'ashen_archive', garruk: 'broken_banner',
+  halden: 'quiet_sanctum', lirael: 'veil_market',
+  serix: 'umbral_covenant', rhyla: 'stone_watch',
+};
+
+const DEMO_GATE_TRIALS = {
+  vaelith: { patterns: 'patterns_gate' },
+  garruk: { scars: 'scars_gate' },
+  halden: { kindness: 'kindness_gate' },
+  lirael: { profit: 'profit_gate' },
+  serix: { ash_blood: 'ash_gate' },
+  rhyla: { patterns_stabilized: 'patterns_gate' },
 };
 
 const TOPIC_GATES = {
@@ -5149,10 +5284,24 @@ function renderConditionIndicator(activeCondition) {
   else document.getElementById('room-name').after(el);
 }
 
+function renderWardenIndicator(wardenActive) {
+  const existing = document.getElementById('warden-indicator');
+  if (existing) existing.remove();
+  if (!wardenActive) return;
+  const el = document.createElement('div');
+  el.id = 'warden-indicator';
+  el.className = 'warden-indicator';
+  el.textContent = 'WARDEN ACTIVE';
+  document.getElementById('room-name').after(el);
+}
+
 function renderRoom(data) {
   document.getElementById('room-name').textContent = data.name || '—';
   renderHazardWarning(data.hazard || null);
   renderConditionIndicator(data.active_condition || null);
+  currentWardenActive = !!(data.warden_active ?? currentWardenActive);
+  currentExitMap = data.exit_map || {};
+  renderWardenIndicator(currentWardenActive);
   document.getElementById('room-desc').innerHTML   = render(data.description || '');
   const district = data.district || '';
   const locationText = district ? (data.name || '—') + ' — ' + district : (data.name || data.location || '—');
@@ -5175,8 +5324,8 @@ function renderRoom(data) {
       const dangerous = dest && DANGEROUS_LOCATIONS.has(dest);
       const b = document.createElement('button');
       b.className = 'btn exit-btn travel-btn' + (dangerous ? ' exit-btn--danger' : '');
-      b.textContent = name + (dangerous ? ' ⚠' : '');
-      b.onclick = () => doMove(dest ? { target: dest } : { direction: dir });
+      b.textContent = currentWardenActive ? ('→ Run ' + dir) : (name + (dangerous ? ' ⚠' : ''));
+      b.onclick = () => doMove(currentWardenActive ? { direction: dir } : (dest ? { target: dest } : { direction: dir }));
       travelRow.appendChild(b);
     });
     document.getElementById('travel-section').style.display = '';
@@ -5188,11 +5337,11 @@ function renderRoom(data) {
       const b = document.createElement('button');
       b.className = 'btn exit-btn travel-btn';
       const arrow = exit.direction ? (DIRECTION_ARROWS[exit.direction] || '') : '';
-      b.textContent = (arrow ? arrow + ' ' : '') + (exit.label || exit.target);
+      b.textContent = currentWardenActive ? ('→ Run ' + (exit.direction || exit.target)) : ((arrow ? arrow + ' ' : '') + (exit.label || exit.target));
       const dest = exit.target;
       const dangerous = dest && DANGEROUS_LOCATIONS.has(dest);
-      if (dangerous) { b.className += ' exit-btn--danger'; b.textContent += ' ⚠'; }
-      b.onclick = () => doMove({ target: dest });
+      if (dangerous && !currentWardenActive) { b.className += ' exit-btn--danger'; b.textContent += ' ⚠'; }
+      b.onclick = () => doMove(currentWardenActive && exit.direction ? { direction: exit.direction } : { target: dest });
       travelRow.appendChild(b);
     });
     enterExits.forEach(exit => {
@@ -5207,20 +5356,6 @@ function renderRoom(data) {
     });
     document.getElementById('travel-section').style.display = travelExits.length ? '' : 'none';
     document.getElementById('enter-section').style.display = enterExits.length ? '' : 'none';
-  }
-
-  const goSection = document.getElementById('go-section');
-  if (goSection) goSection.style.display = data.location ? '' : 'none';
-
-  const goInput = document.getElementById('go-input');
-  if (goInput && !goInput.dataset.goBound) {
-    goInput.dataset.goBound = '1';
-    goInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        doGo(goInput.value);
-      }
-    });
   }
 
   if (window.updateSidebarMap) window.updateSidebarMap(data.location, visitedSet, { ...LOCATION_NAMES, ...locationNamesMap }, data.district);
@@ -5333,39 +5468,31 @@ async function doSearchArea() {
 }
 
 // ── Movement ─────────────────────────────────────────────────────
-async function doGo(landmark) {
-  const trimmed = (landmark || '').trim();
-  if (!trimmed) return;
-  try {
-    const data = await POST('/api/go', { landmark: trimmed });
-    if (!data.success) {
-      log(`<em>${data.message || "You don't know the way to that place yet."}</em>`);
-      return;
-    }
-    visitedSet.add(data.location);
-    renderRoom(data);
-    startLingerTimer(data.fightable);
-    log(`<em>${data.message || ''}</em>`);
-    refreshSidebar();
-    window.dispatchEvent(new CustomEvent('player-moved', { detail: { location: data.location } }));
-    const goInput = document.getElementById('go-input');
-    if (goInput) goInput.value = '';
-  } catch (e) {
-    log(`<em>${e.message || 'Failed to travel.'}</em>`);
-  }
-}
-
 async function doMove(dirOrTarget) {
   try {
     const body = typeof dirOrTarget === 'object' && dirOrTarget?.target != null
       ? { target: dirOrTarget.target }
       : { direction: typeof dirOrTarget === 'object' ? dirOrTarget?.direction : dirOrTarget };
-    const data = await POST('/api/move', body);
+    let data;
+    if (currentWardenActive) {
+      const dir = body.direction || (body.target && currentExitMap && Object.entries(currentExitMap).find(([, t]) => t === body.target)?.[0]);
+      if (!dir) {
+        log('<em>You cannot flee that way.</em>');
+        return;
+      }
+      data = await POST('/api/warden/flee', { direction: dir });
+      currentWardenActive = !!(data.warden_active ?? false);
+    } else {
+      data = await POST('/api/move', body);
+    }
     const visitFlag = data.location === 'market_square' ? 'has_seen_market_square' : 'visited_' + data.location;
     await POST('/api/flag', { flag: visitFlag, value: 1 }).catch(() => {});
     visitedSet.add(data.location);
     renderRoom(data);
     startLingerTimer(data.fightable);
+    if (data.message) {
+      log(render(data.message));
+    }
     if (data.hazard) {
       log(`<em>${data.hazard.cue_enter}</em>`);
       await new Promise(r => setTimeout(r, 600));
@@ -5382,8 +5509,13 @@ async function doMove(dirOrTarget) {
       await handleAutoEncounter(data.encounter);
     } else if (data.encounter?.triggered) {
       await handleAutoEncounter(data.encounter);
-    } else {
-      log(`<em>You move ${dir}.</em>`);
+    } else if (!data.message) {
+      const moveDir = typeof dirOrTarget === 'object' && dirOrTarget?.direction != null
+        ? dirOrTarget.direction
+        : (typeof dirOrTarget === 'object' && dirOrTarget?.target != null
+          ? (data.name || dirOrTarget.target)
+          : dirOrTarget);
+      log(`<em>You move ${moveDir || 'on'}.</em>`);
     }
     refreshSidebar();
     window.dispatchEvent(new CustomEvent('player-moved', { detail: { location: data.location } }));
@@ -5604,22 +5736,125 @@ function escapeHtml(s) {
 }
 
 // ── Dialogue ─────────────────────────────────────────────────────
+function clearAuthoredDialogueUi() {
+  authoredPending = null;
+  const a = document.getElementById('dialogue-authored');
+  if (a) {
+    a.innerHTML = '';
+    a.style.display = 'none';
+  }
+}
+
+function renderAuthoredOptions(options) {
+  const el = document.getElementById('dialogue-authored');
+  if (!el) return;
+  el.innerHTML = '';
+  if (!options || !options.length) {
+    el.style.display = 'none';
+    return;
+  }
+  el.style.display = 'flex';
+  options.forEach(function(o, i) {
+    const btn = document.createElement('button');
+    btn.className = 'topic-btn';
+    btn.type = 'button';
+    btn.textContent = (i + 1) + '. ' + o.label;
+    btn.onclick = function() { selectAuthoredOption(o.id); };
+    el.appendChild(btn);
+  });
+}
+
+async function refreshAuthoredAfterSelect() {
+  if (!currentNPC || !PHASE_A_NPC_IDS[currentNPC]) return;
+  try {
+    const [flagsData, optData] = await Promise.all([
+      GET('/api/character/flags').catch(() => ({})),
+      GET('/api/npc/' + encodeURIComponent(currentNPC) + '/options').catch(() => null),
+    ]);
+    const flags = flagsData && typeof flagsData === 'object' ? flagsData : {};
+    if (optData && optData.ok && Array.isArray(optData.options))
+      renderAuthoredOptions(optData.options);
+    renderTopics(currentNPC, flags, lastDialogueUiMeta);
+  } catch (_) {}
+}
+
+async function selectAuthoredOption(optionId) {
+  if (!currentNPC) return;
+  document.getElementById('dialogue-response').innerHTML = '<span class="spinner"></span>';
+  clearAuthoredDialogueUi();
+  try {
+    const data = await POST('/api/npc/' + encodeURIComponent(currentNPC) + '/select', { option_id: optionId });
+    showDialogueResponse(data.response);
+    if (data.followup && data.followup.label && data.option_id) {
+      authoredPending = { optionId: data.option_id, followup: data.followup };
+      const el = document.getElementById('dialogue-authored');
+      el.style.display = 'flex';
+      const fb = document.createElement('button');
+      fb.className = 'topic-btn';
+      fb.type = 'button';
+      fb.textContent = data.followup.label;
+      fb.onclick = function() { selectAuthoredFollowup(); };
+      el.appendChild(fb);
+    } else {
+      await refreshAuthoredAfterSelect();
+    }
+  } catch (e) {
+    document.getElementById('dialogue-response').innerHTML = render(e.message);
+    await refreshAuthoredAfterSelect();
+  }
+}
+
+async function selectAuthoredFollowup() {
+  if (!currentNPC || !authoredPending) return;
+  const optId = authoredPending.optionId;
+  document.getElementById('dialogue-response').innerHTML = '<span class="spinner"></span>';
+  authoredPending = null;
+  const el = document.getElementById('dialogue-authored');
+  if (el) {
+    el.innerHTML = '';
+    el.style.display = 'none';
+  }
+  try {
+    const data = await POST('/api/npc/' + encodeURIComponent(currentNPC) + '/select', {
+      option_id: optId,
+      followup: true,
+    });
+    showDialogueResponse(data.response);
+    await refreshAuthoredAfterSelect();
+  } catch (e) {
+    document.getElementById('dialogue-response').innerHTML = render(e.message);
+    await refreshAuthoredAfterSelect();
+  }
+}
+
 async function openDialogue(npcId) {
   currentNPC = npcId;
   document.getElementById('dialogue-npc-name').textContent = NPC_NAMES[npcId] || npcId;
   document.getElementById('dialogue-response').innerHTML   = '<span class="spinner"></span>';
+  clearAuthoredDialogueUi();
   document.getElementById('dialogue-overlay').classList.add('open');
 
   try {
+    const isPhaseA = !!PHASE_A_NPC_IDS[npcId];
     const [talkData, topicsData, flagsData] = await Promise.all([
       POST('/api/talk', { npc: npcId, topic: '' }),
       GET(`/api/data/npc/${npcId}/topics`).catch(() => ({ topics: [] })),
       GET('/api/character/flags').catch(() => ({})),
     ]);
+    let optData = null;
+    if (isPhaseA) {
+      optData = await GET('/api/npc/' + encodeURIComponent(npcId) + '/options').catch(() => null);
+    }
     npcTopics[npcId] = topicsData?.topics || [];
     const flags = flagsData && typeof flagsData === 'object' ? flagsData : {};
+    lastDialogueUiMeta = {
+      canOfferTrial: talkData.can_offer_trial,
+      esServices: talkData.es_services || [],
+    };
     showDialogueResponse(talkData.response);
-    renderTopics(npcId, flags, { canOfferTrial: talkData.can_offer_trial, esServices: talkData.es_services || [] });
+    if (optData && optData.ok && Array.isArray(optData.options))
+      renderAuthoredOptions(optData.options);
+    renderTopics(npcId, flags, lastDialogueUiMeta);
     renderSellPanel(npcId);
   } catch(e) {
     document.getElementById('dialogue-response').innerHTML = render(e.message);
@@ -5693,11 +5928,102 @@ async function doSell(itemId, qty, npcId, btn) {
 
 async function askTopic(topic) {
   document.getElementById('dialogue-response').innerHTML = '<span class="spinner"></span>';
+  document.getElementById('dialogue-topics').innerHTML = '';
+  clearAuthoredDialogueUi();
   try {
+    const demoTrial = NPC_TO_GUILD[currentNPC] && DEMO_GATE_TRIALS[currentNPC]?.[topic];
+    if (demoTrial) {
+      const guild = NPC_TO_GUILD[currentNPC];
+      const trial = DEMO_GATE_TRIALS[currentNPC][topic];
+      const data = await POST('/api/guild/trial', { guild, trial });
+      showDialogueResponse(data.message || (data.ok ? 'The trial concludes.' : 'Not yet.'));
+      if (data.ok && data.new_standing) {
+        log('<em>Guild standing is now ' + data.new_standing + '.</em>');
+      }
+      const flagsData = await GET('/api/character/flags').catch(() => ({}));
+      const flags = flagsData && typeof flagsData === 'object' ? flagsData : {};
+      const talkData = await POST('/api/talk', { npc: currentNPC, topic: '' }).catch(() => ({}));
+      lastDialogueUiMeta = { canOfferTrial: talkData.can_offer_trial, esServices: talkData.es_services || [] };
+      renderTopics(currentNPC, flags, lastDialogueUiMeta);
+      if (PHASE_A_NPC_IDS[currentNPC]) {
+        const od = await GET('/api/npc/' + encodeURIComponent(currentNPC) + '/options').catch(() => null);
+        if (od && od.ok && Array.isArray(od.options)) renderAuthoredOptions(od.options);
+      }
+      return;
+    }
     const data = await POST('/api/talk', { npc: currentNPC, topic });
     showDialogueResponse(data.response);
+    if (PHASE_A_NPC_IDS[currentNPC] && data.dialogue_followup && data.dialogue_followup.label && data.dialogue_option_id) {
+      authoredPending = { optionId: data.dialogue_option_id, followup: data.dialogue_followup };
+      const el = document.getElementById('dialogue-authored');
+      el.style.display = 'flex';
+      const fb = document.createElement('button');
+      fb.className = 'topic-btn';
+      fb.type = 'button';
+      fb.textContent = data.dialogue_followup.label;
+      fb.onclick = function() { selectAuthoredFollowup(); };
+      el.appendChild(fb);
+    }
+    const choices = TRIAL_CHOICES[currentNPC]?.[topic];
+    if (choices && choices.length) {
+      const wrap = document.getElementById('dialogue-topics');
+      wrap.innerHTML = '';
+      choices.forEach(function(c) {
+        const btn = document.createElement('button');
+        btn.className = 'topic-btn';
+        btn.textContent = c.label;
+        btn.onclick = () => submitTrialChoice(currentNPC, topic, c.value);
+        wrap.appendChild(btn);
+      });
+    } else {
+      const flagsData = await GET('/api/character/flags').catch(() => ({}));
+      const flags = flagsData && typeof flagsData === 'object' ? flagsData : {};
+      const talkData = await POST('/api/talk', { npc: currentNPC, topic: '' }).catch(() => ({}));
+      lastDialogueUiMeta = { canOfferTrial: talkData.can_offer_trial, esServices: talkData.es_services || [] };
+      renderTopics(currentNPC, flags, lastDialogueUiMeta);
+      if (PHASE_A_NPC_IDS[currentNPC]) {
+        const od = await GET('/api/npc/' + encodeURIComponent(currentNPC) + '/options').catch(() => null);
+        if (od && od.ok && Array.isArray(od.options)) renderAuthoredOptions(od.options);
+      }
+    }
   } catch(e) {
     document.getElementById('dialogue-response').innerHTML = render(e.message);
+    const flagsData = await GET('/api/character/flags').catch(() => ({}));
+    const flags = flagsData && typeof flagsData === 'object' ? flagsData : {};
+    const talkData = await POST('/api/talk', { npc: currentNPC, topic: '' }).catch(() => ({}));
+    lastDialogueUiMeta = { canOfferTrial: talkData?.can_offer_trial, esServices: talkData?.es_services || [] };
+    renderTopics(currentNPC, flags, lastDialogueUiMeta);
+  }
+}
+
+async function submitTrialChoice(npcId, topic, choice) {
+  const trial = TOPIC_TO_TRIAL[topic];
+  const guild = NPC_TO_GUILD[npcId];
+  if (!trial || !guild) return;
+  document.getElementById('dialogue-response').innerHTML = '<span class="spinner"></span>';
+  document.getElementById('dialogue-topics').innerHTML = '';
+  try {
+    const data = await POST('/api/guild/trial', { guild, trial, choice });
+    showDialogueResponse(data.message || 'The trial concludes.');
+    if (data.new_standing) {
+      log('<em>Guild standing is now ' + data.new_standing + '.</em>');
+    }
+    const flagsData = await GET('/api/character/flags').catch(() => ({}));
+    const flags = flagsData && typeof flagsData === 'object' ? flagsData : {};
+    const talkData = await POST('/api/talk', { npc: npcId, topic: '' }).catch(() => ({}));
+    lastDialogueUiMeta = { canOfferTrial: talkData.can_offer_trial, esServices: talkData.es_services || [] };
+    renderTopics(npcId, flags, lastDialogueUiMeta);
+    if (PHASE_A_NPC_IDS[npcId]) {
+      const od = await GET('/api/npc/' + encodeURIComponent(npcId) + '/options').catch(() => null);
+      if (od && od.ok && Array.isArray(od.options)) renderAuthoredOptions(od.options);
+    }
+  } catch(e) {
+    showDialogueResponse(render(e.message));
+    const flagsData = await GET('/api/character/flags').catch(() => ({}));
+    const flags = flagsData && typeof flagsData === 'object' ? flagsData : {};
+    const talkData = await POST('/api/talk', { npc: npcId, topic: '' }).catch(() => ({}));
+    lastDialogueUiMeta = { canOfferTrial: talkData?.can_offer_trial, esServices: talkData?.es_services || [] };
+    renderTopics(npcId, flags, lastDialogueUiMeta);
   }
 }
 
@@ -5798,6 +6124,7 @@ function renderTopics(npcId, flags = {}, opts = {}) {
 
 function closeDialogue() {
   document.getElementById('dialogue-overlay').classList.remove('open');
+  clearAuthoredDialogueUi();
   currentNPC = '';
 }
 
@@ -5812,7 +6139,12 @@ async function useESService(service_id, npcId, extra = {}) {
       if (data.new_es_balance != null) updateWalletES(data.new_es_balance);
       closeESModal();
       const talkData = await POST('/api/talk', { npc: npcId, topic: '' });
-      renderTopics(npcId, {}, { canOfferTrial: talkData.can_offer_trial, esServices: talkData.es_services || [] });
+      lastDialogueUiMeta = { canOfferTrial: talkData.can_offer_trial, esServices: talkData.es_services || [] };
+      renderTopics(npcId, {}, lastDialogueUiMeta);
+      if (PHASE_A_NPC_IDS[npcId]) {
+        const od = await GET('/api/npc/' + encodeURIComponent(npcId) + '/options').catch(() => null);
+        if (od && od.ok && Array.isArray(od.options)) renderAuthoredOptions(od.options);
+      }
     } else {
       log('<em>' + escapeHtml(data.message || 'Failed') + '</em>');
     }
