@@ -3,3 +3,9 @@ node_modules/
 .dev.vars
 *.log
 .DS_Store
+tools/lpc_converter/Children_CGP_Test/
+tools/lpc_converter/LPC_Womens_Shirt_Pack_CGP/
+tools/lpc_converter/__pycache__/
+tools/lpc_converter/lpc_source_structure.txt
+tools/lpc_converter/settings.json
+theoffkeybard-web/
