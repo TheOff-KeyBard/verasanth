@@ -2111,6 +2111,7 @@
   .cs-flags-list li { padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
   .cs-flags-list li.unlocked { color: var(--ember-glow); }
   .cs-flags-list li.locked { color: var(--text-dim); }
+  [data-debug] { display: none; }
   .btn-enter-verasanth {
     display: block;
     width: 100%;
@@ -2800,7 +2801,9 @@
         <div id="cs-inv-list" class="cs-inv-list">Nothing carried.</div>
       </div>
       <div id="cs-tab-progression" class="sheet-tab-panel" style="display:none;">
-        <ul id="cs-flags-list"></ul>
+        <div data-debug="true" id="debug-progression">
+          <ul id="cs-flags-list"></ul>
+        </div>
       </div>
       <div class="sheet-divider"></div>
       <button type="button" id="cs-enter-btn" class="btn-enter-verasanth">Enter Verasanth — The Shadow Hearth Awaits</button>
@@ -2868,7 +2871,9 @@
       <div id="panel-tab-standing" class="sheet-panel-content" style="display:none;"></div>
       <div id="panel-tab-stats" class="sheet-panel-content" style="display:none;"></div>
       <div id="panel-tab-inventory" class="sheet-panel-content" style="display:none;"></div>
-      <div id="panel-tab-progression" class="sheet-panel-content" style="display:none;"></div>
+      <div id="panel-tab-progression" class="sheet-panel-content" style="display:none;">
+        <div data-debug="true" id="debug-progression-panel"></div>
+      </div>
     </div>
   </div>
   <div id="map-panel" class="sheet-panel map-panel" style="display:none;">
@@ -4512,7 +4517,7 @@ async function refreshSheetPanel() {
     flagsHtml += '<li class="' + ((flags[id] && Number(flags[id]) > 0) ? 'unlocked' : 'locked') + '">' + ((flags[id] && Number(flags[id]) > 0) ? label : '???') + '</li>';
   }
   flagsHtml += '</ul>';
-  document.getElementById('panel-tab-progression').innerHTML = flagsHtml;
+  document.getElementById('debug-progression-panel').innerHTML = flagsHtml;
 }
 
 async function doLogin() {
@@ -7007,6 +7012,11 @@ window.admin = window.runAdmin = async function adminCmd(line) {
 };
 
 // ── Boot ─────────────────────────────────────────────────────────
+// Debug toggle: window.okbDebug = true to reveal debug panels (reload page after setting)
+if (window.okbDebug) {
+  document.querySelectorAll('[data-debug]')
+    .forEach(el => el.style.display = '');
+}
 init();
 </script>
 </body>
