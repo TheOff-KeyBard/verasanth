@@ -10,7 +10,6 @@ import {
   SERIS_QUESTS,
   GROMMASH_BOUNTIES,
   getNextAssignableQuest,
-  hasDialogueUnlock,
   QUEST_REWARD_ITEMS,
   QUEST_BY_ID,
 } from "../data/quests.js";
@@ -30,6 +29,53 @@ const QUEST_TOPICS = {
   othorion: ["work", "research"],
   warden: ["work", "bounty"],
 };
+
+/**
+ * Quest unlock context read only from D1 (player_flags + quest completions).
+ * Do not merge request/playerContext here — stale or inferred fields could satisfy hasDialogueUnlock incorrectly.
+ */
+async function loadQuestAssignContext(db, uid, getFlag, dbAll) {
+  const t = async (flag) => {
+    const v = await getFlag(db, uid, flag);
+    return !!v && Number(v) > 0;
+  };
+  const n = async (flag) => Number(await getFlag(db, uid, flag, 0)) || 0;
+
+  const visited_drain_entrance = await t("visited_drain_entrance");
+  const visited_overflow_channel = await t("visited_overflow_channel");
+  const visited_vermin_nest = await t("visited_vermin_nest");
+  const visited_fungal_bloom_chamber = await t("visited_fungal_bloom_chamber");
+  const first_sewer_flag = await t("first_sewer_visit");
+
+  const ctx = {
+    visited_drain_entrance,
+    visited_overflow_channel,
+    visited_vermin_nest,
+    visited_fungal_bloom_chamber,
+    first_sewer_visit:
+      first_sewer_flag ||
+      visited_drain_entrance ||
+      visited_overflow_channel ||
+      visited_vermin_nest ||
+      visited_fungal_bloom_chamber,
+    nest_cleared_floor1: await t("nest_cleared_floor1"),
+    boss_floor3: await t("boss_floor3"),
+    thalara_visits: await n("thalara_visits"),
+    caelir_visits: await n("caelir_visits"),
+    othorion_q1_complete: await t("othorion_q1_complete"),
+    othorion_q2_complete: await t("othorion_q2_complete"),
+    thalara_q1_complete: await t("thalara_q1_complete"),
+    thalara_arc_seed: await t("thalara_arc_seed"),
+    caelir_q1_complete: await t("caelir_q1_complete"),
+    caelir_q2_complete: await t("caelir_q2_complete"),
+    seris_arc_interest: await t("seris_arc_interest"),
+    grommash_b1_complete: await t("grommash_b1_complete"),
+  };
+
+  const completedRows = await dbAll(db, "SELECT quest_id FROM quests WHERE user_id=? AND status='complete'", [uid]);
+  ctx.completedQuestIds = completedRows.map((r) => r.quest_id);
+  return ctx;
+}
 
 function computeArchetype(mercy, order, heat) {
   if (heat >= 16) return "Ash Wraith";
@@ -52,42 +98,19 @@ function computeArchetype(mercy, order, heat) {
 
 /**
  * Handle quest turn-in or assignment when player talks to NPC with work topic.
+ * Unlock checks use loadQuestAssignContext (live D1 only — no merged playerContext).
  * Returns { response } if handled, null to fall through to AI.
  */
-export async function handleQuestDialogue(db, dbGet, dbAll, dbRun, uid, npc, topic, ctx, getFlag, setFlag) {
+export async function handleQuestDialogue(db, dbGet, dbAll, dbRun, uid, npc, topic, _playerContext, getFlag, setFlag) {
   if (!QUEST_TOPICS[npc]?.includes(topic)) return null;
 
   const questList = NPC_TO_QUESTS[npc];
   if (!questList) return null;
 
-  // Build quest context (load visited flags for first_sewer_visit)
-  const visitedDrain = await getFlag(db, uid, "visited_drain_entrance");
-  const visitedOverflow = await getFlag(db, uid, "visited_overflow_channel");
-  const visitedVermin = await getFlag(db, uid, "visited_vermin_nest");
-  const visitedFungal = await getFlag(db, uid, "visited_fungal_bloom_chamber");
-  const questCtx = {
-    ...ctx,
-    visited_drain_entrance: !!visitedDrain,
-    visited_overflow_channel: !!visitedOverflow,
-    visited_vermin_nest: !!visitedVermin,
-    visited_fungal_bloom_chamber: !!visitedFungal,
-    first_sewer_visit: !!(visitedDrain || visitedOverflow || visitedVermin || visitedFungal),
-    nest_cleared_floor1: !!(await getFlag(db, uid, "nest_cleared_floor1")),
-    boss_floor3: !!(await getFlag(db, uid, "boss_floor3")),
-    othorion_q1_complete: !!(await getFlag(db, uid, "othorion_q1_complete")),
-    othorion_q2_complete: !!(await getFlag(db, uid, "othorion_q2_complete")),
-    thalara_q1_complete: !!(await getFlag(db, uid, "thalara_q1_complete")),
-    thalara_arc_seed: !!(await getFlag(db, uid, "thalara_arc_seed")),
-    caelir_q1_complete: !!(await getFlag(db, uid, "caelir_q1_complete")),
-    caelir_q2_complete: !!(await getFlag(db, uid, "caelir_q2_complete")),
-    seris_arc_interest: !!(await getFlag(db, uid, "seris_arc_interest")),
-    grommash_b1_complete: !!(await getFlag(db, uid, "grommash_b1_complete")),
-  };
+  const questCtx = await loadQuestAssignContext(db, uid, getFlag, dbAll);
 
   const activeRows = await dbAll(db, "SELECT quest_id, progress FROM quests WHERE user_id=? AND status='active'", [uid]);
   const activeQuestIds = activeRows.map((r) => r.quest_id);
-  const completedRows = await dbAll(db, "SELECT quest_id FROM quests WHERE user_id=? AND status='complete'", [uid]);
-  questCtx.completedQuestIds = completedRows.map((r) => r.quest_id);
 
   // 1. Check turn-in: any active quest for this NPC with objective met?
   for (const q of questList) {
@@ -104,7 +127,6 @@ export async function handleQuestDialogue(db, dbGet, dbAll, dbRun, uid, npc, top
     }
   }
 
-  // 2. Check assignment: can we assign next quest?
   const nextQuest = getNextAssignableQuest(npc, questCtx, activeQuestIds);
   if (nextQuest) {
     const now = Math.floor(Date.now() / 1000);
@@ -131,42 +153,16 @@ export async function handleQuestDialogue(db, dbGet, dbAll, dbRun, uid, npc, top
 }
 
 /**
- * Silently assign the next available quest for this NPC when player talks to them.
- * Call after dialogue response is generated to auto-assign on any conversation.
+ * After Phase A NPC dialogue, assign the next quest if dialogue_unlock is satisfied (live D1 flags only).
  */
 export async function assignNextQuestIfAvailable(db, dbGet, dbAll, dbRun, uid, npcId, getFlag) {
   if (!QUEST_TOPICS[npcId]) return;
   const questList = NPC_TO_QUESTS[npcId];
   if (!questList) return;
 
-  const visitedDrain = await getFlag(db, uid, "visited_drain_entrance");
-  const visitedOverflow = await getFlag(db, uid, "visited_overflow_channel");
-  const visitedVermin = await getFlag(db, uid, "visited_vermin_nest");
-  const visitedFungal = await getFlag(db, uid, "visited_fungal_bloom_chamber");
-  const questCtx = {
-    visited_drain_entrance: !!visitedDrain,
-    visited_overflow_channel: !!visitedOverflow,
-    visited_vermin_nest: !!visitedVermin,
-    visited_fungal_bloom_chamber: !!visitedFungal,
-    first_sewer_visit: !!(visitedDrain || visitedOverflow || visitedVermin || visitedFungal),
-    nest_cleared_floor1: !!(await getFlag(db, uid, "nest_cleared_floor1")),
-    boss_floor3: !!(await getFlag(db, uid, "boss_floor3")),
-    othorion_q1_complete: !!(await getFlag(db, uid, "othorion_q1_complete")),
-    othorion_q2_complete: !!(await getFlag(db, uid, "othorion_q2_complete")),
-    thalara_q1_complete: !!(await getFlag(db, uid, "thalara_q1_complete")),
-    thalara_arc_seed: !!(await getFlag(db, uid, "thalara_arc_seed")),
-    caelir_q1_complete: !!(await getFlag(db, uid, "caelir_q1_complete")),
-    caelir_q2_complete: !!(await getFlag(db, uid, "caelir_q2_complete")),
-    seris_arc_interest: !!(await getFlag(db, uid, "seris_arc_interest")),
-    grommash_b1_complete: !!(await getFlag(db, uid, "grommash_b1_complete")),
-    thalara_visits: await getFlag(db, uid, "thalara_visits", 0),
-    caelir_visits: await getFlag(db, uid, "caelir_visits", 0),
-  };
-
+  const questCtx = await loadQuestAssignContext(db, uid, getFlag, dbAll);
   const activeRows = await dbAll(db, "SELECT quest_id FROM quests WHERE user_id=? AND status='active'", [uid]);
   const activeQuestIds = activeRows.map((r) => r.quest_id);
-  const completedRows = await dbAll(db, "SELECT quest_id FROM quests WHERE user_id=? AND status='complete'", [uid]);
-  questCtx.completedQuestIds = completedRows.map((r) => r.quest_id);
 
   const nextQuest = getNextAssignableQuest(npcId, questCtx, activeQuestIds);
   if (!nextQuest) return;

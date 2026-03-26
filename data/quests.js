@@ -43,7 +43,7 @@ export const THALARA_QUESTS = [
     id: "thalara_q1",
     npc: "herbalist",
     title: "Common Reagents",
-    dialogue_unlock: "first_meeting_thalara",
+    dialogue_unlock: "first_sewer_visit",
     objective: { type: "item", item: "slime_residue", qty: 3 },
     reward: { ash_marks: 60, item: "channel_salt" },
     completion_flag: "thalara_q1_complete",
