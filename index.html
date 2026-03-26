@@ -1270,20 +1270,188 @@
     color: var(--ember-glow);
   }
 
-  #dialogue-authored {
-    padding: 10px 20px 0;
-    border-top: 1px solid var(--border);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px;
+  .dialogue-mode-hint {
+    padding: 8px 24px 0;
+    margin: 0;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    line-height: 1.4;
+    border-bottom: 1px solid transparent;
   }
 
-  #dialogue-topics {
-    padding: 14px 20px 18px;
+  .dialogue-section-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+    padding: 0 2px;
+  }
+
+  #dialogue-suggested-section {
+    padding: 14px 20px 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  #dialogue-authored {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .dialogue-suggested-btn {
+    text-align: left;
+    line-height: 1.35;
+    padding: 8px 14px;
+    border: 1px solid var(--border-warm);
+    background: rgba(0,0,0,0.15);
+  }
+
+  .dialogue-suggested-btn .dialogue-opt-num {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    font-weight: normal;
+    margin-right: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dialogue-suggested-btn .dialogue-opt-label {
+    color: var(--ash-light);
+  }
+
+  .dialogue-expand-suggested {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    background: none;
+    border: 1px dashed var(--border);
+    padding: 6px 12px;
+    cursor: pointer;
+    font-family: var(--font-body);
+  }
+
+  .dialogue-expand-suggested:hover {
+    color: var(--ember-glow);
+    border-color: var(--border-warm);
+  }
+
+  .dialogue-followup-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .dialogue-followup-primary {
+    flex: 1 1 auto;
+    min-width: 140px;
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    border-color: var(--ember-dim);
+    color: var(--ember-glow);
+  }
+
+  .dialogue-back-options {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    font-family: var(--font-body);
+    padding: 4px 0;
+  }
+
+  .dialogue-back-options:hover {
+    color: var(--ash-light);
+  }
+
+  #dialogue-utility-row {
+    padding: 10px 20px;
     border-top: 1px solid var(--border);
     display: flex;
     flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  #dialogue-utility-row .dialogue-leave-btn {
+    margin-left: auto;
+  }
+
+  .dialogue-util-btn {
+    font-size: 0.82rem;
+    padding: 6px 14px;
+  }
+
+  #dialogue-utility-es {
+    padding: 0 20px 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  #dialogue-utility-es .es-services-section {
+    margin: 0;
+    padding-top: 10px;
+    border-top: none;
+  }
+
+  #dialogue-more-topics-wrap {
+    border-top: 1px solid var(--border);
+    padding: 0 20px 16px;
+  }
+
+  .dialogue-more-toggle {
+    width: 100%;
+    text-align: left;
+    padding: 10px 12px;
+    margin-top: 4px;
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+    color: var(--text-dim);
+    background: rgba(0,0,0,0.2);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    font-family: var(--font-body);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .dialogue-more-toggle::after {
+    content: "▸";
+    font-size: 0.7rem;
+    opacity: 0.7;
+    transition: transform 0.15s ease;
+  }
+
+  .dialogue-more-toggle.open::after {
+    transform: rotate(90deg);
+  }
+
+  .dialogue-more-toggle:hover {
+    color: var(--ash-light);
+    border-color: var(--border-warm);
+  }
+
+  #dialogue-more-topics {
+    display: none;
+    flex-wrap: wrap;
     gap: 7px;
+    padding-top: 12px;
+  }
+
+  #dialogue-more-topics .topic-btn {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    border-color: var(--border);
+  }
+
+  #dialogue-more-topics .topic-btn:hover {
+    color: var(--ash-light);
   }
 
   .topic-btn {
@@ -1305,9 +1473,12 @@
   }
 
   .topic-btn.leave-btn {
-    margin-left: auto;
     border-color: var(--border);
     color: var(--text-dim);
+  }
+
+  #dialogue-utility-row .leave-btn {
+    margin-left: auto;
   }
 
   /* ── Trade overlay ─────────────────────────────────────────────── */
@@ -2650,6 +2821,13 @@
       font-size: 0.9rem;
     }
 
+    .dialogue-util-btn,
+    .dialogue-suggested-btn,
+    .dialogue-more-toggle {
+      padding: 10px 16px;
+      font-size: 0.88rem;
+    }
+
     /* Combat box tighter on small screens */
     #combat-box {
       padding: 18px 16px;
@@ -3072,9 +3250,18 @@
       <span id="dialogue-npc-name"></span>
       <button id="dialogue-close" onclick="closeDialogue()">✕</button>
     </div>
+    <p id="dialogue-mode-hint" class="dialogue-mode-hint" style="display:none;" role="note"></p>
     <div id="dialogue-response"></div>
-    <div id="dialogue-authored" style="display:none"></div>
-    <div id="dialogue-topics"></div>
+    <div id="dialogue-suggested-section" style="display:none;">
+      <div class="dialogue-section-label">Suggested responses</div>
+      <div id="dialogue-authored" style="display:none"></div>
+    </div>
+    <div id="dialogue-utility-row"></div>
+    <div id="dialogue-utility-es" style="display:none;"></div>
+    <div id="dialogue-more-topics-wrap" style="display:none;">
+      <button type="button" id="dialogue-more-topics-toggle" class="dialogue-more-toggle" aria-expanded="false">More topics — city, guild, sewers, lore</button>
+      <div id="dialogue-more-topics"></div>
+    </div>
     <div id="sell-panel" style="display:none"></div>
   </div>
 </div>
@@ -3507,6 +3694,11 @@ let currentNPC = '';
 let lastDialogueUiMeta = { canOfferTrial: false, esServices: [] };
 /** { optionId, followup } when server returned a follow-up line */
 let authoredPending = null;
+/** Collapsed by default; expanded topic list under "More topics" */
+let dialogueMoreTopicsOpen = false;
+/** Show all authored options after "+ more" */
+let dialogueSuggestedExpanded = false;
+const DIALOGUE_SUGGESTED_CAP = 5;
 const PHASE_A_NPC_IDS = {
   bartender: true,
   weaponsmith: true,
@@ -5743,11 +5935,34 @@ function escapeHtml(s) {
 // ── Dialogue ─────────────────────────────────────────────────────
 function clearAuthoredDialogueUi() {
   authoredPending = null;
+  dialogueSuggestedExpanded = false;
   const a = document.getElementById('dialogue-authored');
   if (a) {
     a.innerHTML = '';
     a.style.display = 'none';
   }
+  const sec = document.getElementById('dialogue-suggested-section');
+  if (sec) sec.style.display = 'none';
+}
+
+function syncSuggestedSectionVisibility() {
+  const el = document.getElementById('dialogue-authored');
+  const sec = document.getElementById('dialogue-suggested-section');
+  if (!sec || !el) return;
+  const show = el.style.display !== 'none' && el.children.length > 0;
+  sec.style.display = show ? '' : 'none';
+}
+
+function bindMoreTopicsToggle() {
+  const btn = document.getElementById('dialogue-more-topics-toggle');
+  const inner = document.getElementById('dialogue-more-topics');
+  if (!btn || !inner) return;
+  btn.onclick = function() {
+    dialogueMoreTopicsOpen = !dialogueMoreTopicsOpen;
+    inner.style.display = dialogueMoreTopicsOpen ? 'flex' : 'none';
+    btn.classList.toggle('open', dialogueMoreTopicsOpen);
+    btn.setAttribute('aria-expanded', dialogueMoreTopicsOpen ? 'true' : 'false');
+  };
 }
 
 function renderAuthoredOptions(options) {
@@ -5756,17 +5971,58 @@ function renderAuthoredOptions(options) {
   el.innerHTML = '';
   if (!options || !options.length) {
     el.style.display = 'none';
+    syncSuggestedSectionVisibility();
     return;
   }
   el.style.display = 'flex';
-  options.forEach(function(o, i) {
+  const cap = dialogueSuggestedExpanded ? options.length : Math.min(DIALOGUE_SUGGESTED_CAP, options.length);
+  for (let i = 0; i < cap; i++) {
+    const o = options[i];
     const btn = document.createElement('button');
-    btn.className = 'topic-btn';
+    btn.className = 'topic-btn dialogue-suggested-btn';
     btn.type = 'button';
-    btn.textContent = (i + 1) + '. ' + o.label;
+    const num = document.createElement('span');
+    num.className = 'dialogue-opt-num';
+    num.textContent = '[' + (i + 1) + ']';
+    const lab = document.createElement('span');
+    lab.className = 'dialogue-opt-label';
+    lab.textContent = o.label;
+    btn.appendChild(num);
+    btn.appendChild(lab);
     btn.onclick = function() { selectAuthoredOption(o.id); };
     el.appendChild(btn);
+  }
+  if (!dialogueSuggestedExpanded && options.length > DIALOGUE_SUGGESTED_CAP) {
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'dialogue-expand-suggested';
+    more.textContent = 'Show ' + (options.length - DIALOGUE_SUGGESTED_CAP) + ' more…';
+    more.onclick = function() {
+      dialogueSuggestedExpanded = true;
+      renderAuthoredOptions(options);
+    };
+    el.appendChild(more);
+  }
+  syncSuggestedSectionVisibility();
+}
+
+function renderTrialChoiceButtons(npcId, topic, choices) {
+  const el = document.getElementById('dialogue-authored');
+  if (!el) return;
+  el.innerHTML = '';
+  el.style.display = 'flex';
+  choices.forEach(function(c) {
+    const btn = document.createElement('button');
+    btn.className = 'topic-btn dialogue-suggested-btn';
+    btn.type = 'button';
+    const lab = document.createElement('span');
+    lab.className = 'dialogue-opt-label';
+    lab.textContent = c.label;
+    btn.appendChild(lab);
+    btn.onclick = function() { submitTrialChoice(npcId, topic, c.value); };
+    el.appendChild(btn);
   });
+  syncSuggestedSectionVisibility();
 }
 
 async function refreshAuthoredAfterSelect() {
@@ -5793,13 +6049,35 @@ async function selectAuthoredOption(optionId) {
     if (data.followup && data.followup.label && data.option_id) {
       authoredPending = { optionId: data.option_id, followup: data.followup };
       const el = document.getElementById('dialogue-authored');
+      el.innerHTML = '';
       el.style.display = 'flex';
+      const row = document.createElement('div');
+      row.className = 'dialogue-followup-row';
       const fb = document.createElement('button');
-      fb.className = 'topic-btn';
+      fb.className = 'topic-btn dialogue-followup-primary';
       fb.type = 'button';
       fb.textContent = data.followup.label;
       fb.onclick = function() { selectAuthoredFollowup(); };
-      el.appendChild(fb);
+      row.appendChild(fb);
+      const back = document.createElement('button');
+      back.type = 'button';
+      back.className = 'dialogue-back-options';
+      back.textContent = 'Other responses';
+      back.onclick = async function() {
+        authoredPending = null;
+        el.innerHTML = '';
+        el.style.display = 'none';
+        syncSuggestedSectionVisibility();
+        await refreshAuthoredAfterSelect();
+      };
+      row.appendChild(back);
+      el.appendChild(row);
+      syncSuggestedSectionVisibility();
+      const flagsData = await GET('/api/character/flags').catch(() => ({}));
+      const flags = flagsData && typeof flagsData === 'object' ? flagsData : {};
+      const td = await POST('/api/talk', { npc: currentNPC, topic: '' }).catch(() => ({}));
+      lastDialogueUiMeta = { canOfferTrial: td.can_offer_trial, esServices: td.es_services || [] };
+      renderTopics(currentNPC, flags, lastDialogueUiMeta, { minimal: true });
     } else {
       await refreshAuthoredAfterSelect();
     }
@@ -5819,6 +6097,7 @@ async function selectAuthoredFollowup() {
     el.innerHTML = '';
     el.style.display = 'none';
   }
+  syncSuggestedSectionVisibility();
   try {
     const data = await POST('/api/npc/' + encodeURIComponent(currentNPC) + '/select', {
       option_id: optId,
@@ -5834,10 +6113,21 @@ async function selectAuthoredFollowup() {
 
 async function openDialogue(npcId) {
   currentNPC = npcId;
+  dialogueMoreTopicsOpen = false;
+  dialogueSuggestedExpanded = false;
   document.getElementById('dialogue-npc-name').textContent = NPC_NAMES[npcId] || npcId;
   document.getElementById('dialogue-response').innerHTML   = '<span class="spinner"></span>';
   clearAuthoredDialogueUi();
   document.getElementById('dialogue-overlay').classList.add('open');
+  const hint = document.getElementById('dialogue-mode-hint');
+  if (hint) {
+    if (PHASE_A_NPC_IDS[npcId]) {
+      hint.style.display = '';
+      hint.textContent = 'Replies are fixed paths — not open conversation. Use suggested responses, commerce, or More topics.';
+    } else {
+      hint.style.display = 'none';
+    }
+  }
 
   try {
     const isPhaseA = !!PHASE_A_NPC_IDS[npcId];
@@ -5932,8 +6222,10 @@ async function doSell(itemId, qty, npcId, btn) {
 }
 
 async function askTopic(topic) {
+  dialogueMoreTopicsOpen = false;
   document.getElementById('dialogue-response').innerHTML = '<span class="spinner"></span>';
-  document.getElementById('dialogue-topics').innerHTML = '';
+  const moreInner = document.getElementById('dialogue-more-topics');
+  if (moreInner) moreInner.innerHTML = '';
   clearAuthoredDialogueUi();
   try {
     const demoTrial = NPC_TO_GUILD[currentNPC] && DEMO_GATE_TRIALS[currentNPC]?.[topic];
@@ -5958,38 +6250,64 @@ async function askTopic(topic) {
     }
     const data = await POST('/api/talk', { npc: currentNPC, topic });
     showDialogueResponse(data.response);
+    lastDialogueUiMeta = { canOfferTrial: data.can_offer_trial, esServices: data.es_services || [] };
+
     if (PHASE_A_NPC_IDS[currentNPC] && data.dialogue_followup && data.dialogue_followup.label && data.dialogue_option_id) {
       authoredPending = { optionId: data.dialogue_option_id, followup: data.dialogue_followup };
       const el = document.getElementById('dialogue-authored');
+      el.innerHTML = '';
       el.style.display = 'flex';
+      const row = document.createElement('div');
+      row.className = 'dialogue-followup-row';
       const fb = document.createElement('button');
-      fb.className = 'topic-btn';
+      fb.className = 'topic-btn dialogue-followup-primary';
       fb.type = 'button';
       fb.textContent = data.dialogue_followup.label;
       fb.onclick = function() { selectAuthoredFollowup(); };
-      el.appendChild(fb);
+      row.appendChild(fb);
+      const back = document.createElement('button');
+      back.type = 'button';
+      back.className = 'dialogue-back-options';
+      back.textContent = 'Other responses';
+      back.onclick = async function() {
+        authoredPending = null;
+        el.innerHTML = '';
+        el.style.display = 'none';
+        syncSuggestedSectionVisibility();
+        const flagsData2 = await GET('/api/character/flags').catch(() => ({}));
+        const flags2 = flagsData2 && typeof flagsData2 === 'object' ? flagsData2 : {};
+        const talkData2 = await POST('/api/talk', { npc: currentNPC, topic: '' }).catch(() => ({}));
+        lastDialogueUiMeta = { canOfferTrial: talkData2.can_offer_trial, esServices: talkData2.es_services || [] };
+        renderTopics(currentNPC, flags2, lastDialogueUiMeta);
+        if (PHASE_A_NPC_IDS[currentNPC]) {
+          const od = await GET('/api/npc/' + encodeURIComponent(currentNPC) + '/options').catch(() => null);
+          if (od && od.ok && Array.isArray(od.options)) renderAuthoredOptions(od.options);
+        }
+      };
+      row.appendChild(back);
+      el.appendChild(row);
+      syncSuggestedSectionVisibility();
+      const flagsData = await GET('/api/character/flags').catch(() => ({}));
+      const flags = flagsData && typeof flagsData === 'object' ? flagsData : {};
+      renderTopics(currentNPC, flags, lastDialogueUiMeta, { minimal: true });
+      return;
     }
     const choices = TRIAL_CHOICES[currentNPC]?.[topic];
     if (choices && choices.length) {
-      const wrap = document.getElementById('dialogue-topics');
-      wrap.innerHTML = '';
-      choices.forEach(function(c) {
-        const btn = document.createElement('button');
-        btn.className = 'topic-btn';
-        btn.textContent = c.label;
-        btn.onclick = () => submitTrialChoice(currentNPC, topic, c.value);
-        wrap.appendChild(btn);
-      });
-    } else {
+      renderTrialChoiceButtons(currentNPC, topic, choices);
       const flagsData = await GET('/api/character/flags').catch(() => ({}));
       const flags = flagsData && typeof flagsData === 'object' ? flagsData : {};
-      const talkData = await POST('/api/talk', { npc: currentNPC, topic: '' }).catch(() => ({}));
-      lastDialogueUiMeta = { canOfferTrial: talkData.can_offer_trial, esServices: talkData.es_services || [] };
-      renderTopics(currentNPC, flags, lastDialogueUiMeta);
-      if (PHASE_A_NPC_IDS[currentNPC]) {
-        const od = await GET('/api/npc/' + encodeURIComponent(currentNPC) + '/options').catch(() => null);
-        if (od && od.ok && Array.isArray(od.options)) renderAuthoredOptions(od.options);
-      }
+      renderTopics(currentNPC, flags, lastDialogueUiMeta, { minimal: true });
+      return;
+    }
+    const flagsData = await GET('/api/character/flags').catch(() => ({}));
+    const flags = flagsData && typeof flagsData === 'object' ? flagsData : {};
+    const talkData = await POST('/api/talk', { npc: currentNPC, topic: '' }).catch(() => ({}));
+    lastDialogueUiMeta = { canOfferTrial: talkData.can_offer_trial, esServices: talkData.es_services || [] };
+    renderTopics(currentNPC, flags, lastDialogueUiMeta);
+    if (PHASE_A_NPC_IDS[currentNPC]) {
+      const od = await GET('/api/npc/' + encodeURIComponent(currentNPC) + '/options').catch(() => null);
+      if (od && od.ok && Array.isArray(od.options)) renderAuthoredOptions(od.options);
     }
   } catch(e) {
     document.getElementById('dialogue-response').innerHTML = render(e.message);
@@ -6006,7 +6324,9 @@ async function submitTrialChoice(npcId, topic, choice) {
   const guild = NPC_TO_GUILD[npcId];
   if (!trial || !guild) return;
   document.getElementById('dialogue-response').innerHTML = '<span class="spinner"></span>';
-  document.getElementById('dialogue-topics').innerHTML = '';
+  const moreInner = document.getElementById('dialogue-more-topics');
+  if (moreInner) moreInner.innerHTML = '';
+  clearAuthoredDialogueUi();
   try {
     const data = await POST('/api/guild/trial', { guild, trial, choice });
     showDialogueResponse(data.message || 'The trial concludes.');
@@ -6042,21 +6362,39 @@ function normalizeTopicKey(t) {
   return s.replace(/\s+/g, '_').replace(/^_+|_+$/g, '');
 }
 
-function renderTopics(npcId, flags = {}, opts = {}) {
-  const wrap = document.getElementById('dialogue-topics');
-  wrap.innerHTML = '';
-  if (opts.canOfferTrial) {
-    const trialBtn = document.createElement('button');
-    trialBtn.className = 'topic-btn';
-    trialBtn.textContent = 'Begin Trial';
-    trialBtn.onclick = () => { closeDialogue(); startTrial(npcId); };
-    wrap.appendChild(trialBtn);
+function renderTopics(npcId, flags = {}, opts = {}, mode = {}) {
+  const minimal = mode.minimal === true;
+  const utilRow = document.getElementById('dialogue-utility-row');
+  const utilEs = document.getElementById('dialogue-utility-es');
+  const moreWrap = document.getElementById('dialogue-more-topics-wrap');
+  const moreInner = document.getElementById('dialogue-more-topics');
+  const tgl = document.getElementById('dialogue-more-topics-toggle');
+  if (!utilRow || !moreInner || !moreWrap) return;
+
+  utilRow.innerHTML = '';
+  if (utilEs) {
+    utilEs.innerHTML = '';
+    utilEs.style.display = 'none';
   }
+
+  if (!minimal && opts.canOfferTrial) {
+    const trialBtn = document.createElement('button');
+    trialBtn.className = 'topic-btn dialogue-util-btn';
+    trialBtn.type = 'button';
+    trialBtn.textContent = 'Guild Trial';
+    trialBtn.onclick = function() { closeDialogue(); startTrial(npcId); };
+    utilRow.appendChild(trialBtn);
+  }
+
   const esServices = opts.esServices || [];
-  if (esServices.length > 0) {
+  if (!minimal && esServices.length > 0 && utilEs) {
+    utilEs.style.display = '';
     const esSection = document.createElement('div');
     esSection.className = 'es-services-section';
-    esSection.innerHTML = '<div class="es-services-title">Ember Shard Services</div>';
+    const titleEl = document.createElement('div');
+    titleEl.className = 'es-services-title';
+    titleEl.textContent = 'Ember Shard services';
+    esSection.appendChild(titleEl);
     esServices.forEach(function(svc) {
       const item = document.createElement('div');
       item.className = 'es-service-item';
@@ -6064,7 +6402,7 @@ function renderTopics(npcId, flags = {}, opts = {}) {
       btn.className = 'btn es-btn' + (svc.available ? '' : ' disabled');
       btn.disabled = !svc.available;
       btn.innerHTML = svc.name + ' <span class="es-cost">[' + svc.cost + ' ES]</span>';
-      btn.title = svc.reason || svc.description;
+      btn.title = svc.reason || svc.description || '';
       btn.onclick = function() {
         if (svc.service_id === 'resonance_tuning') openResonanceTuningModal(npcId, svc);
         else if (svc.service_id === 'hidden_lore') openHiddenLoreModal(npcId, svc);
@@ -6077,60 +6415,88 @@ function renderTopics(npcId, flags = {}, opts = {}) {
       item.appendChild(desc);
       esSection.appendChild(item);
     });
-    wrap.appendChild(esSection);
+    utilEs.appendChild(esSection);
   }
-  const vendor = VENDOR_NPCS[npcId];
 
-  if (vendor) {
+  const vendor = VENDOR_NPCS[npcId];
+  if (!minimal && vendor) {
     if (vendor.buy) {
       const buyBtn = document.createElement('button');
-      buyBtn.className = 'topic-btn';
+      buyBtn.className = 'topic-btn dialogue-util-btn';
+      buyBtn.type = 'button';
       buyBtn.textContent = 'Buy';
-      buyBtn.onclick = () => openTradeBuy(npcId);
-      wrap.appendChild(buyBtn);
+      buyBtn.onclick = function() { openTradeBuy(npcId); };
+      utilRow.appendChild(buyBtn);
     }
     if (vendor.sell) {
       const sellBtn = document.createElement('button');
-      sellBtn.className = 'topic-btn';
+      sellBtn.className = 'topic-btn dialogue-util-btn';
+      sellBtn.type = 'button';
       sellBtn.textContent = 'Sell';
-      sellBtn.onclick = () => openTradeSell(npcId);
-      wrap.appendChild(sellBtn);
+      sellBtn.onclick = function() { openTradeSell(npcId); };
+      utilRow.appendChild(sellBtn);
     }
   }
 
+  const leave = document.createElement('button');
+  leave.className = 'topic-btn leave-btn dialogue-util-btn dialogue-leave-btn';
+  leave.type = 'button';
+  leave.textContent = 'Leave';
+  leave.onclick = closeDialogue;
+  utilRow.appendChild(leave);
+
+  moreInner.innerHTML = '';
   const gates = TOPIC_GATES[npcId];
-  const rawTopics = (npcTopics[npcId] || []).filter(t => {
+  const rawTopics = (npcTopics[npcId] || []).filter(function(t) {
     if (t === npcId || TOPIC_TO_NPC[t] === npcId) return false;
     const gate = gates && gates[t];
     return gate == null || (flags[gate] && Number(flags[gate]) > 0);
   });
   const seen = new Map();
   const topics = [];
-  for (const t of rawTopics) {
+  for (let ti = 0; ti < rawTopics.length; ti++) {
+    const t = rawTopics[ti];
     const norm = normalizeTopicKey(t);
     if (!seen.has(norm)) {
       seen.set(norm, { originalKey: t, label: TOPIC_LABELS[t] || t });
       topics.push(seen.get(norm));
     }
   }
-  topics.forEach(({ originalKey, label }) => {
-    const b = document.createElement('button');
-    b.className = 'topic-btn';
-    b.textContent = label;
-    b.onclick = () => askTopic(originalKey);
-    wrap.appendChild(b);
-  });
-  const leave = document.createElement('button');
-  leave.className = 'topic-btn leave-btn';
-  leave.textContent = 'Leave';
-  leave.onclick = closeDialogue;
-  wrap.appendChild(leave);
+
+  if (minimal || topics.length === 0) {
+    moreWrap.style.display = 'none';
+    dialogueMoreTopicsOpen = false;
+    moreInner.style.display = 'none';
+    if (tgl) {
+      tgl.classList.remove('open');
+      tgl.setAttribute('aria-expanded', 'false');
+    }
+  } else {
+    moreWrap.style.display = '';
+    topics.forEach(function(entry) {
+      const b = document.createElement('button');
+      b.className = 'topic-btn';
+      b.type = 'button';
+      b.textContent = entry.label;
+      b.onclick = function() { askTopic(entry.originalKey); };
+      moreInner.appendChild(b);
+    });
+    bindMoreTopicsToggle();
+    moreInner.style.display = dialogueMoreTopicsOpen ? 'flex' : 'none';
+    if (tgl) {
+      tgl.classList.toggle('open', dialogueMoreTopicsOpen);
+      tgl.setAttribute('aria-expanded', dialogueMoreTopicsOpen ? 'true' : 'false');
+    }
+  }
 }
 
 function closeDialogue() {
   document.getElementById('dialogue-overlay').classList.remove('open');
+  dialogueMoreTopicsOpen = false;
   clearAuthoredDialogueUi();
   currentNPC = '';
+  const hint = document.getElementById('dialogue-mode-hint');
+  if (hint) hint.style.display = 'none';
 }
 
 // ── ES Services ───────────────────────────────────────────────────
