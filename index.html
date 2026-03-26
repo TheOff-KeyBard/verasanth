@@ -1270,17 +1270,6 @@
     color: var(--ember-glow);
   }
 
-  .dialogue-mode-hint {
-    padding: 8px 24px 0;
-    margin: 0;
-    font-size: 0.72rem;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-dim);
-    line-height: 1.4;
-    border-bottom: 1px solid transparent;
-  }
-
   .dialogue-section-label {
     font-size: 0.68rem;
     letter-spacing: 0.12em;
@@ -3250,7 +3239,6 @@
       <span id="dialogue-npc-name"></span>
       <button id="dialogue-close" onclick="closeDialogue()">✕</button>
     </div>
-    <p id="dialogue-mode-hint" class="dialogue-mode-hint" style="display:none;" role="note"></p>
     <div id="dialogue-response"></div>
     <div id="dialogue-suggested-section" style="display:none;">
       <div class="dialogue-section-label">Suggested responses</div>
@@ -6119,15 +6107,6 @@ async function openDialogue(npcId) {
   document.getElementById('dialogue-response').innerHTML   = '<span class="spinner"></span>';
   clearAuthoredDialogueUi();
   document.getElementById('dialogue-overlay').classList.add('open');
-  const hint = document.getElementById('dialogue-mode-hint');
-  if (hint) {
-    if (PHASE_A_NPC_IDS[npcId]) {
-      hint.style.display = '';
-      hint.textContent = 'Replies are fixed paths — not open conversation. Use suggested responses, commerce, or More topics.';
-    } else {
-      hint.style.display = 'none';
-    }
-  }
 
   try {
     const isPhaseA = !!PHASE_A_NPC_IDS[npcId];
@@ -6495,8 +6474,6 @@ function closeDialogue() {
   dialogueMoreTopicsOpen = false;
   clearAuthoredDialogueUi();
   currentNPC = '';
-  const hint = document.getElementById('dialogue-mode-hint');
-  if (hint) hint.style.display = 'none';
 }
 
 // ── ES Services ───────────────────────────────────────────────────
