@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <meta name="theme-color" content="#0d0b08">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -508,6 +508,28 @@
   }
 
   .stat-val { color: var(--text); }
+
+  #char-sound-toggle {
+    display: block;
+    width: 100%;
+    margin-top: 12px;
+    padding: 8px 0;
+    text-align: left;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    background: none;
+    border: none;
+    cursor: pointer;
+    opacity: 0.78;
+    font-family: var(--font-body);
+  }
+  #char-sound-toggle:hover,
+  #char-sound-toggle:focus-visible {
+    color: var(--ash-light);
+    opacity: 1;
+    outline: none;
+  }
 
   /* HP bar */
   #hp-bar-wrap {
@@ -1777,8 +1799,20 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    max-height: 100dvh;
+    padding: 24px 16px 80px;
+    box-sizing: border-box;
+  }
+  @media (min-width: 600px) {
+    #auth-screen {
+      justify-content: center;
+      padding-top: 32px;
+    }
   }
 
   #auth-logo {
@@ -2105,26 +2139,69 @@
     background: rgba(0,0,0,0.85);
     z-index: 300;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    max-height: 100dvh;
+    padding: 16px 12px 80px;
+    box-sizing: border-box;
   }
   .tw-modal {
     background: var(--bg2);
     border: 1px solid var(--ember-dim);
     box-shadow: 0 0 24px rgba(196,98,42,0.3);
-    padding: 28px 32px;
-    width: min(420px, 92vw);
-    max-height: 90vh;
+    width: min(420px, 94vw);
+    max-height: min(92dvh, 100%);
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0;
+  }
+  .tw-modal-body {
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding: 24px 24px 12px;
+  }
+  .tw-modal-footer {
+    flex-shrink: 0;
+    padding: 12px 24px 20px;
+    padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
+    background: var(--bg2);
+    border-top: 1px solid var(--border-warm);
+    box-shadow: 0 -8px 24px rgba(0,0,0,0.35);
   }
   .tw-modal h2 { font-family: var(--font-title); font-size: 1.1rem; color: var(--ember-glow); margin-bottom: 12px; }
   .tw-hint { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 16px; }
-  .tw-race-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+  .tw-race-grid {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 10px;
+    margin-bottom: 16px;
+    max-height: min(50dvh, 360px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding-right: 4px;
+  }
+  @media (min-width: 520px) {
+    .tw-race-grid {
+      flex-direction: row;
+      flex-wrap: wrap;
+      max-height: none;
+      overflow-y: visible;
+    }
+  }
   .tw-race-card, .tw-instinct-card {
     text-align: left;
     padding: 12px 14px;
     min-width: 140px;
-    min-height: 60px;
     border: 1px solid var(--border-warm);
     background: var(--bg2);
     color: var(--ash-light);
@@ -2132,6 +2209,9 @@
     cursor: pointer;
     transition: all 0.15s;
     flex: 1 1 200px;
+  }
+  .tw-race-card {
+    min-height: 44px;
   }
   .tw-instinct-card {
     min-width: 240px;
@@ -2179,10 +2259,16 @@
   .tw-pool { font-size: 0.9rem; color: var(--text-dim); margin-bottom: 12px; }
   .tw-msg { min-height: 1.2em; font-size: 0.9rem; margin-bottom: 12px; }
   .tw-msg.err { color: var(--danger); }
-  .tw-actions { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .tw-actions { margin-top: 0; display: flex; gap: 10px; flex-wrap: wrap; }
   .btn-ember.secondary { background: transparent; color: var(--ash-light); border-color: var(--border-warm); }
   .btn-ember.secondary:hover { border-color: var(--gold-dim); color: var(--gold); }
-  .tw-step-sheet { max-height: 75vh; overflow-y: auto; }
+  .tw-step-sheet {
+    max-height: min(58dvh, 420px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tw-sheet-scroll { min-height: 0; }
   .tw-sheet-section { margin-bottom: 24px; }
   .tw-sheet-section-title { font-family: var(--font-title); font-size: 1rem; color: var(--ember-glow); margin-bottom: 4px; }
   .tw-sheet-section-sub { font-style: italic; color: var(--text-dim); font-size: 0.9rem; margin-bottom: 12px; }
@@ -3060,39 +3146,43 @@
 <!-- ── True Welcome (second app) ─────────────────────────────────── -->
 <div id="true-welcome-screen" class="screen-overlay" style="display:none;" aria-hidden="true">
   <div class="tw-modal">
-    <h2 id="tw-title">Choose your lineage</h2>
-    <div id="tw-step-race">
-      <p class="tw-hint">Your lineage shapes your strengths.</p>
-      <div id="tw-race-grid" class="tw-race-grid"></div>
-    </div>
-    <div id="tw-step-instinct" style="display:none;">
-      <p class="tw-hint">Your instinct is permanent. It unlocks a once-per-turn combat ability.</p>
-      <div id="tw-affinity-bonus" class="tw-affinity-bonus" style="display:none;"></div>
-      <div id="tw-instinct-grid" class="tw-instinct-grid"></div>
-    </div>
-    <div id="tw-step-sheet" class="tw-step-sheet" style="display:none;">
-      <div class="tw-sheet-scroll">
-        <section class="tw-sheet-section tw-sheet-name">
-          <h3 class="tw-sheet-section-title">The one thing you remember is your name.</h3>
-          <p class="tw-sheet-section-sub">Everything else is ash.</p>
-          <input type="text" id="tw-create-name" class="tw-create-name-input" placeholder="Your name..." maxlength="32" autocomplete="off">
-        </section>
-        <section class="tw-sheet-section tw-sheet-stats">
-          <h3 class="tw-sheet-section-title stat-title">Distribute Your Echoes</h3>
-          <p class="tw-sheet-section-sub stat-subtitle">Your body remembers more than your mind does.</p>
-          <div class="tw-sheet-pool"><span>Points remaining:</span> <strong id="tw-sheet-pool-remain" class="tw-pool-num">30</strong></div>
-          <div id="tw-sheet-stats-rows" class="tw-sheet-stats-rows"></div>
-        </section>
-        <section class="tw-sheet-section tw-sheet-summary" id="tw-sheet-summary" style="display:none;">
-          <h3 class="tw-sheet-section-title">Summary</h3>
-          <div id="tw-sheet-summary-content" class="tw-sheet-summary-content"></div>
-        </section>
+    <div class="tw-modal-body">
+      <h2 id="tw-title">Choose your lineage</h2>
+      <div id="tw-step-race">
+        <p class="tw-hint">Your lineage shapes your strengths.</p>
+        <div id="tw-race-grid" class="tw-race-grid"></div>
       </div>
+      <div id="tw-step-instinct" style="display:none;">
+        <p class="tw-hint">Your instinct is permanent. It unlocks a once-per-turn combat ability.</p>
+        <div id="tw-affinity-bonus" class="tw-affinity-bonus" style="display:none;"></div>
+        <div id="tw-instinct-grid" class="tw-instinct-grid"></div>
+      </div>
+      <div id="tw-step-sheet" class="tw-step-sheet" style="display:none;">
+        <div class="tw-sheet-scroll">
+          <section class="tw-sheet-section tw-sheet-name">
+            <h3 class="tw-sheet-section-title">The one thing you remember is your name.</h3>
+            <p class="tw-sheet-section-sub">Everything else is ash.</p>
+            <input type="text" id="tw-create-name" class="tw-create-name-input" placeholder="Your name..." maxlength="32" autocomplete="off">
+          </section>
+          <section class="tw-sheet-section tw-sheet-stats">
+            <h3 class="tw-sheet-section-title stat-title">Distribute Your Echoes</h3>
+            <p class="tw-sheet-section-sub stat-subtitle">Your body remembers more than your mind does.</p>
+            <div class="tw-sheet-pool"><span>Points remaining:</span> <strong id="tw-sheet-pool-remain" class="tw-pool-num">30</strong></div>
+            <div id="tw-sheet-stats-rows" class="tw-sheet-stats-rows"></div>
+          </section>
+          <section class="tw-sheet-section tw-sheet-summary" id="tw-sheet-summary" style="display:none;">
+            <h3 class="tw-sheet-section-title">Summary</h3>
+            <div id="tw-sheet-summary-content" class="tw-sheet-summary-content"></div>
+          </section>
+        </div>
+      </div>
+      <div id="tw-msg" class="tw-msg"></div>
     </div>
-    <div id="tw-msg" class="tw-msg"></div>
-    <div class="tw-actions">
-      <button type="button" id="tw-sheet-back-btn" class="btn-ember secondary" style="display:none;">Back</button>
-      <button type="button" id="tw-next-btn" class="btn-ember">Next</button>
+    <div class="tw-modal-footer">
+      <div class="tw-actions">
+        <button type="button" id="tw-sheet-back-btn" class="btn-ember secondary" style="display:none;">Back</button>
+        <button type="button" id="tw-next-btn" class="btn-ember">Next</button>
+      </div>
     </div>
   </div>
 </div>
@@ -3309,6 +3399,7 @@
       <div class="stat-row"><span>XP</span><span class="stat-val" id="stat-xp">—</span></div>
       <div class="stat-row"><span>Level</span><span class="stat-val" id="stat-level">—</span></div>
       <div class="stat-row"><span>Ability</span><span class="stat-val" id="stat-ability">—</span></div>
+      <button type="button" id="char-sound-toggle" aria-pressed="false" title="Sound">🔊 Sounds: On</button>
     </div>
 
     <div id="wallet-panel">
@@ -4818,7 +4909,40 @@ function setupCharacterSheetTabs() {
   });
 }
 
+// Audio mute toggle — checked by all future audio before playing:
+// if (localStorage.getItem("verasanth_muted") === "true") return;
+function getVerasanthMuted() {
+  try {
+    return localStorage.getItem("verasanth_muted") === "true";
+  } catch (e) {
+    return false;
+  }
+}
+window.getVerasanthMuted = getVerasanthMuted;
+function setVerasanthMuted(muted) {
+  try {
+    localStorage.setItem("verasanth_muted", muted ? "true" : "false");
+  } catch (e) {}
+}
+function syncMuteToggleUi() {
+  const btn = document.getElementById("char-sound-toggle");
+  if (!btn) return;
+  const muted = getVerasanthMuted();
+  btn.textContent = muted ? "🔇 Sounds: Off" : "🔊 Sounds: On";
+  btn.setAttribute("aria-pressed", muted ? "true" : "false");
+}
+function initMuteToggle() {
+  const btn = document.getElementById("char-sound-toggle");
+  if (!btn) return;
+  syncMuteToggleUi();
+  btn.onclick = function () {
+    setVerasanthMuted(!getVerasanthMuted());
+    syncMuteToggleUi();
+  };
+}
+
 async function init() {
+  initMuteToggle();
   if (vToken) {
     try {
       const char = await GET('/api/character');
