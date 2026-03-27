@@ -1600,6 +1600,7 @@ async function processMoveTransition(db, uid, row, fromLoc, dest, directionUsed,
 
       let hazardData = null;
       let hazardEncounterBonus = 0;
+      let encounterData = null;
       if (!hubMove) {
       const now = Date.now();
       const activeHazard = await dbGet(db, "SELECT * FROM sewer_hazards WHERE location=? AND expires_at>?", [dest, now]);
@@ -1627,7 +1628,6 @@ async function processMoveTransition(db, uid, row, fromLoc, dest, directionUsed,
       }
 
       // Phase 3: Boss telegraph check — before normal encounter
-      let encounterData = null;
       const telegraphRow = await dbGet(db, "SELECT boss_id, tick FROM boss_telegraph_state WHERE user_id=?", [uid]);
       if (telegraphRow) {
         const def = BOSS_DEFS[telegraphRow.boss_id];

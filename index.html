@@ -2307,6 +2307,8 @@
     cursor: pointer;
     transition: all 0.15s;
     flex: 1 1 200px;
+    overflow: hidden;
+    position: relative;
   }
   .tw-race-card {
     min-height: 44px;
@@ -2318,13 +2320,16 @@
     overflow-wrap: break-word;
   }
   .tw-race-card .tw-race-desc {
-    display: block;
+    display: none;
     margin-top: 8px;
     font-size: 0.76rem;
     line-height: 1.38;
     color: var(--text-dim);
     font-weight: normal;
     overflow-wrap: break-word;
+  }
+  .tw-race-card.selected .tw-race-desc {
+    display: block;
   }
   .tw-race-card:hover, .tw-instinct-card:hover {
     border-color: var(--gold-dim);
@@ -3100,11 +3105,23 @@
   }
 
   #tavern-board-panel {
-    position: fixed; right: 12px; bottom: 300px; z-index: 88;
-    width: min(300px, 92vw); max-height: 240px; display: none;
-    flex-direction: column; background: var(--bg2);
+    position: fixed; inset: 0; z-index: 100;
+    width: 100%; height: 100%;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0,0,0,0.8);
+    flex-direction: column;
+  }
+  #tavern-board-inner {
+    background: var(--bg2);
     border: 1px solid var(--border-warm);
-    box-shadow: 0 4px 24px rgba(0,0,0,0.35);
+    width: min(480px, 92vw);
+    max-height: 80vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 0 60px rgba(0,0,0,0.8);
   }
   .tavern-board-header {
     padding: 8px 12px; font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase;
@@ -3610,14 +3627,27 @@
     <span id="footer-loc" style="font-size:0.8rem;color:var(--text-dim)"></span>
   </div>
 
-  <div id="tavern-board-panel" aria-label="Tavern board">
-    <div class="tavern-board-header">The Board</div>
+  <div id="tavern-board-panel" style="display:none; position:fixed; inset:0; 
+  background:rgba(0,0,0,0.8); z-index:100; justify-content:center; 
+  align-items:center; flex-direction:column;">
+  <div style="background:var(--bg2); border:1px solid var(--border-warm); 
+    width:min(480px,92vw); max-height:80vh; overflow-y:auto; 
+    display:flex; flex-direction:column;
+    box-shadow:0 0 60px rgba(0,0,0,0.8);">
+    <div class="tavern-board-header">THE BOARD</div>
     <div id="tavern-board-list"></div>
     <div class="tavern-board-input-row">
-      <input type="text" id="tavern-board-input" maxlength="200" placeholder="Leave a message..." autocomplete="off" aria-label="Board message" />
-      <button type="button" class="tavern-board-post-btn" id="tavern-board-post-btn">Post</button>
+      <input id="tavern-board-input" placeholder="Leave a message..." maxlength="200">
+      <button class="tavern-board-post-btn" id="tavern-board-post-btn">Post</button>
     </div>
+    <button onclick="document.getElementById('tavern-board-panel').style.display='none'"
+      style="display:block; margin:8px 12px 12px; background:none; 
+      border:1px solid var(--border-warm); color:var(--text-dim); 
+      padding:6px 18px; cursor:pointer; font-family:var(--font-body);">
+      Close
+    </button>
   </div>
+</div>
 
   <!-- Chat panel (Phase 3: global only) -->
   <div id="chat-panel" class="collapsed" aria-label="Chat">
