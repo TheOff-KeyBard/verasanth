@@ -43,6 +43,14 @@ import { getEquipmentSlot, resolveLegacySlot, isValidEquipmentSlot, canEquipItem
 import { aggregateEquipmentStats, applyInstinctAffinities, applyRaceAffinities, getItemEffectiveStats } from "./services/equipment_stats.js";
 import { GUILD_LOCATIONS, getInitialTrialState, getTrialIntro, getTrialActions, handleTrialAction, getTrialStatusBar, ACTION_LABELS } from "./services/trials.js";
 import { handleGuildTrial } from "./services/guild_trials.js";
+import {
+  shouldFireEncounter,
+  pickEncounter,
+  formatNarrativeEncounterAppend,
+  getNarrativeEncounterListIndex,
+  getNarrativeByListIndex,
+  applyNarrativeEncounterEffects,
+} from "./services/encounters.js";
 
 // ─────────────────────────────────────────────────────────────
 // ECONOMY HELPERS
@@ -2150,7 +2158,15 @@ if (path === "/api/admin/command" && method === "POST") {
       if (!dest) return err(`You can't go ${directionUsed || direction || "there"} from here.`);
       if (!WORLD[dest]) return err("That path leads nowhere.");
 
+      const pendingNarrative = await getFlag(db, uid, "active_narrative_encounter", 0);
+      if (pendingNarrative > 0) {
+        await setFlag(db, uid, "active_narrative_encounter", 0);
+      }
+
       await dbRun(db, "UPDATE players SET location=? WHERE user_id=?", [dest, uid]);
+
+      const moveCount = (await getFlag(db, uid, "move_count", 0)) + 1;
+      await setFlag(db, uid, "move_count", moveCount);
 
       // Ambient events
       let ambient = null;
@@ -2595,6 +2611,48 @@ if (path === "/api/admin/command" && method === "POST") {
       }
       // ── End encounter check ─────────────────────────────────────────
 
+      let narrativeEncounter = null;
+      if (!encounterData) {
+        const lastEncMove = await getFlag(db, uid, "last_encounter_move", 0);
+        if (shouldFireEncounter(dest, moveCount, lastEncMove)) {
+          const flagRows = await dbAll(
+            db,
+            "SELECT flag, value FROM player_flags WHERE user_id=?",
+            [uid],
+          );
+          const flagsObj = {};
+          for (const r of flagRows) flagsObj[r.flag] = r.value;
+          const pick = pickEncounter(dest, flagsObj);
+          if (pick) {
+            destDescription += formatNarrativeEncounterAppend(
+              pick.tier,
+              pick.encounter,
+            );
+            await setFlag(db, uid, "last_encounter_move", moveCount);
+            if (pick.tier === "social" || pick.tier === "lore") {
+              const nidx = getNarrativeEncounterListIndex(
+                pick.tier,
+                pick.encounter.id,
+              );
+              if (nidx > 0) {
+                await setFlag(db, uid, "active_narrative_encounter", nidx);
+              }
+              narrativeEncounter = {
+                tier: pick.tier,
+                id: pick.encounter.id,
+                awaiting_choice: true,
+              };
+            } else {
+              narrativeEncounter = {
+                tier: pick.tier,
+                id: pick.encounter.id,
+                awaiting_choice: false,
+              };
+            }
+          }
+        }
+      }
+
       // PvPvE: Ash Heart Chamber group warning when solo
       let pvpveWarning = null;
       if (dest === "ash_heart_chamber") {
@@ -2613,12 +2671,52 @@ if (path === "/api/admin/command" && method === "POST") {
         fightable: FIGHTABLE_LOCATIONS.has(dest),
         death_drops_present: deathDrops.length > 0,
         encounter: encounterData,
+        ...(narrativeEncounter
+          ? { narrative_encounter: narrativeEncounter }
+          : {}),
       };
       if (hazardData) movePayload.hazard = hazardData;
       if (destRoom.pvpve) movePayload.pvpve = destRoom.pvpve;
       if (pvpveWarning) movePayload.pvpve_warning = pvpveWarning;
       if (destActiveCondition) movePayload.active_condition = destActiveCondition;
       return json(movePayload);
+    }
+
+    // ── POST: Narrative random encounter choice ──
+    if (path === "/api/encounter/respond" && method === "POST") {
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const inCombat = await dbGet(db, "SELECT 1 FROM combat_state WHERE user_id=?", [uid]);
+      if (inCombat) return err("You're in combat.", 400);
+      const idx = await getFlag(db, uid, "active_narrative_encounter", 0);
+      if (idx < 1) return err("No active encounter.", 400);
+      const entry = getNarrativeByListIndex(idx);
+      if (!entry || entry.tier === "ambient") return err("No active encounter.", 400);
+      const choice = Number(body.choice_index);
+      if (!Number.isFinite(choice) || !Number.isInteger(choice) || choice < 0) {
+        return err("choice_index required (non-negative integer).", 400);
+      }
+      const { tier, encounter } = entry;
+      if (choice === 0) {
+        await setFlag(db, uid, "active_narrative_encounter", 0);
+        if (tier === "lore" && encounter.once && encounter.effects?.set_flag) {
+          await setFlag(db, uid, encounter.effects.set_flag, 1);
+        }
+        return json({
+          ok: true,
+          response: encounter.ignore_text || "You move on.",
+        });
+      }
+      const opt = encounter.options?.[choice - 1];
+      if (!opt) return err("Invalid choice.", 400);
+      await setFlag(db, uid, "active_narrative_encounter", 0);
+      if (encounter.effects) {
+        await applyNarrativeEncounterEffects(db, uid, setFlag, encounter.effects);
+      }
+      if (opt.effects) {
+        await applyNarrativeEncounterEffects(db, uid, setFlag, opt.effects);
+      }
+      return json({ ok: true, response: opt.response });
     }
 
     // ── POST: Go (landmark quick-travel) ──
