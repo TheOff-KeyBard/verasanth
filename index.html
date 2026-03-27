@@ -3392,19 +3392,20 @@
 
 <!-- Pre-auth audio warning -->
 <div id="pre-auth-audio-notice" style="display:none; position:fixed; 
-  bottom: 80px; left: 50%; transform: translateX(-50%);
-  width: min(380px, 90vw);
-  padding:10px 14px; z-index: 50;
-  border: 1px solid var(--border-warm); background:rgba(0,0,0,0.85);
-  font-size:0.8rem; color:var(--text-dim);
-  display:flex; align-items:center; gap:10px;">
+  bottom:52px; right:12px;
+  padding:6px 10px; z-index:50;
+  border:1px solid var(--border-warm); 
+  background:rgba(0,0,0,0.9);
+  font-size:0.72rem; color:var(--text-dim);
+  display:flex; align-items:center; gap:8px;
+  max-width:200px;">
   <button id="pre-auth-mute"
-    style="background:none; border:1px solid var(--border-warm);
-    color:var(--text-dim); padding:4px 10px; cursor:pointer;
-    font-family:var(--font-body); font-size:0.8rem; white-space:nowrap;">
-    🔊 Mute
+    style="background:none; border:none;
+    color:var(--text-dim); padding:2px 4px; 
+    cursor:pointer; font-size:0.85rem;">
+    🔊
   </button>
-  <span>This game contains audio. Mute before entering if needed.</span>
+  <span>Tap to mute audio</span>
 </div>
 
 <!-- ── Auth Screen ──────────────────────────────────────────────── -->
@@ -4874,6 +4875,12 @@ function showScreen(screenId) {
   app.style.display = screenId === 'game' ? 'grid' : 'none';
   if (screenId !== 'game') app.classList.remove('visible');
   tw.style.display = screenId === 'tw' ? 'flex' : 'none';
+
+  // Hide pre-auth audio notice once player moves past auth
+  if (screenId !== 'auth') {
+    const notice = document.getElementById('pre-auth-audio-notice');
+    if (notice) notice.style.display = 'none';
+  }
 }
 
 function needsOnboard(c) {
