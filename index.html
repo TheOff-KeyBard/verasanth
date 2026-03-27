@@ -498,16 +498,100 @@
     margin-bottom: 14px;
   }
 
-  .stat-row {
+  .char-panel-divider {
+    height: 1px;
+    width: 100%;
+    background: rgba(192, 98, 42, 0.25);
+    margin: 12px 0;
+  }
+
+  .context-panel {
+    padding-top: 12px;
+    min-height: 0;
+  }
+  .context-panel .ctx-section-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+    font-family: var(--font-title);
+    margin-bottom: 4px;
+  }
+  .context-panel .ctx-location {
+    font-size: 0.75rem;
+    color: var(--text);
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .context-panel .ctx-flavor {
+    font-size: 0.7rem;
+    font-style: italic;
+    color: var(--text-dim);
+    line-height: 1.45;
+  }
+  .context-panel .ctx-combat-bar {
+    height: 3px;
+    width: 100%;
+    background: var(--border-warm);
+    margin-top: 6px;
+    border-radius: 1px;
+    overflow: hidden;
+  }
+  .context-panel .ctx-combat-bar-fill {
+    height: 100%;
+    background: #c0622a;
+    border-radius: 1px;
+    width: 0%;
+  }
+
+  .cs-inv-section-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    font-family: var(--font-title);
+  }
+  .cs-progress-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 3px 0;
-    font-size: 0.85rem;
-    color: var(--text-dim);
+    white-space: nowrap;
+    gap: 8px;
+    min-width: 0;
   }
-
-  .stat-val { color: var(--text); }
+  .cs-progress-label {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    flex-shrink: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cs-progress-val {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text);
+    flex-shrink: 0;
+  }
+  .cs-inv-after-currency {
+    margin-top: 10px;
+    margin-bottom: 12px;
+  }
+  .sheet-bounty-indicator {
+    margin-top: 10px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,92,122,.35);
+    background: rgba(255,92,122,.08);
+    display: none;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--danger);
+  }
 
   #char-sound-toggle {
     display: block;
@@ -702,6 +786,19 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+  }
+
+  #ledger-quest-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .ledger-empty {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    font-style: italic;
+    line-height: 1.45;
   }
 
   .quest-item {
@@ -3386,15 +3483,28 @@
       <div class="sheet-panel-divider"></div>
       <div class="sheet-panel-tabs">
         <button type="button" class="sheet-panel-tab-btn active" data-panel-tab="identity">Identity</button>
-        <button type="button" class="sheet-panel-tab-btn" data-panel-tab="standing">Standing</button>
         <button type="button" class="sheet-panel-tab-btn" data-panel-tab="stats">Stats</button>
         <button type="button" class="sheet-panel-tab-btn" data-panel-tab="inventory">Inventory</button>
-        <button type="button" class="sheet-panel-tab-btn" data-panel-tab="progression">Progression</button>
+        <button type="button" class="sheet-panel-tab-btn" data-panel-tab="standing">Standing</button>
+        <button type="button" class="sheet-panel-tab-btn" data-panel-tab="ledger">The Ledger</button>
       </div>
       <div id="panel-tab-identity" class="sheet-panel-content"></div>
-      <div id="panel-tab-standing" class="sheet-panel-content" style="display:none;"></div>
       <div id="panel-tab-stats" class="sheet-panel-content" style="display:none;"></div>
-      <div id="panel-tab-inventory" class="sheet-panel-content" style="display:none;"></div>
+      <div id="panel-tab-inventory" class="sheet-panel-content" style="display:none;">
+        <div class="cs-inv-section-label">CURRENCY</div>
+        <div class="cs-stats-divider" aria-hidden="true"></div>
+        <div class="cs-progress-row"><span class="cs-progress-label">Ash Marks</span><span class="cs-progress-val" id="sheet-w-ash">0 AM</span></div>
+        <div class="cs-progress-row"><span class="cs-progress-label">Ember Shards</span><span class="cs-progress-val" id="sheet-w-ember">0</span></div>
+        <div class="cs-progress-row"><span class="cs-progress-label">Soul Coins</span><span class="cs-progress-val" id="sheet-w-soul">0</span></div>
+        <div class="cs-stats-divider cs-inv-after-currency" aria-hidden="true"></div>
+        <div id="sheet-inventory-body"></div>
+      </div>
+      <div id="panel-tab-standing" class="sheet-panel-content" style="display:none;"></div>
+      <div id="panel-tab-ledger" class="sheet-panel-content" style="display:none;">
+        <div class="cs-stats-heading">THE LEDGER</div>
+        <div class="cs-stats-divider" aria-hidden="true"></div>
+        <div id="ledger-quest-list"></div>
+      </div>
       <div id="panel-tab-progression" class="sheet-panel-content" style="display:none;">
         <div data-debug="true" id="debug-progression-panel"></div>
       </div>
@@ -3482,6 +3592,7 @@
     <div id="char-panel">
       <div id="char-name">—</div>
       <div id="char-title"></div>
+      <div class="char-panel-divider" aria-hidden="true"></div>
       <div id="hp-bar-wrap">
         <div id="hp-label">
           <span>Health</span>
@@ -3489,58 +3600,9 @@
         </div>
         <div id="hp-bar-bg"><div id="hp-bar-fill" style="width:100%"></div></div>
       </div>
-      <div class="stat-row"><span>Stage</span><span class="stat-val" id="stat-stage">—</span></div>
-      <div class="stat-row"><span>XP</span><span class="stat-val" id="stat-xp">—</span></div>
-      <div class="stat-row"><span>Level</span><span class="stat-val" id="stat-level">—</span></div>
-      <div class="stat-row"><span>Ability</span><span class="stat-val" id="stat-ability">—</span></div>
       <button type="button" id="char-sound-toggle" aria-pressed="false" title="Sound">🔊 Sounds: On</button>
-    </div>
-
-    <div id="wallet-panel">
-      <div class="currency-row"><span>Ash Marks</span><span class="currency-val" id="w-ash">0</span></div>
-      <div class="currency-row"><span>Ember Shards</span><span class="currency-val" id="w-ember">0</span></div>
-      <div class="currency-row"><span>Soul Coins</span><span class="currency-val" id="w-soul">0</span></div>
-    </div>
-
-    <!-- ── Standing Panel ─────────────────────────────────────────── -->
-    <div id="standing-panel">
-      <div id="standing-title">Standing</div>
-      <div id="standing-archetype-label"></div>
-      <div id="standing-archetype-flavor"></div>
-
-      <div class="standing-row">
-        <span class="standing-stat-name">Mercy</span>
-        <div class="standing-bar-bg">
-          <div class="standing-bar-fill mercy-bar" id="bar-mercy"></div>
-          <div class="standing-bar-center"></div>
-        </div>
-      </div>
-
-      <div class="standing-row">
-        <span class="standing-stat-name">Order</span>
-        <div class="standing-bar-bg">
-          <div class="standing-bar-fill order-bar" id="bar-order"></div>
-          <div class="standing-bar-center"></div>
-        </div>
-      </div>
-
-      <div class="standing-row">
-        <span class="standing-stat-name">Heat</span>
-        <div class="standing-bar-bg heat-bar-bg">
-          <div class="standing-bar-fill heat-bar" id="bar-heat"></div>
-        </div>
-      </div>
-
-      <div id="bounty-indicator" style="display:none">
-        <span id="bounty-indicator-icon">⚠</span>
-        <span id="bounty-indicator-text">Bounty Active</span>
-      </div>
-    </div>
-
-    <!-- ── Quest Panel ───────────────────────────────────────────── -->
-    <div id="quest-panel">
-      <div id="quest-title">Tasks</div>
-      <div id="quest-list"></div>
+      <div class="char-panel-divider" aria-hidden="true"></div>
+      <div id="context-panel" class="context-panel"></div>
     </div>
   </div>
 
@@ -3596,8 +3658,6 @@
       <div id="m-hp-bar-fill" style="height:100%;background:var(--ember);transition:width 0.4s ease;box-shadow:0 0 8px rgba(196,98,42,0.5);width:100%;"></div>
     </div>
   </div>
-  <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:0.85rem;color:var(--text-dim);"><span>Stage</span><span style="color:var(--text);" id="m-stat-stage">—</span></div>
-  <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:0.85rem;color:var(--text-dim);"><span>XP</span><span style="color:var(--text);" id="m-stat-xp">—</span></div>
   <div style="height:1px;background:var(--border);margin:12px 0;"></div>
   <div style="font-size:0.82rem;color:var(--text-dim);display:flex;flex-direction:column;gap:4px;">
     <div style="display:flex;justify-content:space-between;"><span>Ash Marks</span><span style="color:var(--gold);" id="m-w-ash">0</span></div>
@@ -3991,6 +4051,144 @@ const LOCATION_NAMES = {
   cinder_cells_pit: "The Holding Pit",
 };
 function getLocationName(id) { return LOCATION_NAMES[id] || id || "—"; }
+
+// Sewer floors (mirrors backend SEWER_LEVEL_* / SEWER_LOCATIONS)
+const SEWER_LEVEL_1 = ['drain_entrance', 'overflow_channel', 'broken_pipe_room', 'vermin_nest', 'workers_alcove', 'rusted_gate'];
+const SEWER_LEVEL_2 = ['fungal_bloom_chamber', 'collapsed_passage', 'old_maintenance_room', 'echoing_hall', 'spore_garden', 'cracked_aqueduct'];
+const SEWER_LEVEL_3 = ['flooded_hall', 'drowned_archive', 'submerged_tunnel', 'broken_pump_room', 'drowned_vault', 'sluice_gate'];
+const SEWER_LEVEL_4 = ['gear_hall', 'steam_vent_corridor', 'broken_regulator_chamber', 'iron_walkway', 'heart_pump', 'pressure_valve_shaft'];
+const SEWER_LEVEL_5 = ['ash_pillar_hall', 'whispering_chamber', 'rune_lit_corridor', 'cathedral_floor', 'ash_heart_chamber', 'sump_pit'];
+const SEWER_LOCATIONS_UI = new Set([
+  ...SEWER_LEVEL_1, ...SEWER_LEVEL_2, ...SEWER_LEVEL_3, ...SEWER_LEVEL_4, ...SEWER_LEVEL_5,
+  'sewer_entrance', 'sewer_deep_foundation',
+]);
+const SCAR_CONTEXT_LOCATIONS = new Set([
+  'sewer_deep', 'scar_breach', 'scar_outer_vein', 'scar_echo_chamber', 'scar_deep_membrane',
+  'scar_antechamber', 'scar_fragment_chamber', 'scar_wound_floor', 'scar_root_passage', 'scar_graft_den',
+]);
+const CITY_CONTEXT_LOCATIONS = new Set([
+  'tavern', 'market_square', 'still_scale', 'atelier', 'mended_hide', 'hollow_jar', 'ashen_sanctuary', 'crucible',
+  'wardens_post', 'north_road', 'south_road', 'east_road', 'west_road', 'alley', 'naxirs_crucible',
+  'cinder_cells_entrance', 'cinder_cells_hall', 'cinder_cells_block', 'cinder_cells_pit',
+  'ember_quarter_south', 'ashen_archive_entrance', 'ashen_archive_hall', 'threshold_road', 'stone_watch_gate', 'stone_watch_hall',
+  'broken_banner_gate', 'broken_banner_yard', 'quiet_sanctum_entrance', 'veil_market_surface', 'veil_market_hidden',
+  'umbral_covenant_descent', 'umbral_covenant_hall',
+]);
+
+const CITY_CONTEXT_FLAVORS = [
+  'The city watches.',
+  'Rumors drift through the walls.',
+  'Something shifts in the stone.',
+  'The ash settles, for now.',
+  'Voices carry further than they should.',
+];
+const SEWER_CONTEXT_FLAVORS = [
+  'Damp air. Faint heat.',
+  'The dark adjusts to you.',
+  'Something moved ahead.',
+];
+
+let _contextPanelLastLoc = '';
+let _contextCityFlavorIdx = 0;
+let _contextSewerFlavorIdx = 0;
+
+function sewerFloorLabel(locId) {
+  if (locId === 'sewer_entrance') return 'Threshold';
+  if (SEWER_LEVEL_1.includes(locId)) return 'Floor 1';
+  if (SEWER_LEVEL_2.includes(locId)) return 'Floor 2';
+  if (SEWER_LEVEL_3.includes(locId)) return 'Floor 3';
+  if (SEWER_LEVEL_4.includes(locId)) return 'Floor 4';
+  if (SEWER_LEVEL_5.includes(locId)) return 'Floor 5';
+  if (locId === 'sewer_deep_foundation') return 'Foundation';
+  return 'Descent';
+}
+
+function shortContextPlaceTitle(roomData, locId) {
+  const raw = (roomData && roomData.name) || getLocationName(locId) || '—';
+  const trimmed = raw.replace(/^The\s+/i, '').trim();
+  const w = trimmed.split(/\s+/).filter(Boolean);
+  return w.slice(0, 2).join(' ') || '—';
+}
+
+function shortScarNodeTitle(roomData, locId) {
+  const raw = (roomData && roomData.name) || getLocationName(locId) || '—';
+  const noThe = raw.replace(/^The\s+/i, '').trim();
+  const w = noThe.split(/\s+/).filter(Boolean);
+  return w.slice(0, 3).join(' ') || '—';
+}
+
+function bumpContextFlavorIndices(locId) {
+  if (_contextPanelLastLoc !== locId) {
+    _contextPanelLastLoc = locId;
+    _contextCityFlavorIdx = Math.floor(Math.random() * CITY_CONTEXT_FLAVORS.length);
+    _contextSewerFlavorIdx = Math.floor(Math.random() * SEWER_CONTEXT_FLAVORS.length);
+  }
+}
+
+/** Right sidebar context block; call from renderRoom(data). Reads global combatState when in combat. */
+function updateContextPanel(data) {
+  const el = document.getElementById('context-panel');
+  if (!el) return;
+  const room = data || {};
+  const locationId = room.location || currentGameLocation || '';
+  bumpContextFlavorIndices(locationId);
+
+  if (combatState || room.in_combat) {
+    const cs = combatState || room;
+    const nameRaw = cs.enemy_name || cs.enemy_id || '';
+    const eHp = cs.enemy_hp;
+    const eMax = cs.enemy_hp_max;
+    let body = '';
+    if (nameRaw && Number.isFinite(Number(eHp)) && Number.isFinite(Number(eMax)) && Number(eMax) > 0) {
+      const pct = Math.max(0, Math.min(100, (Number(eHp) / Number(eMax)) * 100));
+      body =
+        '<div class="ctx-location">' + escapeHtml(nameRaw) + '</div>' +
+        '<div class="ctx-combat-bar" aria-hidden="true"><div class="ctx-combat-bar-fill" style="width:' + pct + '%"></div></div>';
+    } else if (nameRaw) {
+      body = '<div class="ctx-location">' + escapeHtml(nameRaw) + '</div><div class="ctx-flavor">Engaged.</div>';
+    } else {
+      body = '<div class="ctx-flavor">Engaged.</div>';
+    }
+    el.innerHTML = '<div class="ctx-section-label">COMBAT</div>' + body;
+    return;
+  }
+
+  if (SCAR_CONTEXT_LOCATIONS.has(locationId)) {
+    el.innerHTML =
+      '<div class="ctx-section-label">THE SCAR</div>' +
+      '<div class="ctx-location">' + escapeHtml(shortScarNodeTitle(room, locationId)) + '</div>' +
+      '<div class="ctx-flavor">You are moving through<br>something alive.</div>';
+    return;
+  }
+
+  if (SEWER_LOCATIONS_UI.has(locationId)) {
+    const hazard = room.hazard;
+    let flavor;
+    if (hazard && (hazard.label || hazard.id)) {
+      flavor = 'Damp air. Faint heat.';
+    } else {
+      flavor = SEWER_CONTEXT_FLAVORS[_contextSewerFlavorIdx % SEWER_CONTEXT_FLAVORS.length];
+    }
+    el.innerHTML =
+      '<div class="ctx-section-label">DESCENT</div>' +
+      '<div class="ctx-location">' + escapeHtml(sewerFloorLabel(locationId)) + '</div>' +
+      '<div class="ctx-flavor">' + escapeHtml(flavor) + '</div>';
+    return;
+  }
+
+  if (CITY_CONTEXT_LOCATIONS.has(locationId)) {
+    const flavor = CITY_CONTEXT_FLAVORS[_contextCityFlavorIdx % CITY_CONTEXT_FLAVORS.length];
+    el.innerHTML =
+      '<div class="ctx-section-label">CITY</div>' +
+      '<div class="ctx-location">' + escapeHtml(shortContextPlaceTitle(room, locationId)) + '</div>' +
+      '<div class="ctx-flavor">' + escapeHtml(flavor) + '</div>';
+    return;
+  }
+
+  el.innerHTML =
+    '<div class="ctx-section-label">VERASANTH</div>' +
+    '<div class="ctx-flavor">The city remembers everything.</div>';
+}
 
 // ── Progression flag labels (for character sheet) ──────────────────
 const PROGRESSION_LABELS = {
@@ -5171,17 +5369,31 @@ async function refreshSheetPanel() {
   const instinctLabel = mainInstinctsData?.instincts?.[char.instinct]?.label || char.instinct || '—';
   document.getElementById('panel-tab-identity').innerHTML = '<p><strong>Race</strong> ' + escapeHtml(raceLabel) + '</p><p><strong>Instinct</strong> ' + escapeHtml(instinctLabel) + '</p><p class="cs-muted">Last seen: ' + escapeHtml(locName) + '</p>';
   const au = char.alignment_ui || {};
-  let standingHtml = '<p><strong>Archetype:</strong> ' + (au.archetype || 'Survivor') + '</p><p class="cs-muted">' + (au.grommash_read || 'Neither asset nor threat. Yet.') + '</p>';
-  if (au.has_bounty) standingHtml += '<p class="cs-bounty-indicator">⚠ Bounty Active</p>';
-  standingHtml += '<p><strong>Mercy</strong></p><div class="cs-hp-bar"><div class="cs-hp-fill cs-align-fill" style="width:' + ((au.mercy_bar ?? 5) / 10 * 100) + '%"></div></div>' +
-    '<p><strong>Order</strong></p><div class="cs-hp-bar"><div class="cs-hp-fill cs-align-fill" style="width:' + ((au.order_bar ?? 5) / 10 * 100) + '%"></div></div>' +
-    '<p><strong>Heat</strong></p><div class="cs-hp-bar cs-heat-bar"><div class="cs-hp-fill cs-align-fill cs-heat-fill" style="width:' + ((au.heat_bar ?? 0) / 10 * 100) + '%"></div></div>';
+  const mercyPct = ((au.mercy_bar ?? 5) / 10 * 100);
+  const orderPct = ((au.order_bar ?? 5) / 10 * 100);
+  const heatPct = ((au.heat_bar ?? 0) / 10 * 100);
+  let standingHtml = '<p><strong>Archetype:</strong> ' + escapeHtml(au.archetype || 'Survivor') + '</p><p class="cs-muted">' + escapeHtml(au.grommash_read || 'Neither asset nor threat. Yet.') + '</p>';
+  standingHtml += '<div id="sheet-bounty-indicator" class="sheet-bounty-indicator" style="display:' + (au.has_bounty ? 'flex' : 'none') + '"><span>⚠</span><span id="sheet-bounty-text">' + (au.has_bounty ? 'Bounty Active' : '') + '</span></div>';
+  standingHtml += '<p><strong>Mercy</strong></p><div class="cs-hp-bar"><div id="sheet-bar-mercy" class="cs-hp-fill cs-align-fill" style="width:' + mercyPct + '%"></div></div>' +
+    '<p><strong>Order</strong></p><div class="cs-hp-bar"><div id="sheet-bar-order" class="cs-hp-fill cs-align-fill" style="width:' + orderPct + '%"></div></div>' +
+    '<p><strong>Heat</strong></p><div class="cs-hp-bar cs-heat-bar"><div id="sheet-bar-heat" class="cs-hp-fill cs-align-fill cs-heat-fill" style="width:' + heatPct + '%"></div></div>';
   document.getElementById('panel-tab-standing').innerHTML = standingHtml;
   const hp = char.current_hp ?? 0;
   const maxHp = char.max_hp || 10;
   const statKeys = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
   const statAbbrev = { strength: 'STR', dexterity: 'DEX', constitution: 'CON', intelligence: 'INT', wisdom: 'WIS', charisma: 'CHA' };
   const hpPct = maxHp > 0 ? Math.max(0, Math.min(100, (Number(hp) / Number(maxHp)) * 100)) : 0;
+  let upgrades = {};
+  try {
+    upgrades = typeof char.upgrades === 'string' ? JSON.parse(char.upgrades || '{}') : (char.upgrades || {});
+  } catch (_) {
+    upgrades = {};
+  }
+  const upg = upgrades.level_5;
+  const abilityDisp = upg && window.LEVEL_5_UPGRADES && window.LEVEL_5_UPGRADES[upg]
+    ? window.LEVEL_5_UPGRADES[upg].display_name
+    : (upg || '—');
+  const charLevel = Math.max(1, 1 + Number(char.class_stage ?? 0));
   let statsHtml =
     '<div class="cs-stats-panel">' +
     '<div class="cs-stats-heading">STATS</div>' +
@@ -5192,6 +5404,12 @@ async function refreshSheetPanel() {
     '<span class="cs-stats-hp-val">' + escapeHtml(String(hp)) + ' / ' + escapeHtml(String(maxHp)) + '</span>' +
     '</div>' +
     '<div class="cs-stats-hp-track"><div class="cs-stats-hp-fill" style="width:' + hpPct + '%"></div></div>' +
+    '<div class="cs-stats-divider" aria-hidden="true"></div>' +
+    '<div class="cs-stats-sub">Progression</div>' +
+    '<div class="cs-progress-row"><span class="cs-progress-label">Level</span><span class="cs-progress-val">' + escapeHtml(String(charLevel)) + '</span></div>' +
+    '<div class="cs-progress-row"><span class="cs-progress-label">XP</span><span class="cs-progress-val">' + escapeHtml(String(char.xp != null ? char.xp : '—')) + '</span></div>' +
+    '<div class="cs-progress-row"><span class="cs-progress-label">Stage</span><span class="cs-progress-val">' + escapeHtml(String(char.class_stage != null ? char.class_stage : '—')) + '</span></div>' +
+    '<div class="cs-progress-row"><span class="cs-progress-label">Ability</span><span class="cs-progress-val">' + escapeHtml(String(abilityDisp)) + '</span></div>' +
     '<div class="cs-stats-divider" aria-hidden="true"></div>' +
     '<div class="cs-stats-sub">Attributes</div>';
   statKeys.forEach(function (s) {
@@ -5217,10 +5435,14 @@ async function refreshSheetPanel() {
   const idToName = {};
   (inv.itemDetails || []).forEach(it => { idToName[it.id] = it.display_name || it.id; });
   const invLines = htmlInventoryReadOnlyLines(inv);
-  document.getElementById('panel-tab-inventory').innerHTML = '<p>◈ ' + (wallet.formatted_am ?? wallet.ash_marks ?? 0) + ' Ash · ◆ ' + (wallet.ember_shards ?? 0) + ' Ember · ○ ' + (wallet.soul_coins ?? 0) + ' Soul</p>' +
-    wrapEquippedSection(htmlEquippedSlotRows(eq, idToName, offhandLocked, dualWield)) +
-    '<div class="inv-panel-h inv-inventory-below">INVENTORY</div>' +
-    '<div class="inv-inventory-readonly">' + invLines + '</div>';
+  const invBody = document.getElementById('sheet-inventory-body');
+  if (invBody) {
+    invBody.innerHTML =
+      wrapEquippedSection(htmlEquippedSlotRows(eq, idToName, offhandLocked, dualWield)) +
+      '<div class="inv-panel-h inv-inventory-below">INVENTORY</div>' +
+      '<div class="inv-inventory-readonly">' + invLines + '</div>';
+  }
+  updateWallet(wallet);
   let flagsHtml = '<ul>';
   for (const [id, label] of Object.entries(PROGRESSION_LABELS)) {
     flagsHtml += '<li class="' + ((flags[id] && Number(flags[id]) > 0) ? 'unlocked' : 'locked') + '">' + ((flags[id] && Number(flags[id]) > 0) ? label : '???') + '</li>';
@@ -5634,15 +5856,6 @@ function updateCharPanel(c) {
     const ins = c.instinct || '';
     document.getElementById('char-title').textContent = ins ? (r + ' · ' + ins) : r;
   }
-  document.getElementById('stat-stage').textContent        = c.class_stage ?? '—';
-  document.getElementById('stat-xp').textContent          = c.xp ?? '—';
-  const charLevel = Math.max(1, 1 + (Number(c.class_stage ?? 0)));
-  document.getElementById('stat-level').textContent = charLevel;
-  const upgrades = (typeof c.upgrades === 'string' ? JSON.parse(c.upgrades || '{}') : (c.upgrades || {}));
-  const abilityName = upgrades.level_5 ? (window.LEVEL_5_UPGRADES?.[upgrades.level_5]?.display_name) || upgrades.level_5 : '—';
-  const abEl = document.getElementById('stat-ability');
-  if (abEl) abEl.textContent = abilityName;
-
   document.getElementById('hp-text').textContent          = `${hp} / ${maxHp}`;
   document.getElementById('hp-bar-fill').style.width      = pctStr;
   document.getElementById('header-sub').textContent       = c.location || '';
@@ -5660,6 +5873,8 @@ function updateCharPanel(c) {
     }
   }
 
+  syncSheetStandingBarsFromChar(c);
+
   const mCharName = document.getElementById('m-char-name');
   if (mCharName) {
     mCharName.textContent      = c.name || '—';
@@ -5668,8 +5883,6 @@ function updateCharPanel(c) {
       const ins = c.instinct || '';
       document.getElementById('m-char-title').textContent = ins ? (r + ' · ' + ins) : r;
     }
-    document.getElementById('m-stat-stage').textContent   = c.class_stage ?? '—';
-    document.getElementById('m-stat-xp').textContent      = c.xp ?? '—';
     document.getElementById('m-hp-text').textContent       = `${hp} / ${maxHp}`;
     document.getElementById('m-hp-bar-fill').style.width  = pctStr;
   }
@@ -5680,9 +5893,12 @@ function updateWallet(w) {
   const ember = w.ember_shards || 0;
   const soul  = w.soul_coins  || 0;
 
-  document.getElementById('w-ash').textContent   = ash;
-  document.getElementById('w-ember').textContent = ember;
-  document.getElementById('w-soul').textContent  = soul;
+  const sheetAsh = document.getElementById('sheet-w-ash');
+  if (sheetAsh) sheetAsh.textContent = typeof ash === 'string' ? ash : String(ash) + ' AM';
+  const sheetEm = document.getElementById('sheet-w-ember');
+  if (sheetEm) sheetEm.textContent = String(ember);
+  const sheetSo = document.getElementById('sheet-w-soul');
+  if (sheetSo) sheetSo.textContent = String(soul);
 
   const mAsh = document.getElementById('m-w-ash');
   if (mAsh) {
@@ -5709,70 +5925,28 @@ const ARCHETYPE_FLAVOR = {
 };
 
 function updateStanding(data) {
-  const { archetype, mercy_score, order_score, crime_heat,
-          has_bounty, bounty_reward } = data || {};
-
-  const archetypeLabel = document.getElementById('standing-archetype-label');
-  const archetypeFlavor = document.getElementById('standing-archetype-flavor');
-  if (archetypeLabel) archetypeLabel.textContent = archetype || 'Survivor';
-  if (archetypeFlavor) archetypeFlavor.textContent =
-    ARCHETYPE_FLAVOR[archetype] || ARCHETYPE_FLAVOR['Survivor'];
-
-  const mercyPct = ((mercy_score || 0) + 200) / 400;
-  const mercyEl  = document.getElementById('bar-mercy');
-  if (mercyEl) {
-    if ((mercy_score || 0) >= 0) {
-      mercyEl.style.left   = '50%';
-      mercyEl.style.right  = '';
-      mercyEl.style.width  = (mercyPct - 0.5) * 100 + '%';
-      mercyEl.style.background = 'var(--ok)';
-    } else {
-      mercyEl.style.left   = '';
-      mercyEl.style.right  = '50%';
-      mercyEl.style.width  = (0.5 - mercyPct) * 100 + '%';
-      mercyEl.style.background = 'var(--danger)';
-    }
-  }
-
-  const orderPct = ((order_score || 0) + 200) / 400;
-  const orderEl  = document.getElementById('bar-order');
-  if (orderEl) {
-    if ((order_score || 0) >= 0) {
-      orderEl.style.left   = '50%';
-      orderEl.style.right  = '';
-      orderEl.style.width  = (orderPct - 0.5) * 100 + '%';
-      orderEl.style.background = 'var(--accent)';
-    } else {
-      orderEl.style.left   = '';
-      orderEl.style.right  = '50%';
-      orderEl.style.width  = (0.5 - orderPct) * 100 + '%';
-      orderEl.style.background = 'rgba(255,180,80,.7)';
-    }
-  }
-
-  const heatPct = Math.min(1, (crime_heat || 0) / 20) * 100;
-  const heatEl  = document.getElementById('bar-heat');
-  if (heatEl) {
-    heatEl.style.width = heatPct + '%';
-    if ((crime_heat || 0) >= 11) {
-      heatEl.style.background = 'var(--danger)';
-    } else if ((crime_heat || 0) >= 4) {
-      heatEl.style.background = 'rgba(255,180,80,.8)';
-    } else {
-      heatEl.style.background = 'rgba(167,173,189,.4)';
-    }
-  }
-
-  const indicator = document.getElementById('bounty-indicator');
-  const indicatorText = document.getElementById('bounty-indicator-text');
-  if (indicator && indicatorText) {
+  const { has_bounty, bounty_reward } = data || {};
+  const sheetBounty = document.getElementById('sheet-bounty-indicator');
+  const sheetBountyText = document.getElementById('sheet-bounty-text');
+  if (sheetBounty && sheetBountyText) {
     if (has_bounty) {
-      indicator.style.display = 'flex';
-      indicatorText.textContent = `Bounty Active — ${bounty_reward || 0} AM`;
+      sheetBounty.style.display = 'flex';
+      sheetBountyText.textContent = 'Bounty Active — ' + (bounty_reward || 0) + ' AM';
     } else {
-      indicator.style.display = 'none';
+      sheetBounty.style.display = 'none';
     }
   }
+}
+
+function syncSheetStandingBarsFromChar(c) {
+  const au = c && c.alignment_ui;
+  if (!au) return;
+  const m = document.getElementById('sheet-bar-mercy');
+  const o = document.getElementById('sheet-bar-order');
+  const h = document.getElementById('sheet-bar-heat');
+  if (m) m.style.width = ((au.mercy_bar ?? 5) / 10 * 100) + '%';
+  if (o) o.style.width = ((au.order_bar ?? 5) / 10 * 100) + '%';
+  if (h) h.style.width = ((au.heat_bar ?? 0) / 10 * 100) + '%';
 }
 
 const EQUIPMENT_SLOT_LABELS = {
@@ -6657,6 +6831,7 @@ function renderRoom(data) {
     log(render(data.ambient));
   }
 
+  updateContextPanel(data);
   syncTavernBoardPanel(loc);
   syncNarrativeEncounterUI(data);
 }
@@ -7778,6 +7953,7 @@ function showCombat(data, isBoss) {
   updateCombatActionButtons(data.ability_cooldown ?? 0, false, data.ability_used ?? false);
   const panel = document.getElementById('combat-item-panel');
   if (panel) panel.style.display = 'none';
+  updateContextPanel({ location: currentGameLocation, in_combat: true });
 }
 
 const TRIAL_ACTION_LABELS = {
@@ -7889,6 +8065,7 @@ function updateCombatBars(php, pmax, ehp, emax) {
   document.getElementById('enemy-hp-text').textContent = ehp;
   const epct = emax > 0 ? Math.max(0,(ehp/emax)*100) : 0;
   document.getElementById('enemy-bar').style.width = epct + '%';
+  if (combatState) updateContextPanel({ location: currentGameLocation });
 }
 
 const STATUS_LABELS = {
@@ -8319,18 +8496,20 @@ async function refreshSidebar() {
     updateInventory(invData);
     updateStanding(alignData);
     updateQuests();
+    const sp = document.getElementById('sheet-panel');
+    if (sp && sp.style.display !== 'none') await refreshSheetPanel();
   } catch(e) {}
 }
 
 async function updateQuests() {
   try {
     const data = await GET('/api/quests');
-    const listEl = document.getElementById('quest-list');
+    const listEl = document.getElementById('ledger-quest-list');
     if (!listEl) return;
     listEl.innerHTML = '';
 
     if (!data.active || !data.active.length) {
-      listEl.innerHTML = '<div class="quest-empty">No active tasks.</div>';
+      listEl.innerHTML = '<div class="ledger-empty">Nothing assigned. Not yet.</div>';
       return;
     }
 
