@@ -3204,6 +3204,10 @@
     <div id="room-panel">
       <div id="room-name">—</div>
       <div id="room-desc"></div>
+      <div id="narrative-encounter-wrap" style="display:none;margin-bottom:16px;">
+        <div id="narrative-encounter-result" style="display:none;margin-bottom:10px;color:var(--text);line-height:1.7;font-size:0.95rem;white-space:pre-wrap;"></div>
+        <div id="narrative-encounter-buttons" style="display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;"></div>
+      </div>
 
       <div id="travel-section" style="display:none">
         <div class="section-label">Travel</div>
@@ -5817,6 +5821,79 @@ function renderWardenIndicator(wardenActive) {
   document.getElementById('room-name').after(el);
 }
 
+function parseNarrativeEncounterOptionsFromDescription(description) {
+  const lines = String(description || '').split(/\r?\n/);
+  const re = /^\[E(\d+)\]\s*(.+)$/;
+  const opts = [];
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim();
+    const m = t.match(re);
+    if (m) opts.push({ choice_index: parseInt(m[1], 10), label: m[2] });
+  }
+  opts.sort(function(a, b) {
+    if (a.choice_index === 0) return 1;
+    if (b.choice_index === 0) return -1;
+    return a.choice_index - b.choice_index;
+  });
+  return opts;
+}
+
+function syncNarrativeEncounterUI(data) {
+  const wrap = document.getElementById('narrative-encounter-wrap');
+  const btnRow = document.getElementById('narrative-encounter-buttons');
+  const resEl = document.getElementById('narrative-encounter-result');
+  if (!wrap || !btnRow || !resEl) return;
+  const ne = data.narrative_encounter;
+  if (ne && ne.awaiting_choice && ne.tier !== 'ambient') {
+    const opts = parseNarrativeEncounterOptionsFromDescription(data.description);
+    resEl.style.display = 'none';
+    resEl.innerHTML = '';
+    btnRow.innerHTML = '';
+    if (opts.length) {
+      wrap.style.display = '';
+      opts.forEach(function(o) {
+        const btn = document.createElement('button');
+        btn.className = 'topic-btn dialogue-suggested-btn';
+        btn.type = 'button';
+        const num = document.createElement('span');
+        num.className = 'dialogue-opt-num';
+        num.textContent = '[E' + o.choice_index + ']';
+        const lab = document.createElement('span');
+        lab.className = 'dialogue-opt-label';
+        lab.textContent = o.label;
+        btn.appendChild(num);
+        btn.appendChild(lab);
+        btn.onclick = function() { submitNarrativeEncounterChoice(o.choice_index); };
+        btnRow.appendChild(btn);
+      });
+    } else {
+      wrap.style.display = 'none';
+    }
+  } else {
+    btnRow.innerHTML = '';
+    resEl.style.display = 'none';
+    resEl.innerHTML = '';
+    wrap.style.display = 'none';
+  }
+}
+
+async function submitNarrativeEncounterChoice(choiceIndex) {
+  try {
+    const data = await POST('/api/encounter/respond', { choice_index: choiceIndex });
+    const wrap = document.getElementById('narrative-encounter-wrap');
+    const btnRow = document.getElementById('narrative-encounter-buttons');
+    const resEl = document.getElementById('narrative-encounter-result');
+    if (btnRow) btnRow.innerHTML = '';
+    if (wrap) wrap.style.display = '';
+    if (resEl) {
+      resEl.style.display = 'block';
+      resEl.innerHTML = render(data.response || '');
+    }
+  } catch (e) {
+    log('<em>' + e.message + '</em>');
+  }
+}
+
 function renderRoom(data) {
   document.getElementById('room-name').textContent = data.name || '—';
   renderHazardWarning(data.hazard || null);
@@ -5967,6 +6044,8 @@ function renderRoom(data) {
   if (data.ambient) {
     log(render(data.ambient));
   }
+
+  syncNarrativeEncounterUI(data);
 }
 
 function makeActionBtn(label, fn) {

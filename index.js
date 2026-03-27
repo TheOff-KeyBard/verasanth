@@ -25,6 +25,7 @@ import {
   isPhaseAGameNpc,
   resolveAuthoredGreeting,
   incrementPhaseAVisit,
+  getEffectiveTrust,
 } from "./services/authored_dialogue.js";
 import { DIALOGUE_REGISTRY, GAME_NPC_TO_CANONICAL } from "./data/dialogue/index.js";
 import { PIP_REACTIONS } from "./data/npc_dialogue_lines.js";
@@ -51,6 +52,12 @@ import {
   getNarrativeByListIndex,
   applyNarrativeEncounterEffects,
 } from "./services/encounters.js";
+import {
+  getEligibleScenes,
+  pickScene,
+  formatNpcSceneAppend,
+  NPC_SCENE_LIST,
+} from "./services/npc_scenes.js";
 
 // ─────────────────────────────────────────────────────────────
 // ECONOMY HELPERS
@@ -2162,6 +2169,10 @@ if (path === "/api/admin/command" && method === "POST") {
       if (pendingNarrative > 0) {
         await setFlag(db, uid, "active_narrative_encounter", 0);
       }
+      const pendingScene = await getFlag(db, uid, "active_scene", 0);
+      if (pendingScene > 0) {
+        await setFlag(db, uid, "active_scene", 0);
+      }
 
       await dbRun(db, "UPDATE players SET location=? WHERE user_id=?", [dest, uid]);
 
@@ -2653,6 +2664,50 @@ if (path === "/api/admin/command" && method === "POST") {
         }
       }
 
+      let npcSceneMeta = null;
+      if (!narrativeEncounter && Math.random() < 0.03) {
+        const sceneFlagRows = await dbAll(
+          db,
+          "SELECT flag, value FROM player_flags WHERE user_id=?",
+          [uid],
+        );
+        const sceneFlags = {};
+        for (const r of sceneFlagRows) sceneFlags[r.flag] = r.value;
+        const npcTrust = {
+          seris: await getEffectiveTrust(db, dbGet, uid, "seris", getFlag),
+          trader: await getEffectiveTrust(db, dbGet, uid, "trader", getFlag),
+          warden: await getEffectiveTrust(db, dbGet, uid, "grommash", getFlag),
+        };
+        const eligible = getEligibleScenes(dest, sceneFlags, npcTrust, moveCount);
+        const scenePick = pickScene(eligible);
+        if (scenePick) {
+          destDescription += formatNpcSceneAppend(scenePick);
+          await setFlag(
+            db,
+            uid,
+            `last_scene_${scenePick.id}_move`,
+            moveCount,
+          );
+          const sceneIndex = NPC_SCENE_LIST.indexOf(scenePick);
+          if (sceneIndex >= 0) {
+            await setFlag(db, uid, "active_scene", sceneIndex + 1);
+          }
+          if (scenePick.effects) {
+            await applyNarrativeEncounterEffects(
+              db,
+              uid,
+              setFlag,
+              scenePick.effects,
+            );
+          }
+          npcSceneMeta = {
+            id: scenePick.id,
+            interactive: !!scenePick.interactive,
+            awaiting_choice: true,
+          };
+        }
+      }
+
       // PvPvE: Ash Heart Chamber group warning when solo
       let pvpveWarning = null;
       if (dest === "ash_heart_chamber") {
@@ -2674,6 +2729,7 @@ if (path === "/api/admin/command" && method === "POST") {
         ...(narrativeEncounter
           ? { narrative_encounter: narrativeEncounter }
           : {}),
+        ...(npcSceneMeta ? { npc_scene: npcSceneMeta } : {}),
       };
       if (hazardData) movePayload.hazard = hazardData;
       if (destRoom.pvpve) movePayload.pvpve = destRoom.pvpve;
@@ -2715,6 +2771,38 @@ if (path === "/api/admin/command" && method === "POST") {
       }
       if (opt.effects) {
         await applyNarrativeEncounterEffects(db, uid, setFlag, opt.effects);
+      }
+      return json({ ok: true, response: opt.response });
+    }
+
+    // ── POST: NPC scene choice ──
+    if (path === "/api/scene/respond" && method === "POST") {
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const inCombat = await dbGet(db, "SELECT 1 FROM combat_state WHERE user_id=?", [uid]);
+      if (inCombat) return err("You're in combat.", 400);
+      const active_scene_index = await getFlag(db, uid, "active_scene", 0);
+      if (active_scene_index < 1 || active_scene_index > NPC_SCENE_LIST.length) {
+        return err("No active scene.", 400);
+      }
+      const scene = NPC_SCENE_LIST[active_scene_index - 1];
+      if (!scene) return err("No active scene.", 400);
+      const choice = Number(body.choice_index);
+      if (!Number.isFinite(choice) || !Number.isInteger(choice) || choice < 0) {
+        return err("choice_index required (non-negative integer).", 400);
+      }
+      if (!scene.interactive || choice === 0) {
+        await setFlag(db, uid, "active_scene", 0);
+        return json({
+          ok: true,
+          response: scene.soft_exit || "You say nothing.",
+        });
+      }
+      const opt = scene.options?.[choice - 1];
+      if (!opt) return err("Invalid choice.", 400);
+      await setFlag(db, uid, "active_scene", 0);
+      if (scene.effects) {
+        await applyNarrativeEncounterEffects(db, uid, setFlag, scene.effects);
       }
       return json({ ok: true, response: opt.response });
     }
