@@ -1067,8 +1067,7 @@
   .inv-item.equipped { border-left: 2px solid var(--ember-glow); padding-left: 6px; }
   .inv-item.inv-resonance { color: #c4a574; }
   .inv-item.inv-resonance .inv-resonance-lore { font-size: 0.8rem; color: var(--text-dim); margin-top: 4px; font-style: italic; }
-  .inv-loadout { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
-  .inv-loadout span { display: block; margin: 2px 0; }
+  .inv-loadout { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
   .inv-offhand-locked { color: var(--text-dim); font-style: italic; }
   .inv-dual-wield-ind { font-size: 0.7rem; color: var(--text-dim); margin-left: 4px; }
   .inv-equip-btn { font-size: 0.7rem; margin-left: 6px; padding: 1px 6px; cursor: pointer; }
@@ -2267,6 +2266,91 @@
   .cs-bounty-indicator { color: var(--gold); font-size: 0.9rem; margin-bottom: 8px; }
   .cs-currency { margin-bottom: 12px; color: var(--gold); font-size: 0.9rem; }
   .cs-inv-list { color: var(--text-dim); font-size: 0.9rem; }
+  .inv-section-title {
+    font-family: var(--font-title);
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    margin-top: 12px;
+  }
+  .inv-panel-h {
+    font-family: var(--font-title);
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+    margin-top: 0;
+  }
+  .inv-equipped-block .inv-panel-h { margin-top: 0; }
+  .inv-inventory-below { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .inv-slide-inventory-head { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .inv-equipped-slots { font-size: 0.8rem; color: var(--ash-light); }
+  .inv-slot-row {
+    display: grid;
+    grid-template-columns: 5.5rem 1fr;
+    gap: 8px;
+    align-items: baseline;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(80, 80, 80, 0.35);
+  }
+  .inv-slot-row--slide {
+    grid-template-columns: 4.6rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px;
+  }
+  .inv-slot-label { color: var(--text-dim); font-size: 0.72rem; }
+  .inv-slot-value { color: var(--ash-light); font-size: 0.78rem; word-break: break-word; }
+  .inv-slot-unequip {
+    font-size: 0.62rem;
+    padding: 2px 6px;
+    cursor: pointer;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    white-space: nowrap;
+    font-family: inherit;
+  }
+  .inv-slot-unequip:hover { color: var(--ember-glow); border-color: var(--ember-dim); }
+  .inv-inventory-readonly { margin-top: 4px; }
+  .inv-inventory-lines { display: flex; flex-direction: column; gap: 2px; }
+  .inv-inventory-line {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 0 4px 2px;
+    font-size: 0.88rem;
+    color: var(--ash-light);
+    border-bottom: 1px solid rgba(60, 60, 60, 0.4);
+  }
+  .inv-inventory-bullet { color: var(--text-dim); flex-shrink: 0; }
+  .inv-inventory-text { min-width: 0; word-break: break-word; }
+  .inv-inventory-empty { color: var(--text-dim); font-size: 0.85rem; padding: 6px 0; }
+  #inv-list.inv-inventory-list { margin-top: 6px; }
+  #inv-list .inv-item {
+    padding: 8px 0 8px 10px;
+    border-bottom: 1px solid rgba(60, 60, 60, 0.45);
+    border-left: 2px solid transparent;
+  }
+  .m-inv-line {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 0.82rem;
+    color: var(--ash-light);
+    border-bottom: 1px solid rgba(60, 60, 60, 0.35);
+  }
+  .m-inv-line .inv-inventory-bullet { color: var(--text-dim); }
+  #char-sheet .m-equipped-block { margin-bottom: 4px; }
+  #char-sheet .m-equipped-slots .inv-slot-row {
+    grid-template-columns: 4.25rem 1fr;
+    font-size: 0.76rem;
+    padding: 3px 0;
+    border-bottom: 1px solid rgba(80, 80, 80, 0.25);
+  }
   .cs-flags-list { list-style: none; }
   .cs-flags-list li { padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
   .cs-flags-list li.unlocked { color: var(--ember-glow); }
@@ -2965,7 +3049,7 @@
       </div>
       <div id="cs-tab-inventory" class="sheet-tab-panel" style="display:none;">
         <div class="cs-currency"><span>◈</span> <span id="cs-ash">0</span> Ash Marks · <span>◆</span> <span id="cs-ember">0</span> Ember Shards · <span>○</span> <span id="cs-soul">0</span> Soul Coins</div>
-        <div id="cs-inv-list" class="cs-inv-list">Nothing carried.</div>
+        <div id="cs-inv-list" class="cs-inv-list">—</div>
       </div>
       <div id="cs-tab-progression" class="sheet-tab-panel" style="display:none;">
         <div data-debug="true" id="debug-progression">
@@ -3058,10 +3142,11 @@
   </div>
   <div id="inv-panel-slide" class="sheet-panel inv-panel-slide" style="display:none;">
     <div class="sheet-panel-inner">
-      <h2 class="sheet-panel-title">Carried</h2>
+      <h2 class="sheet-panel-title">Inventory</h2>
       <div class="sheet-panel-divider"></div>
       <div id="inv-loadout" class="inv-loadout"></div>
-      <div id="inv-list"></div>
+      <div class="inv-panel-h inv-slide-inventory-head">INVENTORY</div>
+      <div id="inv-list" class="inv-inventory-list"></div>
     </div>
   </div>
   <div id="header">
@@ -3223,8 +3308,11 @@
     <div style="display:flex;justify-content:space-between;"><span>Soul Coins</span><span style="color:var(--gold);" id="m-w-soul">0</span></div>
   </div>
   <div style="height:1px;background:var(--border);margin:12px 0;"></div>
-  <div style="font-family:var(--font-title);font-size:0.7rem;letter-spacing:0.15em;color:var(--text-dim);text-transform:uppercase;margin-bottom:8px;">Carried</div>
-  <div id="m-inv-list"><div style="color:var(--text-dim);font-size:0.82rem;">Nothing carried.</div></div>
+  <div class="inv-panel-h" style="margin-top:0;">EQUIPPED</div>
+  <div id="m-equipped-block" class="m-equipped-block"></div>
+  <div style="height:1px;background:var(--border);margin:10px 0;"></div>
+  <div class="inv-panel-h" style="margin-top:0;">INVENTORY</div>
+  <div id="m-inv-list"><div class="inv-inventory-empty">—</div></div>
 </div>
 
 <!-- ── Mobile toggle bar ─────────────────────────────────────────── -->
@@ -4482,23 +4570,17 @@ async function populateCharacterSheet() {
   document.getElementById('cs-ash').textContent = wallet.formatted_am ?? wallet.ash_marks ?? 0;
   document.getElementById('cs-ember').textContent = wallet.ember_shards ?? 0;
   document.getElementById('cs-soul').textContent = wallet.soul_coins ?? 0;
-  const items = inv.items || [];
   const eq = inv.equipment || {};
   const offhandLocked = !!inv.offhand_locked;
   const dualWield = !!inv.dual_wield;
   const idToName = {};
   (inv.itemDetails || []).forEach(it => { idToName[it.id] = it.display_name || it.id; });
-  const slotLabels = { weapon_main:'Weapon',weapon_offhand:'Offhand',head:'Head',chest:'Chest',hands:'Hands',legs:'Legs',feet:'Feet',cloak:'Cloak',ring_1:'Ring 1',ring_2:'Ring 2',charm:'Charm',relic:'Relic' };
-  const slotOrder = ['weapon_main','weapon_offhand','head','chest','hands','legs','feet','cloak','ring_1','ring_2','charm','relic'];
-  const loadoutParts = slotOrder.map(s => {
-    let val = '—';
-    if (s === 'weapon_offhand' && offhandLocked) val = '— Two-Handed —';
-    else val = idToName[eq[s]] || '—';
-    const label = (slotLabels[s] || s) + ': ' + val;
-    return (s === 'weapon_offhand' && dualWield && eq[s]) ? label + ' ⚔ Dual Wield' : label;
-  });
-  const loadout = loadoutParts.join(' · ');
-  document.getElementById('cs-inv-list').innerHTML = (loadout ? '<div class="inv-loadout" style="margin-bottom:6px">' + escapeHtml(loadout) + '</div>' : '') + (items.length ? escapeHtml(items.join(', ')) : 'Nothing carried.');
+  const equippedHtml = wrapEquippedSection(htmlEquippedSlotRows(eq, idToName, offhandLocked, dualWield));
+  const invLines = htmlInventoryReadOnlyLines(inv);
+  document.getElementById('cs-inv-list').innerHTML =
+    equippedHtml +
+    '<div class="inv-panel-h inv-inventory-below">INVENTORY</div>' +
+    '<div class="inv-inventory-readonly">' + invLines + '</div>';
   const ul = document.getElementById('cs-flags-list');
   ul.innerHTML = '';
   for (const [id, label] of Object.entries(PROGRESSION_LABELS)) {
@@ -4673,25 +4755,16 @@ async function refreshSheetPanel() {
   let statsHtml = '<p><strong>HP</strong> ' + hp + ' / ' + maxHp + '</p>';
   statKeys.forEach(s => { statsHtml += '<p>' + s + ': ' + (char[s] ?? '—') + '</p>'; });
   document.getElementById('panel-tab-stats').innerHTML = statsHtml;
-  const items = inv.items || [];
   const eq = inv.equipment || {};
   const offhandLocked = !!inv.offhand_locked;
   const dualWield = !!inv.dual_wield;
   const idToName = {};
   (inv.itemDetails || []).forEach(it => { idToName[it.id] = it.display_name || it.id; });
-  const slotLabels = { weapon_main:'Weapon',weapon_offhand:'Offhand',head:'Head',chest:'Chest',hands:'Hands',legs:'Legs',feet:'Feet',cloak:'Cloak',ring_1:'Ring 1',ring_2:'Ring 2',charm:'Charm',relic:'Relic' };
-  const slotOrder = ['weapon_main','weapon_offhand','head','chest','hands','legs','feet','cloak','ring_1','ring_2','charm','relic'];
-  const loadoutParts = slotOrder.map(s => {
-    let val = '—';
-    if (s === 'weapon_offhand' && offhandLocked) val = '— Two-Handed —';
-    else val = idToName[eq[s]] || '—';
-    const label = (slotLabels[s] || s) + ': ' + val;
-    return (s === 'weapon_offhand' && dualWield && eq[s]) ? label + ' ⚔ Dual Wield' : label;
-  });
-  const loadout = loadoutParts.join(' · ');
+  const invLines = htmlInventoryReadOnlyLines(inv);
   document.getElementById('panel-tab-inventory').innerHTML = '<p>◈ ' + (wallet.formatted_am ?? wallet.ash_marks ?? 0) + ' Ash · ◆ ' + (wallet.ember_shards ?? 0) + ' Ember · ○ ' + (wallet.soul_coins ?? 0) + ' Soul</p>' +
-    '<p class="inv-loadout" style="margin-bottom:6px">' + escapeHtml(loadout) + '</p>' +
-    '<p>' + (items.length ? escapeHtml(items.join(', ')) : 'Nothing carried.') + '</p>';
+    wrapEquippedSection(htmlEquippedSlotRows(eq, idToName, offhandLocked, dualWield)) +
+    '<div class="inv-panel-h inv-inventory-below">INVENTORY</div>' +
+    '<div class="inv-inventory-readonly">' + invLines + '</div>';
   let flagsHtml = '<ul>';
   for (const [id, label] of Object.entries(PROGRESSION_LABELS)) {
     flagsHtml += '<li class="' + ((flags[id] && Number(flags[id]) > 0) ? 'unlocked' : 'locked') + '">' + ((flags[id] && Number(flags[id]) > 0) ? label : '???') + '</li>';
@@ -5183,7 +5256,7 @@ function updateStanding(data) {
 }
 
 const EQUIPMENT_SLOT_LABELS = {
-  weapon_main: 'Weapon Main', weapon_offhand: 'Weapon Offhand', head: 'Head', chest: 'Chest',
+  weapon_main: 'Weapon', weapon_offhand: 'Offhand', head: 'Head', chest: 'Chest',
   hands: 'Hands', legs: 'Legs', feet: 'Feet', cloak: 'Cloak',
   ring_1: 'Ring 1', ring_2: 'Ring 2', charm: 'Charm', relic: 'Relic',
 };
@@ -5191,6 +5264,120 @@ const EQUIPMENT_SLOT_ORDER = ['weapon_main','weapon_offhand','head','chest','han
 
 function formatEquipmentSlotName(slot) {
   return EQUIPMENT_SLOT_LABELS[slot] || (slot ? slot.replace(/_/g, ' ') : '');
+}
+
+function htmlEquippedSlotRows(equipment, idToName, offhandLocked, dualWield) {
+  let rows = '';
+  EQUIPMENT_SLOT_ORDER.forEach(slot => {
+    const label = escapeHtml(EQUIPMENT_SLOT_LABELS[slot] || slot);
+    let valueHtml;
+    if (slot === 'weapon_offhand' && offhandLocked) {
+      valueHtml = '<span class="inv-offhand-locked" title="Locked by two-handed weapon">—</span>';
+    } else {
+      const itemId = equipment[slot];
+      const nm = itemId ? idToName[itemId] : '';
+      valueHtml = nm ? escapeHtml(nm) : '—';
+      if (dualWield && slot === 'weapon_offhand' && itemId) {
+        valueHtml += ' <span class="inv-dual-wield-ind">⚔ Dual Wield</span>';
+      }
+    }
+    rows += '<div class="inv-slot-row"><span class="inv-slot-label">' + label + ':</span><span class="inv-slot-value">' + valueHtml + '</span></div>';
+  });
+  return rows;
+}
+
+function wrapEquippedSection(rowsHtml) {
+  return '<div class="inv-equipped-block"><div class="inv-panel-h">EQUIPPED</div><div class="inv-equipped-slots">' + rowsHtml + '</div></div>';
+}
+
+/** Read-only INVENTORY lines (unequipped only); uses middle dot per line. */
+function htmlInventoryReadOnlyLines(inv) {
+  const equipment = inv.equipment || {};
+  const equippedIds = new Set();
+  Object.keys(equipment).forEach(k => {
+    const v = equipment[k];
+    if (v) equippedIds.add(v);
+  });
+  const details = inv.itemDetails || [];
+  const items = inv.items || [];
+  const idToName = {};
+  details.forEach(it => { idToName[it.id] = it.display_name || it.id; });
+  const lines = [];
+  if (details.length) {
+    details.filter(it => !it.equipped).forEach(it => {
+      const nm = escapeHtml(it.display_name || it.id);
+      const q = it.qty > 1 ? ' ×' + it.qty : '';
+      lines.push('<div class="inv-inventory-line"><span class="inv-inventory-bullet">·</span><span class="inv-inventory-text">' + nm + q + '</span></div>');
+    });
+  } else if (items.length) {
+    items.filter(id => !equippedIds.has(id)).forEach(id => {
+      lines.push('<div class="inv-inventory-line"><span class="inv-inventory-bullet">·</span><span class="inv-inventory-text">' + escapeHtml(idToName[id] || id) + '</span></div>');
+    });
+  }
+  if (!lines.length) return '<div class="inv-inventory-empty">—</div>';
+  return '<div class="inv-inventory-lines">' + lines.join('') + '</div>';
+}
+
+/** Slide panel: EQUIPPED block with optional Unequip per filled slot. */
+function renderSlideEquippedSection(container, equipment, idToName, offhandLocked, dualWield, itemDetails) {
+  container.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'inv-equipped-block';
+  const h = document.createElement('div');
+  h.className = 'inv-panel-h';
+  h.textContent = 'EQUIPPED';
+  wrap.appendChild(h);
+  const grid = document.createElement('div');
+  grid.className = 'inv-equipped-slots';
+  EQUIPMENT_SLOT_ORDER.forEach(slot => {
+    const row = document.createElement('div');
+    row.className = 'inv-slot-row inv-slot-row--slide';
+    const lab = document.createElement('span');
+    lab.className = 'inv-slot-label';
+    lab.textContent = (EQUIPMENT_SLOT_LABELS[slot] || slot) + ':';
+    const valCell = document.createElement('span');
+    valCell.className = 'inv-slot-value';
+    if (slot === 'weapon_offhand' && offhandLocked) {
+      valCell.innerHTML = '<span class="inv-offhand-locked" title="Locked by two-handed weapon">—</span>';
+      row.appendChild(lab);
+      row.appendChild(valCell);
+      grid.appendChild(row);
+      return;
+    }
+    const itemId = equipment[slot];
+    const nm = itemId ? (idToName[itemId] || itemId) : '';
+    valCell.textContent = '';
+    if (nm) valCell.appendChild(document.createTextNode(nm));
+    else valCell.textContent = '—';
+    if (dualWield && slot === 'weapon_offhand' && itemId && nm) {
+      const dw = document.createElement('span');
+      dw.className = 'inv-dual-wield-ind';
+      dw.textContent = ' ⚔ Dual Wield';
+      valCell.appendChild(dw);
+    }
+    row.appendChild(lab);
+    row.appendChild(valCell);
+    if (itemId) {
+      const det = itemDetails.find(it => it.id === itemId && it.equipped && it.slot);
+      const unequipSlot = det && det.slot ? det.slot : slot;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'inv-slot-unequip';
+      btn.textContent = 'Unequip';
+      btn.onclick = async () => {
+        try {
+          await POST('/api/inventory/unequip', { slot: unequipSlot });
+          const inv = await GET('/api/inventory');
+          updateInventory(inv);
+          refreshSidebar();
+        } catch (e) { log('<em>' + escapeHtml(e.message) + '</em>'); }
+      };
+      row.appendChild(btn);
+    }
+    grid.appendChild(row);
+  });
+  wrap.appendChild(grid);
+  container.appendChild(wrap);
 }
 
 function formatStatName(key) {
@@ -5341,30 +5528,15 @@ function updateInventory(invData) {
   const dualWield = !!invData?.dual_wield;
   const idToName = {};
   itemDetails.forEach(it => { idToName[it.id] = it.display_name || it.id; });
-  let loadoutHtml = '';
-  EQUIPMENT_SLOT_ORDER.forEach(slot => {
-    const label = EQUIPMENT_SLOT_LABELS[slot] || slot;
-    let value = '— none —';
-    if (slot === 'weapon_offhand' && offhandLocked) {
-      value = '<span class="inv-offhand-locked" title="Locked by two-handed weapon">— Two-Handed —</span>';
-    } else {
-      const itemId = equipment[slot];
-      value = escapeHtml(idToName[itemId] || '— none —');
-      if (dualWield && slot === 'weapon_offhand' && itemId) {
-        value += ' <span class="inv-dual-wield-ind">⚔ Dual Wield</span>';
-      }
-    }
-    loadoutHtml += '<span><strong>' + escapeHtml(label) + ':</strong> ' + value + '</span>';
-  });
-  loadoutEl.innerHTML = loadoutHtml;
+  renderSlideEquippedSection(loadoutEl, equipment, idToName, offhandLocked, dualWield, itemDetails);
+  const packItems = itemDetails.filter(it => !it.equipped);
   el.innerHTML = '';
-  if (!itemDetails.length) {
-    el.innerHTML = '<div style="color:var(--text-dim);font-size:0.82rem">Nothing carried.</div>';
-    return;
-  }
-  itemDetails.forEach(it => {
+  if (!packItems.length) {
+    el.innerHTML = '<div class="inv-inventory-empty">—</div>';
+  } else {
+  packItems.forEach(it => {
     const d = document.createElement('div');
-    d.className = 'inv-item' + (it.equipped ? ' equipped' : '') + (it.id === 'ashbound_resonance' ? ' inv-resonance' : '');
+    d.className = 'inv-item' + (it.id === 'ashbound_resonance' ? ' inv-resonance' : '');
     const typeTag = it.item_type ? `<span class="inv-type-tag">${it.item_type}</span>` : '';
     const affinityPrefix = (() => {
       if (!it.affinity_marker) return '';
@@ -5373,7 +5545,7 @@ function updateInventory(invData) {
       if (it.affinity_marker === '↓') return `<span class="inv-affinity-marker inv-affinity-penalty"${t}>↓</span> `;
       return `<span class="inv-affinity-marker"${t}><span class="inv-affinity-bonus">✦</span><span class="inv-affinity-penalty">↓</span></span> `;
     })();
-    const label = affinityPrefix + (it.equipped ? '[E] ' : '') + escapeHtml(it.display_name || it.id) + (it.qty > 1 ? ' x' + it.qty : '');
+    const label = affinityPrefix + escapeHtml(it.display_name || it.id) + (it.qty > 1 ? ' x' + it.qty : '');
     const effectLine = it.effect_summary ? `<div class="inv-effect-summary">${escapeHtml(it.effect_summary)}</div>` : '';
     const loreLine = (it.id === 'ashbound_resonance' && it.lore) ? `<div class="inv-resonance-lore">${escapeHtml(it.lore)}</div>` : '';
     const valueLine = (it.item_type === 'loot' && it.value_am > 0 && !it.unsellable) ? `<span class="inv-value">${it.value_am} AM</span>` : '';
@@ -5418,17 +5590,30 @@ function updateInventory(invData) {
     if (btnRow.children.length) d.appendChild(btnRow);
     el.appendChild(d);
   });
+  }
+
+  const mEq = document.getElementById('m-equipped-block');
+  if (mEq) {
+    mEq.innerHTML = '<div class="inv-equipped-slots m-equipped-slots">' + htmlEquippedSlotRows(equipment, idToName, offhandLocked, dualWield) + '</div>';
+  }
 
   const mInvList = document.getElementById('m-inv-list');
   if (mInvList) {
     mInvList.innerHTML = '';
-    if (!itemDetails.length) {
-      mInvList.innerHTML = '<div style="color:var(--text-dim);font-size:0.82rem">Nothing carried.</div>';
+    if (!packItems.length) {
+      mInvList.innerHTML = '<div class="inv-inventory-empty">—</div>';
     } else {
-      itemDetails.forEach(it => {
+      packItems.forEach(it => {
         const d = document.createElement('div');
-        d.className = 'inv-item' + (it.equipped ? ' equipped' : '');
-        d.textContent = (it.equipped ? '[E] ' : '') + (it.display_name || it.id) + (it.qty > 1 ? ' x' + it.qty : '');
+        d.className = 'm-inv-line';
+        const b = document.createElement('span');
+        b.className = 'inv-inventory-bullet';
+        b.textContent = '·';
+        const t = document.createElement('span');
+        t.className = 'inv-inventory-text';
+        t.textContent = (it.display_name || it.id) + (it.qty > 1 ? ' ×' + it.qty : '');
+        d.appendChild(b);
+        d.appendChild(t);
         mInvList.appendChild(d);
       });
     }
