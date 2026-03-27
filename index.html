@@ -4356,6 +4356,19 @@ document.addEventListener('click', () => {
 }, { once: false });
 
 // ── State ────────────────────────────────────────────────────────
+let sheetCache = {
+  char: null,
+  wallet: null,
+  inv: null,
+  flags: null,
+  ts: 0,
+};
+const SHEET_CACHE_TTL = 15000;
+
+function invalidateSheetCache() {
+  sheetCache.ts = 0;
+}
+
 let vToken = localStorage.getItem('v_token') || '';
 let currentNPC = '';
 /** Phase A NPC dialogue: ES/trial chrome from last /api/talk open */
@@ -5465,14 +5478,36 @@ async function init() {
 }
 
 async function refreshSheetPanel() {
-  const char = await GET('/api/character');
+  const now = Date.now();
+  const useCache =
+    sheetCache.ts > 0 &&
+    (now - sheetCache.ts) < SHEET_CACHE_TTL &&
+    sheetCache.char != null;
+
+  let char;
+  let wallet;
+  let inv;
+  let flags;
+  if (useCache) {
+    char = sheetCache.char;
+    wallet = sheetCache.wallet;
+    inv = sheetCache.inv;
+    flags = sheetCache.flags;
+  } else {
+    char = await GET('/api/character');
+    wallet = { ash_marks: 0, ember_shards: 0, soul_coins: 0 };
+    inv = { items: [] };
+    flags = {};
+    try { wallet = await GET('/api/wallet'); } catch(e) {}
+    try { inv = await GET('/api/inventory'); } catch(e) {}
+    try { flags = await GET('/api/character/flags'); } catch(e) {}
+    sheetCache.char = char;
+    sheetCache.wallet = wallet;
+    sheetCache.inv = inv;
+    sheetCache.flags = flags;
+    sheetCache.ts = Date.now();
+  }
   mainCharacter = char;
-  let wallet = { ash_marks: 0, ember_shards: 0, soul_coins: 0 };
-  let inv = { items: [] };
-  let flags = {};
-  try { wallet = await GET('/api/wallet'); } catch(e) {}
-  try { inv = await GET('/api/inventory'); } catch(e) {}
-  try { flags = await GET('/api/character/flags'); } catch(e) {}
   if (!mainRacesData) try { mainRacesData = await GET('/api/data/races'); } catch(e) {}
   if (!mainInstinctsData) try { mainInstinctsData = await GET('/api/data/instincts'); } catch(e) {}
   document.getElementById('panel-cs-name').textContent = char.name || '—';
@@ -6173,6 +6208,7 @@ function renderSlideEquippedSection(container, equipment, idToName, offhandLocke
       btn.onclick = async () => {
         try {
           await POST('/api/inventory/unequip', { slot: unequipSlot });
+          invalidateSheetCache();
           const inv = await GET('/api/inventory');
           updateInventory(inv);
           refreshSidebar();
@@ -6308,6 +6344,7 @@ async function confirmEquipFromCompare() {
   if (!compareItemId) return;
   try {
     await POST('/api/inventory/equip', { item: compareItemId });
+    invalidateSheetCache();
     closeItemCompare();
     const inv = await GET('/api/inventory');
     updateInventory(inv);
@@ -6367,6 +6404,7 @@ function updateInventory(invData) {
         try {
           if (it.equipped) {
             await POST('/api/inventory/unequip', { slot: it.slot });
+            invalidateSheetCache();
             const inv = await GET('/api/inventory');
             updateInventory(inv);
             refreshSidebar();
@@ -6946,6 +6984,7 @@ function renderRoom(data) {
   updateContextPanel(data);
   syncTavernBoardPanel(loc);
   syncNarrativeEncounterUI(data);
+  invalidateSheetCache();
 }
 
 function makeActionBtn(label, fn) {
@@ -7024,12 +7063,16 @@ async function doMove(dirOrTarget) {
     } else if (data.encounter?.triggered) {
       await handleAutoEncounter(data.encounter);
     } else if (!data.message && !(data.chain_moves && data.chain_moves.length)) {
-      const moveDir = typeof dirOrTarget === 'object' && dirOrTarget?.direction != null
-        ? dirOrTarget.direction
-        : (typeof dirOrTarget === 'object' && dirOrTarget?.target != null
-          ? (data.name || dirOrTarget.target)
-          : dirOrTarget);
-      log(`<em>You move ${moveDir || 'on'}.</em>`);
+      const rawDir = typeof dirOrTarget === 'object' && dirOrTarget != null ? dirOrTarget.direction : dirOrTarget;
+      const dirLow = String(rawDir ?? '').toLowerCase();
+      if (dirLow !== 'h' && dirLow !== 'hub' && dirLow !== 'b' && dirLow !== 'back') {
+        const moveDir = typeof dirOrTarget === 'object' && dirOrTarget?.direction != null
+          ? dirOrTarget.direction
+          : (typeof dirOrTarget === 'object' && dirOrTarget?.target != null
+            ? (data.name || dirOrTarget.target)
+            : dirOrTarget);
+        log(`<em>You move ${moveDir || 'on'}.</em>`);
+      }
     }
     refreshSidebar();
     window.dispatchEvent(new CustomEvent('player-moved', { detail: { location: data.location } }));
@@ -8006,6 +8049,7 @@ async function doTradeBuy() {
   try {
     const data = await POST('/api/shop/buy', { npc_id: npc, item_id: pendingItem.id });
     log(render(data.message || ''));
+    invalidateSheetCache();
     refreshSidebar();
     cancelTradeConfirm();
     closeTrade();
@@ -8020,6 +8064,7 @@ async function doTradeSell() {
   try {
     const data = await POST('/api/shop/sell', { npc_id: npc, item_id: pendingItem.id });
     log(render(data.message || ''));
+    invalidateSheetCache();
     refreshSidebar();
     cancelTradeConfirm();
     closeTrade();
@@ -8441,6 +8486,7 @@ async function selectUpgrade(upgradeId) {
     document.getElementById('upgrade-overlay').style.display = 'none';
     const name = (window.LEVEL_5_UPGRADES || {})[upgradeId]?.display_name || upgradeId;
     log(`<strong>${escapeHtml(name)}</strong> — learned.`);
+    invalidateSheetCache();
     refreshSidebar();
   } catch(e) {
     log(`<em>${e.message || 'Failed.'}</em>`);

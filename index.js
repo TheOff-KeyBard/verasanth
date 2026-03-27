@@ -326,7 +326,7 @@ function getZoneType(locationId) {
 }
 
 const HUB_TRAVEL_LINE =
-  "You find your way back to the Broken Coil. The city lets you go — for now.";
+  "You find your way back to the tavern. The city lets you go — for now.";
 
 function pickTravelLineForZone(zone) {
   const pool = TRAVEL_NARRATION_BY_ZONE[zone] || TRAVEL_NARRATION_BY_ZONE.default;
@@ -1446,6 +1446,7 @@ async function getExitMapForMove(db, uid, row, fromLoc) {
 }
 
 async function processMoveTransition(db, uid, row, fromLoc, dest, directionUsed, opts = {}) {
+  let encounterData = null;
   const skipNarrativeAndScene = opts.skipNarrativeAndScene ?? false;
   const hubMove = opts.hubMove ?? false;
   const skipMoveCount = opts.skipMoveCount ?? false;
@@ -1600,7 +1601,6 @@ async function processMoveTransition(db, uid, row, fromLoc, dest, directionUsed,
 
       let hazardData = null;
       let hazardEncounterBonus = 0;
-      let encounterData = null;
       if (!hubMove) {
       const now = Date.now();
       const activeHazard = await dbGet(db, "SELECT * FROM sewer_hazards WHERE location=? AND expires_at>?", [dest, now]);
@@ -2994,7 +2994,16 @@ if (path === "/api/admin/command" && method === "POST") {
           const prevIdx = await getFlag(db, uid, "previous_location", 0);
           const prev = decodePreviousLocation(prevIdx);
           if (!prev) return { ok: false, error: "There is no going back from here. Not yet." };
-          return { ok: true, fromLoc, dest: prev, directionUsed: "back", moveOpts: {} };
+          const backRoomName = WORLD[prev]?.name || prev;
+          return {
+            ok: true,
+            fromLoc,
+            dest: prev,
+            directionUsed: "back",
+            moveOpts: {
+              travelNarrationOverride: `You retrace your steps to ${backRoomName}.`,
+            },
+          };
         }
         const exitMap = await getExitMapForMove(db, uid, row, fromLoc);
         let directionUsed;
