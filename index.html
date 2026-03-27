@@ -3351,6 +3351,23 @@
 </head>
 <body>
 
+<!-- Pre-auth audio warning -->
+<div id="pre-auth-audio-notice" style="display:none; position:fixed; 
+  bottom: 80px; left: 50%; transform: translateX(-50%);
+  width: min(380px, 90vw);
+  padding:10px 14px; z-index: 50;
+  border: 1px solid var(--border-warm); background:rgba(0,0,0,0.85);
+  font-size:0.8rem; color:var(--text-dim);
+  display:flex; align-items:center; gap:10px;">
+  <button id="pre-auth-mute"
+    style="background:none; border:1px solid var(--border-warm);
+    color:var(--text-dim); padding:4px 10px; cursor:pointer;
+    font-family:var(--font-body); font-size:0.8rem; white-space:nowrap;">
+    🔊 Mute
+  </button>
+  <span>This game contains audio. Mute before entering if needed.</span>
+</div>
+
 <!-- ── Auth Screen ──────────────────────────────────────────────── -->
 <div id="auth-screen">
   <div id="auth-logo">VERASANTH</div>
@@ -3657,7 +3674,6 @@
         </div>
         <div id="hp-bar-bg"><div id="hp-bar-fill" style="width:100%"></div></div>
       </div>
-      <button type="button" id="char-sound-toggle" aria-pressed="false" title="Sound">🔊 Sounds: On</button>
       <div class="char-panel-divider" aria-hidden="true"></div>
       <div id="context-panel" class="context-panel"></div>
     </div>
@@ -3692,10 +3708,15 @@
   <!-- Chat panel (Phase 3: global only) -->
   <div id="chat-panel" class="collapsed" aria-label="Chat">
     <div class="chat-panel-bar" id="chat-panel-bar">
-      <span>Chat</span>
-      <span class="chat-unread-badge" id="chat-unread-badge" style="display:none;">0</span>
-      <span class="chat-toggle" id="chat-toggle">▲</span>
-    </div>
+  <span>Chat</span>
+  <span class="chat-unread-badge" id="chat-unread-badge" style="display:none;">0</span>
+  <button type="button" id="char-sound-toggle" aria-pressed="false"
+    title="Sounds: On (click to mute)"
+    style="background:none; border:none; color:var(--text-dim);
+    cursor:pointer; font-size:0.9rem; padding:0 6px;
+    line-height:1; margin-left:auto; margin-right:4px;">🔊</button>
+  <span class="chat-toggle" id="chat-toggle">▲</span>
+</div>
     <div class="chat-panel-body">
       <div class="chat-tabs">
         <button type="button" class="chat-tab active" data-chat-tab="global">Global</button>
@@ -4758,6 +4779,7 @@ function log(html, fresh = true) {
 
 // ── Auth ─────────────────────────────────────────────────────────
 function fadeOutAuthScreen() {
+  document.getElementById('pre-auth-audio-notice').style.display = 'none';
   const screen = document.getElementById('auth-screen');
   screen.classList.add('fading-out');
   setTimeout(() => {
@@ -4980,10 +5002,13 @@ async function showTrueWelcome() {
   document.getElementById('tw-sheet-back-btn').onclick = () => {
     document.getElementById('auth-screen').classList.remove('hidden');
     showScreen('auth');
+    document.getElementById('pre-auth-audio-notice').style.display = 'flex';
   };
   mainTwStep = 'race';
   showScreen('tw');
+  if (!getVerasanthMuted()) {
   startBackground('/Audio/awakening/A%20Nightmare.mp3', 0.22);
+}
 }
 
 function renderTwInstinctStep() {
@@ -5290,8 +5315,24 @@ function syncMuteToggleUi() {
   const btn = document.getElementById("char-sound-toggle");
   if (!btn) return;
   const muted = getVerasanthMuted();
-  btn.textContent = muted ? "🔇 Sounds: Off" : "🔊 Sounds: On";
+  btn.textContent = muted ? "🔇" : "🔊";
   btn.setAttribute("aria-pressed", muted ? "true" : "false");
+  btn.title = muted ? "Sounds: Off (click to unmute)" 
+                    : "Sounds: On (click to mute)";
+}
+function initPreAuthMute() {
+  const btn = document.getElementById("pre-auth-mute");
+  if (!btn) return;
+  function syncPreAuth() {
+    const muted = getVerasanthMuted();
+    btn.textContent = muted ? "🔇 Unmute" : "🔊 Mute";
+  }
+  btn.onclick = function() {
+    setVerasanthMuted(!getVerasanthMuted());
+    syncPreAuth();
+    syncMuteToggleUi();
+  };
+  syncPreAuth();
 }
 function initMuteToggle() {
   const btn = document.getElementById("char-sound-toggle");
@@ -5305,6 +5346,7 @@ function initMuteToggle() {
 
 async function init() {
   initMuteToggle();
+  initPreAuthMute();
   if (vToken) {
     try {
       const char = await GET('/api/character');
