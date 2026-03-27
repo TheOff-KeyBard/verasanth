@@ -2809,6 +2809,49 @@
   #chat-panel .chat-send-btn:hover:not(:disabled) { background: rgba(196,98,42,0.15); }
   #chat-panel .chat-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
   #chat-panel .chat-error { font-size: 0.8rem; color: var(--danger); padding: 4px 12px; }
+  .chat-history-sep {
+    text-align: center; font-size: 0.72rem; color: var(--text-dim);
+    margin: 10px 0 8px; letter-spacing: 0.12em;
+  }
+  #chat-panel .chat-msg-global-history .chat-time-ago {
+    font-size: 0.72rem; color: var(--text-dim); margin-top: 3px;
+  }
+
+  .city-presence-line {
+    font-size: 0.78rem; color: var(--text-dim); letter-spacing: 0.04em;
+    margin: -4px 0 10px 0; font-style: italic;
+  }
+
+  #tavern-board-panel {
+    position: fixed; right: 12px; bottom: 300px; z-index: 88;
+    width: min(300px, 92vw); max-height: 240px; display: none;
+    flex-direction: column; background: var(--bg2);
+    border: 1px solid var(--border-warm);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.35);
+  }
+  .tavern-board-header {
+    padding: 8px 12px; font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ash-light); border-bottom: 1px solid var(--border);
+  }
+  #tavern-board-list {
+    flex: 1; overflow-y: auto; padding: 8px 10px; font-size: 0.85rem; max-height: 140px;
+    scrollbar-width: thin;
+  }
+  .tavern-board-item { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .tavern-board-item:last-child { border-bottom: none; }
+  .tavern-board-meta { color: var(--gold); font-size: 0.8rem; margin-bottom: 4px; }
+  .tavern-board-text { color: var(--text); line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+  .tavern-board-time { font-size: 0.72rem; color: var(--text-dim); margin-top: 4px; }
+  .tavern-board-input-row { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--border); align-items: center; }
+  .tavern-board-input-row input {
+    flex: 1; background: rgba(0,0,0,0.4); border: 1px solid var(--border-warm); color: var(--text);
+    padding: 6px 10px; border-radius: 4px; font-size: 0.85rem;
+  }
+  .tavern-board-post-btn {
+    padding: 6px 12px; background: transparent; border: 1px solid var(--ember); color: var(--ember-glow);
+    cursor: pointer; font-size: 0.8rem; border-radius: 4px; white-space: nowrap;
+  }
+  .tavern-board-post-btn:hover { background: rgba(196,98,42,0.12); }
 
   /* ── Mobile toggle button (hidden on desktop) ──────────────────── */
   #char-toggle {
@@ -3203,6 +3246,7 @@
   <div id="main-area">
     <div id="room-panel">
       <div id="room-name">—</div>
+      <div id="city-presence-line" class="city-presence-line" style="display:none" aria-live="polite"></div>
       <div id="room-desc"></div>
       <div id="narrative-encounter-wrap" style="display:none;margin-bottom:16px;">
         <div id="narrative-encounter-result" style="display:none;margin-bottom:10px;color:var(--text);line-height:1.7;font-size:0.95rem;white-space:pre-wrap;"></div>
@@ -3317,6 +3361,15 @@
 
   <div id="footer">
     <span id="footer-loc" style="font-size:0.8rem;color:var(--text-dim)"></span>
+  </div>
+
+  <div id="tavern-board-panel" aria-label="Tavern board">
+    <div class="tavern-board-header">The Board</div>
+    <div id="tavern-board-list"></div>
+    <div class="tavern-board-input-row">
+      <input type="text" id="tavern-board-input" maxlength="200" placeholder="Leave a message..." autocomplete="off" aria-label="Board message" />
+      <button type="button" class="tavern-board-post-btn" id="tavern-board-post-btn">Post</button>
+    </div>
   </div>
 
   <!-- Chat panel (Phase 3: global only) -->
@@ -5015,6 +5068,7 @@ async function loadGame() {
   updateCharPanel(charData);
   updateWallet(walletData);
   updateInventory(invData);
+  if (window.setGlobalChatHistorySnapshot) window.setGlobalChatHistorySnapshot(charData.global_history || []);
   renderRoom(lookData);
   if (!lookData.in_combat) startLingerTimer(lookData.fightable);
 
@@ -5043,6 +5097,7 @@ async function loadGame() {
   let chatUnreadInterval = null;
   let chatSendCooldownUntil = 0;
   let activeChatTab = 'global';
+  let globalHistorySnapshot = [];
   const CHAT_POLL_GLOBAL_MS = 4000;
   const CHAT_POLL_LOCAL_MS = 3000;
   const CHAT_POLL_WHISPERS_MS = 5000;
@@ -5081,6 +5136,39 @@ async function loadGame() {
   function clearMessages() {
     if (messagesEl) messagesEl.innerHTML = '';
   }
+
+  function maxHistoryTs() {
+    if (!globalHistorySnapshot.length) return 0;
+    var mx = 0;
+    globalHistorySnapshot.forEach(function(m) {
+      var t = Number(m && m.timestamp);
+      if (Number.isFinite(t) && t > mx) mx = t;
+    });
+    return mx;
+  }
+
+  function renderGlobalHistoryBlock() {
+    if (!messagesEl || !globalHistorySnapshot.length) return;
+    var sep = document.createElement('div');
+    sep.className = 'chat-history-sep';
+    sep.textContent = '— Earlier —';
+    messagesEl.appendChild(sep);
+    globalHistorySnapshot.forEach(function(m, i) {
+      var div = document.createElement('div');
+      div.className = 'chat-msg chat-msg-global-history';
+      div.dataset.msgId = 'kv-hist-' + (m.timestamp || 0) + '-' + i;
+      var nm = (m.name || 'Someone');
+      var tx = (m.text || '');
+      div.innerHTML =
+        '<span class="chat-name">[' + escapeHtml(nm) + ']</span> <span class="chat-text">' + escapeHtml(tx) + '</span>' +
+        '<div class="chat-time-ago">' + escapeHtml(formatTimeAgo(m.timestamp)) + '</div>';
+      messagesEl.appendChild(div);
+    });
+  }
+
+  window.setGlobalChatHistorySnapshot = function(arr) {
+    globalHistorySnapshot = Array.isArray(arr) ? arr.slice() : [];
+  };
 
   function pollGlobal() {
     if (!vToken || !isExpanded() || activeChatTab !== 'global') return;
@@ -5136,7 +5224,12 @@ async function loadGame() {
 
   function startPoll() {
     if (chatPollInterval) return;
-    if (activeChatTab === 'global') { chatLastSince = 0; pollGlobal(); }
+    if (activeChatTab === 'global') {
+      clearMessages();
+      renderGlobalHistoryBlock();
+      chatLastSince = globalHistorySnapshot.length ? maxHistoryTs() : Date.now();
+      pollGlobal();
+    }
     else if (activeChatTab === 'local') { localLastSince = 0; pollLocal(); }
     else if (activeChatTab === 'whispers') {
       whispersLastSince = 0;
@@ -5162,7 +5255,11 @@ async function loadGame() {
     var tabs = document.querySelectorAll('.chat-tab');
     tabs.forEach(function(t) { t.classList.toggle('active', t.dataset.chatTab === tab); });
     clearMessages();
-    if (tab === 'global') { chatLastSince = 0; pollGlobal(); }
+    if (tab === 'global') {
+      renderGlobalHistoryBlock();
+      chatLastSince = globalHistorySnapshot.length ? maxHistoryTs() : Date.now();
+      pollGlobal();
+    }
     else if (tab === 'local') { localLastSince = 0; pollLocal(); }
     else if (tab === 'whispers') {
       whispersLastSince = 0;
@@ -5304,6 +5401,18 @@ function updateCharPanel(c) {
   document.getElementById('hp-bar-fill').style.width      = pctStr;
   document.getElementById('header-sub').textContent       = c.location || '';
   document.getElementById('footer-loc').textContent        = c.location || '';
+
+  const cityLine = document.getElementById('city-presence-line');
+  if (cityLine) {
+    const w = Number(c.city_wanderers);
+    if (Number.isFinite(w) && w > 0) {
+      cityLine.textContent = w + ' wanderer' + (w === 1 ? '' : 's') + ' in the city';
+      cityLine.style.display = 'block';
+    } else {
+      cityLine.textContent = '';
+      cityLine.style.display = 'none';
+    }
+  }
 
   const mCharName = document.getElementById('m-char-name');
   if (mCharName) {
@@ -5886,6 +5995,69 @@ function syncNarrativeEncounterUI(data) {
   }
 }
 
+async function loadTavernBoard() {
+  const list = document.getElementById('tavern-board-list');
+  if (!list) return;
+  list.innerHTML = '<div class="tavern-board-time">…</div>';
+  try {
+    const data = await GET('/api/board');
+    const posts = data.posts || [];
+    list.innerHTML = '';
+    if (!posts.length) {
+      list.innerHTML = '<div class="tavern-board-time">The board is bare. No words yet.</div>';
+      return;
+    }
+    posts.forEach(function(p) {
+      const div = document.createElement('div');
+      div.className = 'tavern-board-item';
+      const rlab = displayPlayerRaceLabel(p.race) || String(p.race || 'unknown').replace(/_/g, ' ');
+      div.innerHTML =
+        '<div class="tavern-board-meta">[' + escapeHtml(p.name || 'Someone') + ' — ' + escapeHtml(rlab) + ']</div>' +
+        '<div class="tavern-board-text">' + escapeHtml(p.text || '') + '</div>' +
+        '<div class="tavern-board-time">' + escapeHtml(formatTimeAgo(p.timestamp)) + '</div>';
+      list.appendChild(div);
+    });
+  } catch (e) {
+    list.innerHTML = '<div class="tavern-board-time">' + escapeHtml(e.message || 'The board could not be read.') + '</div>';
+  }
+}
+
+function syncTavernBoardPanel(locationId) {
+  const panel = document.getElementById('tavern-board-panel');
+  if (!panel) return;
+  if (locationId === 'tavern') {
+    panel.style.display = 'flex';
+    loadTavernBoard();
+  } else {
+    panel.style.display = 'none';
+  }
+}
+
+(function initTavernBoardControls() {
+  const btn = document.getElementById('tavern-board-post-btn');
+  const inp = document.getElementById('tavern-board-input');
+  if (!btn || !inp) return;
+  async function postBoard() {
+    const t = (inp.value || '').trim();
+    if (!t) return;
+    if (t.length > 200) {
+      log('<em>Message too long.</em>');
+      return;
+    }
+    try {
+      await POST('/api/board', { text: t });
+      inp.value = '';
+      await loadTavernBoard();
+    } catch (e) {
+      log('<em>' + escapeHtml(e.message || String(e)) + '</em>');
+    }
+  }
+  btn.addEventListener('click', postBoard);
+  inp.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); postBoard(); }
+  });
+})();
+
 async function submitNarrativeEncounterChoice(choiceIndex) {
   try {
     const data = await POST('/api/encounter/respond', { choice_index: choiceIndex });
@@ -6239,6 +6411,7 @@ function renderRoom(data) {
     log(render(data.ambient));
   }
 
+  syncTavernBoardPanel(loc);
   syncNarrativeEncounterUI(data);
 }
 
@@ -6553,6 +6726,18 @@ function escapeHtml(s) {
   const div = document.createElement('div');
   div.textContent = s;
   return div.innerHTML;
+}
+
+function formatTimeAgo(ts) {
+  if (ts == null || typeof ts !== 'number' || !Number.isFinite(ts)) return '';
+  const sec = Math.floor((Date.now() - ts) / 1000);
+  if (sec < 45) return 'just now';
+  const m = Math.floor(sec / 60);
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60);
+  if (h < 48) return h + 'h ago';
+  const d = Math.floor(h / 24);
+  return d + 'd ago';
 }
 
 // ── Dialogue ─────────────────────────────────────────────────────

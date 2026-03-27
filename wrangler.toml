@@ -14,6 +14,18 @@ binding = "DB"
 database_name = "verasanth"
 database_id = "0d211a3f-958c-4738-ae0c-89bc626b1a08"
 
+[[kv_namespaces]]
+binding = "ECHOES"
+id = "243c2a5513eb4bf1b79a2e96e2a0bac3"
+
+[[kv_namespaces]]
+binding = "BOARD"
+id = "0d0c54f0c5de4af5a38845770c1467b2"
+
+[[kv_namespaces]]
+binding = "GLOBAL"
+id = "42a2df98d62d45b8a0c86faa7671cfe7"
+
 [triggers]
 crons = ["*/45 * * * *", "*/3 * * * *"]
 

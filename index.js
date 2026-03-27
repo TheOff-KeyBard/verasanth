@@ -59,6 +59,18 @@ import {
   formatNpcSceneAppend,
   NPC_SCENE_LIST,
 } from "./services/npc_scenes.js";
+import {
+  appendRoomSocialToDescription,
+  recordMoveSocialKv,
+  appendGlobalChatHistory,
+  getGlobalChatHistoryTail,
+  adjustGlobalWandererCount,
+  getGlobalWandererCount,
+  getBoardPosts,
+  saveBoardPosts,
+  boardPostAllowed,
+  recordBoardPostRate,
+} from "./services/kv_social.js";
 
 // ─────────────────────────────────────────────────────────────
 // ECONOMY HELPERS
@@ -2138,6 +2150,7 @@ if (path === "/api/register" && method === "POST") {
     [normalizedUsername, pwHash, uid]
   );
 
+  await adjustGlobalWandererCount(env, 1);
   return json({ token, user_id: uid });
 }
 
@@ -2162,6 +2175,7 @@ if (path === "/api/login" && method === "POST") {
     [token, row.user_id]
   );
 
+  await adjustGlobalWandererCount(env, 1);
   return json({ token, user_id: row.user_id });
 }
 
@@ -2246,7 +2260,9 @@ if (path === "/api/admin/command" && method === "POST") {
       const hp = await getPlayerHp(db, uid, row);
       const alignment_ui = { ...buildAlignmentUI(row.alignment_morality, row.alignment_order, row.crime_heat, row.archetype) };
       alignment_ui.has_bounty = !!(await dbGet(db, "SELECT id FROM bounties WHERE target_id=? AND status='active'", [uid]));
-      return json({ ...row, current_hp: hp.current, max_hp: hp.max, alignment_ui });
+      const global_history = await getGlobalChatHistoryTail(env, 20);
+      const city_wanderers = await getGlobalWandererCount(env);
+      return json({ ...row, current_hp: hp.current, max_hp: hp.max, alignment_ui, global_history, city_wanderers });
     }
 
     if (path === "/api/alignment" && method === "GET") {
@@ -2636,6 +2652,12 @@ if (path === "/api/admin/command" && method === "POST") {
       if (hazardInRoom) locPayload.hazard = hazardInRoom;
       if (room.pvpve) locPayload.pvpve = room.pvpve;
       if (activeCondition) locPayload.active_condition = activeCondition;
+      locPayload.description = await appendRoomSocialToDescription(
+        env,
+        loc,
+        locPayload.description,
+        row.name,
+      );
       return json(locPayload);
     }
 
@@ -2923,6 +2945,8 @@ if (path === "/api/admin/command" && method === "POST") {
             destination: WORLD[destCh].name,
           });
           lastPayload = payload;
+          const rowStep = await getPlayerSheet(db, uid);
+          await recordMoveSocialKv(env, rowStep, destCh);
           if (payload.encounter?.triggered && payload.encounter?.combat_state) {
             stopped_early = true;
             stop_reason = "Combat started.";
@@ -2937,6 +2961,13 @@ if (path === "/api/admin/command" && method === "POST") {
         if (!lastPayload) {
           return err(stop_reason || "Chain could not complete.", 400);
         }
+        const rowChain = await getPlayerSheet(db, uid);
+        lastPayload.description = await appendRoomSocialToDescription(
+          env,
+          lastPayload.location,
+          lastPayload.description,
+          rowChain.name,
+        );
         return json({
           ...lastPayload,
           chain_moves,
@@ -3013,6 +3044,14 @@ if (path === "/api/admin/command" && method === "POST") {
         resolved.dest,
         resolved.directionUsed,
         resolved.moveOpts,
+      );
+      const rowAfterMove = await getPlayerSheet(db, uid);
+      await recordMoveSocialKv(env, rowAfterMove, movePayload.location);
+      movePayload.description = await appendRoomSocialToDescription(
+        env,
+        movePayload.location,
+        movePayload.description,
+        rowAfterMove.name,
       );
       return json(movePayload);
     }
@@ -4582,6 +4621,12 @@ But he is not the only one that was made."`,
           INSERT INTO chat_messages (channel, location, user_id, player_name, message, created_at)
           VALUES (?, NULL, ?, ?, ?, ?)`, ["global", uid, playerName, message, now]);
         const insertRow = await dbGet(db, "SELECT id, created_at FROM chat_messages WHERE user_id = ? AND channel = 'global' ORDER BY id DESC LIMIT 1", [uid]);
+        await appendGlobalChatHistory(env, {
+          name: playerName,
+          race: row.race || "unknown",
+          text: message,
+          timestamp: now,
+        });
         return json({ ok: true, id: insertRow?.id ?? null, created_at: insertRow?.created_at ?? now });
       }
 
@@ -4758,8 +4803,8 @@ But he is not the only one that was made."`,
       return json({ ok: true });
     }
 
-    // ── GET: Board ──
-    if (path === "/api/board" && method === "GET") {
+    // ── GET: Ember Post (market) ──
+    if (path === "/api/board/ember" && method === "GET") {
       const row = await getPlayerSheet(db, uid);
       if (!row) return err("No character.", 404);
       if (row.location !== "market_square") return err("The Ember Post is in the market square.");
@@ -4767,6 +4812,40 @@ But he is not the only one that was made."`,
                   : await getFlag(db, uid, "warned_mid_sewer") ? 1 : 0;
       const seed  = Math.floor(Date.now() / 3_600_000); // hourly
       return json({ board: formatBoard(row.name, depth, seed) });
+    }
+
+    // ── GET: Tavern message board (KV) ──
+    if (path === "/api/board" && method === "GET") {
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (row.location !== "tavern") return err("The board hangs in the tavern.", 400);
+      const all = await getBoardPosts(env);
+      const posts = all.slice(0, 20);
+      return json({ posts });
+    }
+
+    // ── POST: Tavern message board (KV) ──
+    if (path === "/api/board" && method === "POST") {
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      if (row.location !== "tavern") return err("The board hangs in the tavern.", 400);
+      const text = body.text != null ? String(body.text).trim() : "";
+      if (text.length < 1 || text.length > 200) return err("Message must be 1–200 characters.", 400);
+      if (!(await boardPostAllowed(env, uid))) {
+        return err("You have posted enough for now. Wait before leaving another mark.", 429);
+      }
+      const posterName = (row.name || "").trim() || "Someone";
+      const post = {
+        name: posterName,
+        race: row.race || "unknown",
+        text,
+        timestamp: Date.now(),
+      };
+      const all = await getBoardPosts(env);
+      const next = [post, ...(Array.isArray(all) ? all : [])].slice(0, 50);
+      await saveBoardPosts(env, next);
+      await recordBoardPostRate(env, uid);
+      return json({ ok: true });
     }
 
     // ── POST: Commune ──
@@ -6491,7 +6570,10 @@ Something about the room has changed.`;
     if (path === "/api/logout" && method === "POST") {
       const auth = request.headers.get("Authorization") || "";
       if (auth.startsWith("Bearer ")) {
-        await dbRun(db, "DELETE FROM sessions WHERE token=?", [auth.slice(7).trim()]);
+        const tok = auth.slice(7).trim();
+        const sess = await dbGet(db, "SELECT user_id FROM sessions WHERE token=?", [tok]);
+        await dbRun(db, "DELETE FROM sessions WHERE token=?", [tok]);
+        if (sess) await adjustGlobalWandererCount(env, -1);
       }
       return json({ ok: true });
     }
