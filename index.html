@@ -2774,6 +2774,46 @@
     color: var(--ash);
     font-weight: 500;
   }
+  @media (max-width: 640px) {
+  .left-tabs {
+    position: fixed;
+    bottom: 44px;
+    left: 0;
+    right: 0;
+    top: auto;
+    transform: none;
+    flex-direction: row;
+    width: 100%;
+    gap: 0;
+    z-index: 89;
+  }
+
+  .left-tabs .sheet-panel-tab {
+    writing-mode: horizontal-tb;
+    text-orientation: mixed;
+    transform: none;
+    flex: 1;
+    text-align: center;
+    padding: 10px 4px;
+    font-size: 0.65rem;
+    border-radius: 0;
+    border-left: 1px solid var(--border-warm);
+    border-top: 1px solid var(--border-warm);
+    border-bottom: none;
+    border-right: none;
+  }
+
+  .left-tabs .sheet-panel-tab:first-child {
+    border-left: none;
+  }
+
+  /* Push game content above the tab bar */
+  #game-panel,
+  #room-panel,
+  #app {
+    padding-bottom: 84px;
+  }
+}
 
   /* ── Scrollbars ────────────────────────────────────────────────── */
   ::-webkit-scrollbar { width: 4px; }
