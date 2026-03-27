@@ -21,7 +21,7 @@ export const NPC_NAMES = {
   armorsmith:  "Veyra",
   herbalist:   "Thalara",
   curator:     "Seris Vantrel",
-  trader:      "Still Scale",
+  trader:      "Gautrorn Haargoth",
   othorion:    "Othorion Naxir",
   warden:      "Grommash Nazgrel",
   vaelith:     "Vaelith Xyrelle",
@@ -30,6 +30,24 @@ export const NPC_NAMES = {
   lirael:      "Lirael Quickstep",
   serix:       "Serix Vaunt",
   rhyla:       "Rhyla Thornshield",
+};
+
+/** Game NPC id → playable race key (Verasanth canon). */
+export const NPC_RACES = {
+  bartender:   "human",
+  weaponsmith: "panaridari",
+  armorsmith:  "human",
+  herbalist:   "human",
+  curator:     "human",
+  trader:      "darmerians",
+  othorion:    "dakaridari",
+  warden:      "silth",
+  vaelith:     "dakaridari",
+  garruk:      "silth",
+  halden:      "human",
+  lirael:      "panaridari",
+  serix:       "ashborn",
+  rhyla:       "cambral",
 };
 
 export const NPC_TOPICS = {

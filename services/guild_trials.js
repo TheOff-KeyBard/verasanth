@@ -154,8 +154,8 @@ export async function handleGuildTrial(db, uid, guild, trial, choice, standing, 
         return deny("Choose who vouches for you: vouch_kelvaris, vouch_caelir, or vouch_seris.");
       }
       const responses = {
-        vouch_kelvaris: '"The dwarf with the long memory," Lirael says. "That\'s a careful choice. A stable reputation, if not a loud one."',
-        vouch_caelir: '"The elf who can\'t leave. Interesting. His reputation is clean. Also, leverageable." She writes something down.',
+        vouch_kelvaris: '"Kelvaris — long memory behind the bar," Lirael says. "That\'s a careful choice. A stable reputation, if not a loud one."',
+        vouch_caelir: '"The Panaridari smith who can\'t leave. Interesting. His reputation is clean. Also, leverageable." She writes something down.',
         vouch_seris: 'A pause. A genuine one. "You vouch through the curator." She closes the ledger. "That tells me quite a lot about what you think the Market is."',
       };
       return advance(4, responses[choice], { market_voucher: choice });

@@ -1226,7 +1226,16 @@
     border-bottom: 1px solid var(--border);
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .dialogue-header-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    align-items: flex-start;
+    min-width: 0;
   }
 
   #dialogue-npc-name {
@@ -1236,7 +1245,17 @@
     letter-spacing: 0.1em;
   }
 
+  #dialogue-npc-race {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    letter-spacing: 0.07em;
+    text-transform: none;
+    font-family: var(--font-body, system-ui, sans-serif);
+  }
+
   #dialogue-close {
+    align-self: center;
+    flex-shrink: 0;
     background: none;
     border: none;
     color: var(--text-dim);
@@ -1495,9 +1514,18 @@
   #trade-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
+    gap: 12px;
     padding: 14px 20px;
     border-bottom: 1px solid var(--border);
+  }
+
+  .trade-header-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    align-items: flex-start;
+    min-width: 0;
   }
 
   #trade-title {
@@ -1506,7 +1534,16 @@
     color: var(--ember-glow);
   }
 
+  #trade-subtitle {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    letter-spacing: 0.06em;
+    font-family: var(--font-body, system-ui, sans-serif);
+  }
+
   #trade-close {
+    align-self: center;
+    flex-shrink: 0;
     background: none;
     border: none;
     color: var(--text-dim);
@@ -2100,6 +2137,15 @@
     min-width: 240px;
     min-height: 80px;
     line-height: 1.35;
+    overflow-wrap: break-word;
+  }
+  .tw-race-card .tw-race-desc {
+    display: block;
+    margin-top: 8px;
+    font-size: 0.76rem;
+    line-height: 1.38;
+    color: var(--text-dim);
+    font-weight: normal;
     overflow-wrap: break-word;
   }
   .tw-race-card:hover, .tw-instinct-card:hover {
@@ -3324,7 +3370,10 @@
 <div id="dialogue-overlay">
   <div id="dialogue-box">
     <div id="dialogue-header">
-      <span id="dialogue-npc-name"></span>
+      <div class="dialogue-header-text">
+        <span id="dialogue-npc-name"></span>
+        <span id="dialogue-npc-race" class="dialogue-npc-race"></span>
+      </div>
       <button id="dialogue-close" onclick="closeDialogue()">✕</button>
     </div>
     <div id="dialogue-response"></div>
@@ -3346,7 +3395,10 @@
 <div id="trade-overlay">
   <div id="trade-box">
     <div id="trade-header">
-      <span id="trade-title"></span>
+      <div class="trade-header-text">
+        <span id="trade-title"></span>
+        <span id="trade-subtitle"></span>
+      </div>
       <button id="trade-close" onclick="closeTrade()">✕</button>
     </div>
     <div id="trade-list"></div>
@@ -3809,6 +3861,87 @@ let twSelectedInstinct = "";
 const TW_SHEET_POOL = 30;
 const TW_SHEET_BASE = 5;
 const TW_SHEET_STAT_MAX = 18;
+/** Display order for True Welcome race step (must match Worker /api/data/races keys). */
+const TW_RACE_ORDER = [
+  "ashborn",
+  "dakaridari",
+  "panaridari",
+  "cambral",
+  "silth",
+  "human",
+  "malaridari",
+  "darmerians",
+];
+
+/** Legacy stored race keys → canonical id (matches Worker races). */
+const LEGACY_RACE_TO_CANONICAL = {
+  tiefling: "ashborn",
+  dark_elf: "dakaridari",
+  elf: "panaridari",
+  dwarf: "cambral",
+  orc: "silth",
+};
+
+/** Fallback display names if /api/data/races is empty. */
+const STATIC_RACE_DISPLAY = {
+  ashborn: "Ashborn",
+  dakaridari: "Dak'Aridari",
+  panaridari: "Pan'Aridari",
+  cambral: "Cambral",
+  silth: "Silth",
+  human: "Human",
+  malaridari: "Mal'Aridari",
+  darmerians: "Darmerians",
+};
+
+function canonicalizePlayerRaceKey(raceKey) {
+  if (!raceKey) return "";
+  const k = String(raceKey).toLowerCase().replace(/-/g, "_");
+  return LEGACY_RACE_TO_CANONICAL[k] || k;
+}
+
+function displayPlayerRaceLabel(raceKey) {
+  const canon = canonicalizePlayerRaceKey(raceKey);
+  if (!canon) return "—";
+  const fromApi = mainRacesData?.races?.[canon];
+  if (fromApi && fromApi.name) return fromApi.name;
+  return STATIC_RACE_DISPLAY[canon] || (canon.charAt(0).toUpperCase() + canon.slice(1));
+}
+
+/** Game NPC id → canonical race key (aligned with Worker data/npcs.js NPC_RACES). */
+const NPC_GAME_RACE_KEYS = {
+  bartender: "human",
+  weaponsmith: "panaridari",
+  armorsmith: "human",
+  herbalist: "human",
+  curator: "human",
+  trader: "darmerians",
+  othorion: "dakaridari",
+  warden: "silth",
+  vaelith: "dakaridari",
+  garruk: "silth",
+  halden: "human",
+  lirael: "panaridari",
+  serix: "ashborn",
+  rhyla: "cambral",
+};
+
+function npcRaceDisplayLabel(npcId) {
+  if (!NPC_GAME_RACE_KEYS[npcId]) return "";
+  if (npcId === "trader") return "Darmerian";
+  return displayPlayerRaceLabel(NPC_GAME_RACE_KEYS[npcId]);
+}
+
+function setTradeHeaderContext(npcId) {
+  const sub = document.getElementById("trade-subtitle");
+  if (!sub) return;
+  const name = NPC_NAMES[npcId];
+  const race = npcRaceDisplayLabel(npcId);
+  const line = [name, race].filter(Boolean).join(" · ");
+  sub.textContent = line;
+  sub.style.display = line ? "" : "none";
+}
+
 let twSheetBaseStats = { strength: 5, dexterity: 5, constitution: 5, intelligence: 5, wisdom: 5, charisma: 5 };
 const STARTING_ITEMS_DISPLAY = {
   ember_touched: ['charred_focus_wand', 'ash_thread_robe', 'ember_charm'],
@@ -3825,6 +3958,7 @@ const NPC_NAMES = {
   armorsmith:  'Veyra',
   herbalist:   'Thalara',
   curator:     'Seris Vantrel',
+  trader:      'Gautrorn Haargoth',
   othorion:    'Othorion Naxir',
   warden:      'Grommash Nazgrel',
   vaelith:     'Vaelith Xyrelle',
@@ -4288,24 +4422,31 @@ async function showTrueWelcome() {
     mainRacesData = rData;
     mainInstinctsData = iData;
   } catch (e) {}
-  twSelectedRace = (mainCharacter && mainCharacter.race && mainRacesData?.races?.[mainCharacter.race]) ? mainCharacter.race : 'human';
+  {
+    const raw = mainCharacter && mainCharacter.race;
+    const canon = raw ? canonicalizePlayerRaceKey(raw) : "human";
+    twSelectedRace = mainRacesData?.races?.[canon] ? canon : "human";
+  }
   twSelectedInstinct = '';
 
   const raceGrid = document.getElementById('tw-race-grid');
   raceGrid.innerHTML = '';
   const races = mainRacesData?.races || {};
-  for (const [id, def] of Object.entries(races)) {
+  TW_RACE_ORDER.forEach(id => {
+    const def = races[id];
+    if (!def) return;
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'tw-race-card' + (twSelectedRace === id ? ' selected' : '');
-    btn.innerHTML = '<strong>' + (def.name || id) + '</strong><br><span class="tw-stat-mods">' + formatStatMods(def.stat_mods) + '</span>';
+    const desc = def.description ? '<span class="tw-race-desc">' + escapeHtml(def.description) + '</span>' : '';
+    btn.innerHTML = '<strong>' + escapeHtml(def.name || id) + '</strong><br><span class="tw-stat-mods">' + formatStatMods(def.stat_mods) + '</span>' + desc;
     btn.onclick = () => {
       twSelectedRace = id;
       raceGrid.querySelectorAll('.tw-race-card').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
     };
     raceGrid.appendChild(btn);
-  }
+  });
   raceGrid.classList.add('stagger-reveal');
   raceGrid.offsetHeight;
 
@@ -4395,7 +4536,7 @@ function updateTwSheetSummary() {
     const primaryStat = instDef && Object.keys(instDef.stat_mods || {})[0];
     let statsStr = final ? Object.entries(final).map(([k, v]) => k.slice(0, 3).toUpperCase() + ' ' + v).join(' · ') : '';
     contentEl.innerHTML =
-      '<p><strong>' + (race ? race.name : twSelectedRace) + ' · ' + (instinct ? instinct.label : twSelectedInstinct) + '</strong></p>' +
+      '<p><strong>' + (race ? race.name : displayPlayerRaceLabel(twSelectedRace)) + ' · ' + (instinct ? instinct.label : twSelectedInstinct) + '</strong></p>' +
       '<p class="tw-stats-preview">' + statsStr + '</p>' +
       '<p>Starting equipment: ' + (items.length ? items.join(', ') : '—') + '</p>' +
       (hasAffinity && primaryStat ? '<p class="tw-affinity-bonus">Affinity bonus: +1 ' + primaryStat.charAt(0).toUpperCase() + primaryStat.slice(1) + '</p>' : '');
@@ -4542,8 +4683,7 @@ async function populateCharacterSheet() {
   try { flags = await GET('/api/character/flags'); } catch(e) {}
   const locName = getLocationName(char.location);
   document.getElementById('cs-name').textContent = char.name || '—';
-  const raceDef = mainRacesData?.races?.[char.race];
-  document.getElementById('cs-race').textContent = raceDef ? raceDef.name : (char.race ? char.race.charAt(0).toUpperCase() + char.race.slice(1) : '—');
+  document.getElementById('cs-race').textContent = displayPlayerRaceLabel(char.race);
   const instId = char.instinct || '';
   const instDef = mainInstinctsData?.instincts?.[instId];
   document.getElementById('cs-instinct').textContent = instDef ? instDef.label : (instId || '—');
@@ -4739,9 +4879,13 @@ async function refreshSheetPanel() {
   try { wallet = await GET('/api/wallet'); } catch(e) {}
   try { inv = await GET('/api/inventory'); } catch(e) {}
   try { flags = await GET('/api/character/flags'); } catch(e) {}
+  if (!mainRacesData) try { mainRacesData = await GET('/api/data/races'); } catch(e) {}
+  if (!mainInstinctsData) try { mainInstinctsData = await GET('/api/data/instincts'); } catch(e) {}
   document.getElementById('panel-cs-name').textContent = char.name || '—';
   const locName = getLocationName(char.location);
-  document.getElementById('panel-tab-identity').innerHTML = '<p><strong>Race</strong> ' + (char.race || '—') + '</p><p><strong>Instinct</strong> ' + (char.instinct || '—') + '</p><p class="cs-muted">Last seen: ' + locName + '</p>';
+  const raceLabel = displayPlayerRaceLabel(char.race);
+  const instinctLabel = mainInstinctsData?.instincts?.[char.instinct]?.label || char.instinct || '—';
+  document.getElementById('panel-tab-identity').innerHTML = '<p><strong>Race</strong> ' + escapeHtml(raceLabel) + '</p><p><strong>Instinct</strong> ' + escapeHtml(instinctLabel) + '</p><p class="cs-muted">Last seen: ' + escapeHtml(locName) + '</p>';
   const au = char.alignment_ui || {};
   let standingHtml = '<p><strong>Archetype:</strong> ' + (au.archetype || 'Survivor') + '</p><p class="cs-muted">' + (au.grommash_read || 'Neither asset nor threat. Yet.') + '</p>';
   if (au.has_bounty) standingHtml += '<p class="cs-bounty-indicator">⚠ Bounty Active</p>';
@@ -5129,7 +5273,11 @@ function updateCharPanel(c) {
   const pctStr = pct + '%';
 
   document.getElementById('char-name').textContent        = c.name || '—';
-  document.getElementById('char-title').textContent        = c.instinct || '';
+  {
+    const r = displayPlayerRaceLabel(c.race);
+    const ins = c.instinct || '';
+    document.getElementById('char-title').textContent = ins ? (r + ' · ' + ins) : r;
+  }
   document.getElementById('stat-stage').textContent        = c.class_stage ?? '—';
   document.getElementById('stat-xp').textContent          = c.xp ?? '—';
   const charLevel = Math.max(1, 1 + (Number(c.class_stage ?? 0)));
@@ -5147,7 +5295,11 @@ function updateCharPanel(c) {
   const mCharName = document.getElementById('m-char-name');
   if (mCharName) {
     mCharName.textContent      = c.name || '—';
-    document.getElementById('m-char-title').textContent   = c.instinct || '';
+    {
+      const r = displayPlayerRaceLabel(c.race);
+      const ins = c.instinct || '';
+      document.getElementById('m-char-title').textContent = ins ? (r + ' · ' + ins) : r;
+    }
     document.getElementById('m-stat-stage').textContent   = c.class_stage ?? '—';
     document.getElementById('m-stat-xp').textContent      = c.xp ?? '—';
     document.getElementById('m-hp-text').textContent       = `${hp} / ${maxHp}`;
@@ -6289,6 +6441,12 @@ async function openDialogue(npcId) {
   dialogueMoreTopicsOpen = false;
   dialogueSuggestedExpanded = false;
   document.getElementById('dialogue-npc-name').textContent = NPC_NAMES[npcId] || npcId;
+  const npcRaceEl = document.getElementById('dialogue-npc-race');
+  if (npcRaceEl) {
+    const rl = npcRaceDisplayLabel(npcId);
+    npcRaceEl.textContent = rl;
+    npcRaceEl.style.display = rl ? '' : 'none';
+  }
   document.getElementById('dialogue-response').innerHTML   = '<span class="spinner"></span>';
   clearAuthoredDialogueUi();
   document.getElementById('dialogue-overlay').classList.add('open');
@@ -6759,6 +6917,7 @@ let tradeState = { mode: null, npc: null, pendingItem: null, pendingPrice: null 
 async function openTradeBuy(npcId) {
   tradeState = { mode: 'buy', npc: npcId };
   document.getElementById('trade-title').textContent = 'Buy';
+  setTradeHeaderContext(npcId);
   document.getElementById('trade-list').innerHTML = '';
   document.getElementById('trade-confirm').style.display = 'none';
   document.getElementById('trade-overlay').classList.add('open');
@@ -6783,6 +6942,7 @@ async function openTradeBuy(npcId) {
 async function openTradeSell(npcId) {
   tradeState = { mode: 'sell', npc: npcId };
   document.getElementById('trade-title').textContent = 'Sell';
+  setTradeHeaderContext(npcId);
   document.getElementById('trade-list').innerHTML = '';
   document.getElementById('trade-confirm').style.display = 'none';
   document.getElementById('trade-overlay').classList.add('open');
@@ -6860,6 +7020,8 @@ function cancelTradeConfirm() {
 
 function closeTrade() {
   document.getElementById('trade-overlay').classList.remove('open');
+  const sub = document.getElementById('trade-subtitle');
+  if (sub) { sub.textContent = ''; sub.style.display = 'none'; }
   tradeState = { mode: null, npc: null, pendingItem: null, pendingPrice: null };
 }
 

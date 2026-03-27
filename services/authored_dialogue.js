@@ -133,8 +133,6 @@ async function legacyTrustBoost(db, uid, canonicalId, getFlag) {
     }
     case "grommash":
       return Math.min(45, (await getFlag(db, uid, "grommash_visits", 0)) * 4);
-    case "trader":
-      return 100;
     default:
       return 0;
   }
@@ -456,13 +454,70 @@ export async function handleNpcSelectPost(deps, routeSegment, body) {
   );
   await incrementPhaseAVisit(db, uid, gameNpcId, getFlag, setFlag, row);
 
+  let responseOut = opt.response;
+  if (canonicalId === "seris" && optionId === "seris_ledger_question") {
+    const serisTrust = await getEffectiveTrust(
+      db,
+      dbGet,
+      uid,
+      "seris",
+      getFlag,
+    );
+    const gautrornRevealed = await getFlag(
+      db,
+      uid,
+      "gautrorn_name_revealed",
+      0,
+    );
+    const alreadyConfirmed = await getFlag(
+      db,
+      uid,
+      "ledger_gautrorn_confirmed",
+      0,
+    );
+    if (serisTrust >= 25 && gautrornRevealed >= 1 && !alreadyConfirmed) {
+      const ledgerNarrative = [
+        "",
+        "The ledger's pages turn on their own.",
+        "",
+        "Not forward. Not backward.",
+        "",
+        "Searching.",
+        "",
+        "Ink rises from the surface — not written, but pulled upward, as though remembering its shape.",
+        "",
+        "A name forms:",
+        "",
+        "**GAUTRORN HAARGOTH**",
+        "",
+        "The letters settle... then shift.",
+        "",
+        "A second line emerges beneath it:",
+        "",
+        "*A memory misplaced.*",
+        "",
+        "For a moment — the name flickers. As if it could be something else.",
+        "",
+        "The ledger closes.",
+        "",
+        "The sound is not paper. It is stone.",
+        "",
+        "---",
+        "",
+        "\u201c...So it\u2019s confirmed.\u201d A quiet breath. \u201cThe city marked him before he ever arrived.\u201d",
+      ].join("\n");
+      responseOut = (responseOut || "") + ledgerNarrative;
+      await setFlag(db, uid, "ledger_gautrorn_confirmed", 1);
+    }
+  }
+
   const follow = opt.followup
     ? { label: opt.followup.label, response: opt.followup.response }
     : null;
 
   return {
     ok: true,
-    response: opt.response,
+    response: responseOut,
     followup: follow,
     effects_applied: effectsApplied,
     fallback: false,

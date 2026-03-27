@@ -84,6 +84,56 @@ export const dialogue = {
       },
       effects: { set_flag: "seris_arc_1_complete" },
     },
+    {
+      id: "seris_gautrorn_hint",
+      label:
+        "Ask if she has noticed anything unusual about anyone in the city.",
+      requires_trust_min: 20,
+      requires_flag_not: "gautrorn_name_revealed",
+      response:
+        "You're asking the right questions. Not quite the right moment.",
+      followup: null,
+      effects: null,
+    },
+    {
+      id: "seris_gautrorn_mid",
+      label: "Ask if she has seen names written before they exist.",
+      requires_trust_min: 20,
+      requires_flag: "gautrorn_dreams_discussed",
+      requires_flag_not: "ledger_gautrorn_confirmed",
+      response:
+        "There is a man in this district who dreams of places that do not exist. If you meet him, listen carefully. His memories are not entirely his own.",
+      followup: null,
+      effects: null,
+    },
+    {
+      id: "seris_ledger_question",
+      label: "Ask her directly — is his name already in the ledger?",
+      requires_trust_min: 25,
+      requires_flag: "gautrorn_name_revealed",
+      requires_flag_not: "ledger_gautrorn_confirmed",
+      response:
+        "Gautrorn Haargoth. The Darmerian with the storm-scarred eyes. He remembers a world that never touched Verasanth. The ledger has already accounted for him.",
+      followup: {
+        label: "Ask why.",
+        response:
+          "Because he does not belong to a single version of the story. And the city notices inconsistencies.",
+      },
+      effects: null,
+    },
+    {
+      id: "seris_after_ledger",
+      label: "Ask what it means that his name was there.",
+      requires_trust_min: 25,
+      requires_flag: "ledger_gautrorn_confirmed",
+      response:
+        "It means the city marked him before he ever arrived. Whether that is a gift or a claim — I have not yet decided.",
+      followup: {
+        label: "Ask if she has told him.",
+        response: "No. She does not elaborate.",
+      },
+      effects: { trust_delta: 1 },
+    },
   ],
 
   fallback: "I don't deal in guesswork. Come back with something specific.",
