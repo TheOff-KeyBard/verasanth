@@ -3211,7 +3211,16 @@
 
       <div id="travel-section" style="display:none">
         <div class="section-label">Travel</div>
+        <div class="button-row" id="travel-quick-row" style="margin-bottom:8px;"></div>
+        <div id="exit-compass-wrap" style="display:none;max-width:440px;margin-bottom:10px;"></div>
         <div class="button-row" id="travel-row"></div>
+        <div id="chain-move-bar" style="margin-top:12px;display:none;">
+          <label for="chain-moves-input" style="display:block;font-size:0.72rem;color:var(--text-dim);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">Chain moves</label>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            <input type="text" id="chain-moves-input" placeholder="e.g. n e e s" autocomplete="off" style="flex:1;min-width:140px;padding:8px 10px;background:rgba(0,0,0,0.2);border:1px solid var(--border);color:var(--text);font-family:var(--font-body);font-size:0.9rem;" />
+            <button type="button" class="btn" id="chain-go-btn">Go</button>
+          </div>
+        </div>
       </div>
       <div id="enter-section" style="display:none">
         <div class="section-label">Enter</div>
@@ -5908,53 +5917,238 @@ function renderRoom(data) {
   document.getElementById('header-sub').textContent = locationText;
 
   const DIRECTION_ARROWS = { north: '↑', south: '↓', east: '→', west: '←', up: '↑', down: '↓', deeper: '↓', back: '←', out: '→', northwest: '↖', northeast: '↗', southwest: '↙', southeast: '↘', in: '→' };
+  const DIRECTION_LABEL = { north: 'N', south: 'S', east: 'E', west: 'W', up: 'Up', down: 'Down', deeper: 'Deeper', back: 'Back', out: 'Out', northwest: 'NW', northeast: 'NE', southwest: 'SW', southeast: 'SE', in: 'In' };
+  const CARDINAL_KEYS = ['north', 'south', 'east', 'west'];
   const exits = data.exits || [];
   const exitMap = data.exit_map || {};
 
   const travelRow = document.getElementById('travel-row');
   const enterRow = document.getElementById('enter-row');
+  const compassWrap = document.getElementById('exit-compass-wrap');
+  const quickRow = document.getElementById('travel-quick-row');
+  const chainBar = document.getElementById('chain-move-bar');
   travelRow.innerHTML = '';
   enterRow.innerHTML = '';
+  if (compassWrap) compassWrap.innerHTML = '';
+  if (quickRow) quickRow.innerHTML = '';
 
-  if (exits.length && exits.every(e => typeof e === 'string')) {
-    exits.forEach(dir => {
-      const dest = exitMap[dir];
-      const name = (locationNamesMap[dest] || LOCATION_NAMES[dest] || dest || dir).trim();
-      const dangerous = dest && DANGEROUS_LOCATIONS.has(dest);
-      const b = document.createElement('button');
-      b.className = 'btn exit-btn travel-btn' + (dangerous ? ' exit-btn--danger' : '');
-      b.textContent = currentWardenActive ? ('→ Run ' + dir) : (name + (dangerous ? ' ⚠' : ''));
-      b.onclick = () => doMove(currentWardenActive ? { direction: dir } : (dest ? { target: dest } : { direction: dir }));
-      travelRow.appendChild(b);
-    });
-    document.getElementById('travel-section').style.display = '';
+  function shortRoomTitle(name) {
+    const s = (name || '—').trim();
+    const w = s.split(/\s+/).filter(Boolean);
+    return w.slice(0, 3).join(' ') || '—';
+  }
+
+  function buildFlatTravelExits() {
+    if (exits.length && exits.every(function(e) { return typeof e === 'string'; })) {
+      return exits.map(function(dir) {
+        const dest = exitMap[dir];
+        const label = (locationNamesMap[dest] || LOCATION_NAMES[dest] || dest || dir).trim();
+        return { direction: dir, target: dest, label: label, type: 'travel' };
+      });
+    }
+    return exits.filter(function(e) { return e && typeof e === 'object'; });
+  }
+
+  function makeExitButton(ex) {
+    const dest = ex.target;
+    const dir = ex.direction || '';
+    const dangerous = dest && DANGEROUS_LOCATIONS.has(dest);
+    const b = document.createElement('button');
+    b.className = 'btn exit-btn travel-btn' + (dangerous ? ' exit-btn--danger' : '');
+    const arrow = dir ? (DIRECTION_ARROWS[dir] || '') : '';
+    const dlab = DIRECTION_LABEL[dir] || dir;
+    const destName = ex.label || dest || dir;
+    if (currentWardenActive) {
+      b.textContent = '→ Run ' + (dir || destName);
+    } else {
+      b.textContent = (dlab ? '[' + dlab + '] ' : '') + destName + (dangerous ? ' ⚠' : '');
+    }
+    b.onclick = function() {
+      if (currentWardenActive && dir) doMove({ direction: dir });
+      else if (dest) doMove({ target: dest });
+      else if (dir) doMove({ direction: dir });
+    };
+    return b;
+  }
+
+  if (exits.length && exits.every(function(e) { return typeof e === 'string'; })) {
     document.getElementById('enter-section').style.display = 'none';
+    const flat = buildFlatTravelExits();
+    const travelOnly = flat;
+    const byDir = {};
+    travelOnly.forEach(function(ex) { if (ex.direction) byDir[ex.direction] = ex; });
+    const cardSlots = { north: [1, 1], south: [1, 3], west: [0, 2], east: [2, 2] };
+    let hasCompass = false;
+    CARDINAL_KEYS.forEach(function(k) { if (byDir[k]) hasCompass = true; });
+    const extras = travelOnly.filter(function(ex) { return ex.direction && CARDINAL_KEYS.indexOf(ex.direction) < 0; });
+    if (compassWrap && hasCompass) {
+      compassWrap.style.display = 'grid';
+      compassWrap.style.gridTemplateColumns = '1fr 1fr 1fr';
+      compassWrap.style.gridTemplateRows = 'auto auto auto';
+      compassWrap.style.gap = '8px';
+      compassWrap.style.alignItems = 'stretch';
+      for (let r = 1; r <= 3; r++) {
+        for (let c = 1; c <= 3; c++) {
+          if (r === 2 && c === 2) {
+            const here = document.createElement('div');
+            here.style.display = 'flex';
+            here.style.alignItems = 'center';
+            here.style.justifyContent = 'center';
+            here.style.textAlign = 'center';
+            here.style.fontSize = '0.88rem';
+            here.style.color = 'var(--ash-light)';
+            here.style.padding = '6px 4px';
+            here.style.border = '1px dashed var(--border)';
+            here.innerHTML = '<strong>HERE</strong><br><span style="font-size:0.78rem;color:var(--text-dim);">' + escapeHtml(shortRoomTitle(data.name)) + '</span>';
+            here.style.gridColumn = String(c);
+            here.style.gridRow = String(r);
+            compassWrap.appendChild(here);
+            continue;
+          }
+          let placed = false;
+          for (let ki = 0; ki < CARDINAL_KEYS.length; ki++) {
+            const key = CARDINAL_KEYS[ki];
+            const pos = cardSlots[key];
+            if (pos[0] + 1 === c && pos[1] === r && byDir[key]) {
+              const cell = document.createElement('div');
+              cell.style.display = 'flex';
+              cell.style.alignItems = 'center';
+              cell.style.justifyContent = 'center';
+              cell.style.gridColumn = String(c);
+              cell.style.gridRow = String(r);
+              cell.appendChild(makeExitButton(byDir[key]));
+              compassWrap.appendChild(cell);
+              placed = true;
+              break;
+            }
+          }
+          if (!placed) {
+            const ph = document.createElement('div');
+            ph.style.gridColumn = String(c);
+            ph.style.gridRow = String(r);
+            ph.style.minHeight = '8px';
+            compassWrap.appendChild(ph);
+          }
+        }
+      }
+    } else if (compassWrap) {
+      compassWrap.style.display = 'none';
+    }
+    extras.forEach(function(ex) { travelRow.appendChild(makeExitButton(ex)); });
+    if (!hasCompass) {
+      travelOnly.forEach(function(ex) { travelRow.appendChild(makeExitButton(ex)); });
+    }
+    document.getElementById('travel-section').style.display = (hasCompass || travelOnly.length) ? '' : 'none';
   } else {
-    const travelExits = exits.filter(e => e && e.type === 'travel');
-    const enterExits = exits.filter(e => e && e.type === 'enter');
-    travelExits.forEach(exit => {
-      const b = document.createElement('button');
-      b.className = 'btn exit-btn travel-btn';
-      const arrow = exit.direction ? (DIRECTION_ARROWS[exit.direction] || '') : '';
-      b.textContent = currentWardenActive ? ('→ Run ' + (exit.direction || exit.target)) : ((arrow ? arrow + ' ' : '') + (exit.label || exit.target));
-      const dest = exit.target;
-      const dangerous = dest && DANGEROUS_LOCATIONS.has(dest);
-      if (dangerous && !currentWardenActive) { b.className += ' exit-btn--danger'; b.textContent += ' ⚠'; }
-      b.onclick = () => doMove(currentWardenActive && exit.direction ? { direction: exit.direction } : { target: dest });
-      travelRow.appendChild(b);
-    });
-    enterExits.forEach(exit => {
+    const allFlat = buildFlatTravelExits();
+    const travelExits = allFlat.filter(function(e) { return e.type === 'travel'; });
+    const enterExits = allFlat.filter(function(e) { return e.type === 'enter'; });
+    const byDir = {};
+    travelExits.forEach(function(ex) { if (ex.direction) byDir[ex.direction] = ex; });
+    const cardSlots = { north: [1, 1], south: [1, 3], west: [0, 2], east: [2, 2] };
+    let hasCompass = false;
+    CARDINAL_KEYS.forEach(function(k) { if (byDir[k]) hasCompass = true; });
+    const extras = travelExits.filter(function(ex) { return !ex.direction || CARDINAL_KEYS.indexOf(ex.direction) < 0; });
+    if (compassWrap && hasCompass) {
+      compassWrap.style.display = 'grid';
+      compassWrap.style.gridTemplateColumns = '1fr 1fr 1fr';
+      compassWrap.style.gridTemplateRows = 'auto auto auto';
+      compassWrap.style.gap = '8px';
+      compassWrap.style.alignItems = 'stretch';
+      for (let r = 1; r <= 3; r++) {
+        for (let c = 1; c <= 3; c++) {
+          if (r === 2 && c === 2) {
+            const here = document.createElement('div');
+            here.style.display = 'flex';
+            here.style.alignItems = 'center';
+            here.style.justifyContent = 'center';
+            here.style.textAlign = 'center';
+            here.style.fontSize = '0.88rem';
+            here.style.color = 'var(--ash-light)';
+            here.style.padding = '6px 4px';
+            here.style.border = '1px dashed var(--border)';
+            here.innerHTML = '<strong>HERE</strong><br><span style="font-size:0.78rem;color:var(--text-dim);">' + escapeHtml(shortRoomTitle(data.name)) + '</span>';
+            here.style.gridColumn = String(c);
+            here.style.gridRow = String(r);
+            compassWrap.appendChild(here);
+            continue;
+          }
+          let placed = false;
+          for (let ki = 0; ki < CARDINAL_KEYS.length; ki++) {
+            const key = CARDINAL_KEYS[ki];
+            const pos = cardSlots[key];
+            if (pos[0] + 1 === c && pos[1] === r && byDir[key]) {
+              const cell = document.createElement('div');
+              cell.style.display = 'flex';
+              cell.style.alignItems = 'center';
+              cell.style.justifyContent = 'center';
+              cell.style.gridColumn = String(c);
+              cell.style.gridRow = String(r);
+              cell.appendChild(makeExitButton(byDir[key]));
+              compassWrap.appendChild(cell);
+              placed = true;
+              break;
+            }
+          }
+          if (!placed) {
+            const ph = document.createElement('div');
+            ph.style.gridColumn = String(c);
+            ph.style.gridRow = String(r);
+            ph.style.minHeight = '8px';
+            compassWrap.appendChild(ph);
+          }
+        }
+      }
+    } else if (compassWrap) {
+      compassWrap.style.display = 'none';
+    }
+    extras.forEach(function(ex) { travelRow.appendChild(makeExitButton(ex)); });
+    if (!hasCompass) {
+      travelExits.forEach(function(ex) {
+        const b = document.createElement('button');
+        b.className = 'btn exit-btn travel-btn';
+        const arrow = ex.direction ? (DIRECTION_ARROWS[ex.direction] || '') : '';
+        b.textContent = currentWardenActive ? ('→ Run ' + (ex.direction || ex.target)) : ((arrow ? arrow + ' ' : '') + (ex.label || ex.target));
+        const dest = ex.target;
+        const dangerous = dest && DANGEROUS_LOCATIONS.has(dest);
+        if (dangerous && !currentWardenActive) { b.className += ' exit-btn--danger'; b.textContent += ' ⚠'; }
+        b.onclick = function() {
+          if (currentWardenActive && ex.direction) doMove({ direction: ex.direction });
+          else doMove({ target: dest });
+        };
+        travelRow.appendChild(b);
+      });
+    }
+    enterExits.forEach(function(exit) {
       const b = document.createElement('button');
       b.className = 'btn exit-btn enter-btn';
       b.textContent = exit.label || exit.target;
       const dest = exit.target;
       const dangerous = dest && DANGEROUS_LOCATIONS.has(dest);
       if (dangerous) { b.className += ' exit-btn--danger'; b.textContent += ' ⚠'; }
-      b.onclick = () => doMove({ target: dest });
+      b.onclick = function() { doMove({ target: dest }); };
       enterRow.appendChild(b);
     });
-    document.getElementById('travel-section').style.display = travelExits.length ? '' : 'none';
+    document.getElementById('travel-section').style.display = (hasCompass || travelExits.length) ? '' : 'none';
     document.getElementById('enter-section').style.display = enterExits.length ? '' : 'none';
+  }
+
+  if (quickRow && !currentWardenActive && !combatState) {
+    const backB = document.createElement('button');
+    backB.type = 'button';
+    backB.className = 'btn exit-btn travel-btn';
+    backB.textContent = '← Back';
+    backB.onclick = function() { doMove({ direction: 'b' }); };
+    quickRow.appendChild(backB);
+    const hubB = document.createElement('button');
+    hubB.type = 'button';
+    hubB.className = 'btn exit-btn travel-btn';
+    hubB.textContent = '⌂ Hub';
+    hubB.onclick = function() { doMove({ direction: 'h' }); };
+    quickRow.appendChild(hubB);
+  }
+  if (chainBar) {
+    chainBar.style.display = (!currentWardenActive && !combatState && document.getElementById('travel-section').style.display !== 'none') ? '' : 'none';
   }
 
   if (window.updateSidebarMap) window.updateSidebarMap(data.location, visitedSet, { ...LOCATION_NAMES, ...locationNamesMap }, data.district);
@@ -6071,9 +6265,14 @@ async function doSearchArea() {
 // ── Movement ─────────────────────────────────────────────────────
 async function doMove(dirOrTarget) {
   try {
-    const body = typeof dirOrTarget === 'object' && dirOrTarget?.target != null
-      ? { target: dirOrTarget.target }
-      : { direction: typeof dirOrTarget === 'object' ? dirOrTarget?.direction : dirOrTarget };
+    let body;
+    if (dirOrTarget && typeof dirOrTarget === 'object' && Array.isArray(dirOrTarget.chain) && dirOrTarget.chain.length) {
+      body = { chain: dirOrTarget.chain };
+    } else if (typeof dirOrTarget === 'object' && dirOrTarget?.target != null) {
+      body = { target: dirOrTarget.target };
+    } else {
+      body = { direction: typeof dirOrTarget === 'object' ? dirOrTarget?.direction : dirOrTarget };
+    }
     let data;
     if (currentWardenActive) {
       const dir = body.direction || (body.target && currentExitMap && Object.entries(currentExitMap).find(([, t]) => t === body.target)?.[0]);
@@ -6091,6 +6290,14 @@ async function doMove(dirOrTarget) {
     visitedSet.add(data.location);
     renderRoom(data);
     startLingerTimer(data.fightable);
+    if (data.chain_moves && data.chain_moves.length) {
+      const pathStr = data.chain_moves.map(function(c) { return c.direction; }).join(' → ');
+      log('<em>' + escapeHtml(pathStr) + '</em>');
+      log('<em>Arrived: ' + escapeHtml(data.name || '—') + '</em>');
+      if (data.stopped_early && data.stop_reason) {
+        log('<em>' + escapeHtml(data.stop_reason) + '</em>');
+      }
+    }
     if (data.message) {
       log(render(data.message));
     }
@@ -6110,7 +6317,7 @@ async function doMove(dirOrTarget) {
       await handleAutoEncounter(data.encounter);
     } else if (data.encounter?.triggered) {
       await handleAutoEncounter(data.encounter);
-    } else if (!data.message) {
+    } else if (!data.message && !(data.chain_moves && data.chain_moves.length)) {
       const moveDir = typeof dirOrTarget === 'object' && dirOrTarget?.direction != null
         ? dirOrTarget.direction
         : (typeof dirOrTarget === 'object' && dirOrTarget?.target != null
@@ -6124,6 +6331,18 @@ async function doMove(dirOrTarget) {
     log(`<em>${e.message}</em>`);
   }
 }
+
+(function setupChainMoveBar() {
+  const go = document.getElementById('chain-go-btn');
+  const inp = document.getElementById('chain-moves-input');
+  if (!go || !inp) return;
+  go.addEventListener('click', function() {
+    const parts = inp.value.trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return;
+    doMove({ chain: parts });
+    inp.value = '';
+  });
+})();
 
 async function handleAutoEncounter(enc) {
   log(`<em>${enc.cue}</em>`);

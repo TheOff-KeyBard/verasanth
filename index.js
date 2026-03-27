@@ -7,6 +7,7 @@
 
 import { runAdminCommand } from "./admin.js";
 import { WORLD, FIRST_VISIT_INTROS } from "./data/world.js";
+import { GUILD_ROOMS } from "./data/guild_rooms.js";
 import { COMBAT_DATA, FIGHTABLE_LOCATIONS, ENCOUNTER_CHANCES, ENCOUNTER_CUES, SCENT_ITEMS, PREDATOR_ENEMIES, getPredatorCue, AMBUSH_ROOMS, getAmbushCue, LOCATION_TO_FLOOR } from "./data/combat.js";
 import { RACES } from "./data/races.js";
 import { INSTINCTS } from "./data/instincts.js";
@@ -238,19 +239,120 @@ const ENTER_TARGETS = new Set([
   "sewer_entrance",
 ]);
 
-/** One-sentence travel narration by exit type. */
-function getTravelNarration(fromRoom, toRoom, exitType) {
+/** Stable room id list for INTEGER previous_location flag (1-based index; 0 = none). */
+const WORLD_LOCATION_ORDER = Object.keys(WORLD).sort();
+
+function encodePreviousLocation(locId) {
+  const i = WORLD_LOCATION_ORDER.indexOf(locId);
+  return i >= 0 ? i + 1 : 0;
+}
+
+function decodePreviousLocation(n) {
+  if (n < 1 || n > WORLD_LOCATION_ORDER.length) return null;
+  return WORLD_LOCATION_ORDER[n - 1];
+}
+
+const GUILD_ZONE_ROOMS = new Set(Object.keys(GUILD_ROOMS));
+
+/**
+ * Bible / content reference — travel flavor lines by zone (getTravelNarration).
+ * Zones: street | guild | indoor | sewer | scar | default
+ */
+const TRAVEL_NARRATION_BY_ZONE = {
+  street: [
+    "The street shifts around you.",
+    "Verasanth rearranges itself, slightly.",
+    "Your steps echo where they shouldn't.",
+    "The city watches you move through it.",
+    "Someone was just here. You can tell.",
+    "The air changes as you turn the corner.",
+  ],
+  guild: [
+    "The district asserts itself as you enter.",
+    "You feel the weight of what this place represents.",
+    "Somewhere, someone notes your presence.",
+    "The guild's influence seeps into the stonework here.",
+  ],
+  indoor: [
+    "You step inside. The outside stays outside — mostly.",
+    "The air is different in here.",
+    "Something shifts when you cross the threshold.",
+  ],
+  sewer: [
+    "The dark adjusts to your presence.",
+    "Water drips somewhere you can't see.",
+    "The smell changes. Deeper now.",
+    "Something moved ahead of you. Or behind. Hard to tell.",
+    "The stone remembers everyone who has walked here.",
+  ],
+  scar: [
+    "The tissue yields slightly underfoot.",
+    "The walls pulse once. Then stop.",
+    "You are moving through something alive.",
+    "The Scar accommodates you. For now.",
+  ],
+  default: [
+    "The way ahead opens.",
+    "You walk on.",
+  ],
+};
+
+function getZoneType(locationId) {
+  if (!locationId) return "default";
+  if (String(locationId).startsWith("scar_")) return "scar";
+  if (
+    SEWER_LOCATIONS.has(locationId) ||
+    locationId === "sewer_entrance" ||
+    locationId === "sewer_deep_foundation" ||
+    locationId === "sewer_deep"
+  ) {
+    return "sewer";
+  }
+  if (GUILD_ZONE_ROOMS.has(locationId)) return "guild";
+  if (ENTER_TARGETS.has(locationId)) return "indoor";
+  return "street";
+}
+
+const HUB_TRAVEL_LINE =
+  "You find your way back to the Broken Coil. The city lets you go — for now.";
+
+function pickTravelLineForZone(zone) {
+  const pool = TRAVEL_NARRATION_BY_ZONE[zone] || TRAVEL_NARRATION_BY_ZONE.default;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function getTravelNarration(fromRoom, toRoom, exitType, toLocationId) {
   if (exitType === "enter") {
     return `You step inside. ${(toRoom?.entry_line || "").trim()}`.trim() || "You step inside.";
   }
-  const narrations = [
-    `You move through the ${fromRoom?.district || "city"}.`,
-    "The street shifts around you.",
-    "You walk on.",
-    "The way ahead opens.",
-  ];
-  const idx = (fromRoom?.name?.length || 0) % narrations.length;
-  return narrations[idx];
+  return pickTravelLineForZone(getZoneType(toLocationId));
+}
+
+const MOVE_DIRECTION_ALIASES = {
+  n: "north",
+  north: "north",
+  s: "south",
+  south: "south",
+  e: "east",
+  east: "east",
+  w: "west",
+  west: "west",
+  u: "up",
+  up: "up",
+  d: "down",
+  down: "down",
+  in: "in",
+  out: "out",
+  b: "__back__",
+  back: "__back__",
+  h: "__hub__",
+  hub: "__hub__",
+};
+
+function normalizeMoveDirectionToken(raw) {
+  if (raw == null || typeof raw !== "string") return null;
+  const k = raw.trim().toLowerCase();
+  return MOVE_DIRECTION_ALIASES[k] ?? null;
 }
 
 /** Convert exit_map to typed exits for API response. */
@@ -1318,6 +1420,611 @@ async function hashPassword(password) {
   return hex;
 }
 
+async function getExitMapForMove(db, uid, row, fromLoc) {
+  let exitMap = { ...(WORLD[fromLoc]?.exits || {}) };
+  if (fromLoc === "market_square") exitMap.down = "sewer_entrance";
+  if (fromLoc === "cinder_cells_block" && (row.crime_heat ?? 0) < 11) {
+    delete exitMap.deeper;
+  }
+  if (fromLoc === "scar_outer_vein") {
+    const echoTriggered = await getFlag(db, uid, "first_echo_triggered", 0);
+    if (echoTriggered) exitMap.west = "scar_root_passage";
+  }
+  return exitMap;
+}
+
+async function processMoveTransition(db, uid, row, fromLoc, dest, directionUsed, opts = {}) {
+  const skipNarrativeAndScene = opts.skipNarrativeAndScene ?? false;
+  const hubMove = opts.hubMove ?? false;
+  const skipMoveCount = opts.skipMoveCount ?? false;
+  const travelNarrationOverride = opts.travelNarrationOverride ?? null;
+  const room = WORLD[fromLoc];
+
+      const pendingNarrative = await getFlag(db, uid, "active_narrative_encounter", 0);
+      if (pendingNarrative > 0) {
+        await setFlag(db, uid, "active_narrative_encounter", 0);
+      }
+      const pendingScene = await getFlag(db, uid, "active_scene", 0);
+      if (pendingScene > 0) {
+        await setFlag(db, uid, "active_scene", 0);
+      }
+
+      await dbRun(db, "UPDATE players SET location=? WHERE user_id=?", [dest, uid]);
+      await setFlag(db, uid, "previous_location", encodePreviousLocation(fromLoc));
+      let moveCount = await getFlag(db, uid, "move_count", 0);
+      if (!skipMoveCount) {
+        moveCount += 1;
+        await setFlag(db, uid, "move_count", moveCount);
+      }
+
+      let ambient = null;
+      if (!hubMove) {
+      if (dest === "flooded_hall") {
+        const r = Math.random();
+        if (r < 0.1) ambient = "*A single bubble rises from the still water. The surface does not ripple.*";
+        else if (r < 0.225) ambient = "*Something skitters just beyond your torchlight. The sound stops the moment you turn.*";
+      }
+
+      // Phase 3: Footstep cue — roamer in adjacent room
+      const neighbors = getRoomNeighbors(dest);
+      if (neighbors.length > 0) {
+        const placeholders = neighbors.map(() => "?").join(",");
+        const roamersNearby = await dbAll(db,
+          `SELECT * FROM roamers WHERE active=1 AND location IN (${placeholders})`,
+          neighbors);
+        if (roamersNearby.length > 0) {
+          const nearRoamer = roamersNearby[Math.floor(Math.random() * roamersNearby.length)];
+          const def = ROAMER_DEFS[nearRoamer.id];
+          if (def) {
+            const cue = def.approach_cues[Math.floor(Math.random() * def.approach_cues.length)];
+            ambient = ambient ? ambient + "\n\n" + cue : cue;
+          }
+        }
+      }
+      }
+
+      const destRoom = WORLD[dest];
+      let destDescription = destRoom.description;
+      if (dest === "tavern") {
+        const hasSeenAwakening = await getFlag(db, uid, "has_seen_awakening", 0);
+        if (hasSeenAwakening === 0) {
+          destDescription = AWAKENING_ROOM_DESCRIPTION;
+          await setFlag(db, uid, "has_seen_awakening", 1);
+        }
+      } else {
+        const visitFlag = dest === "market_square" ? "has_seen_market_square" : dest === "crucible" ? "seen_crucible" : "visited_" + dest;
+        const hadVisited = await getFlag(db, uid, visitFlag, 0);
+        if (FIRST_VISIT_INTROS[dest] && hadVisited === 0) {
+          destDescription = FIRST_VISIT_INTROS[dest] + destRoom.description;
+        }
+      }
+      const exitType = ENTER_TARGETS.has(dest) ? "enter" : "travel";
+      const narration = travelNarrationOverride || getTravelNarration(room, destRoom, exitType, dest);
+      destDescription = `*${narration}*\n\n${destDescription}`;
+
+      // Depth flag (sewer floors 2–5)
+      if (SEWER_LEVEL_2.includes(dest) || SEWER_LEVEL_3.includes(dest) || SEWER_LEVEL_4.includes(dest) || SEWER_LEVEL_5.includes(dest)) {
+        await setFlag(db, uid, "warned_mid_sewer", 1);
+      }
+      if (fromLoc === "market_square" && dest === "sewer_entrance") {
+        const se = await getFlag(db, uid, "sewer_expeditions", 0);
+        await setFlag(db, uid, "sewer_expeditions", se + 1);
+      }
+      if (dest === "market_square") {
+        await setFlag(db, uid, "has_seen_market_square", 1);
+      }
+      await setFlag(db, uid, dest === "crucible" ? "seen_crucible" : "visited_" + dest, 1);
+      if (dest === "crucible") await setFlag(db, uid, "visited_crucible", 1);
+      if (SEWER_LEVEL_1.includes(dest) || SEWER_LEVEL_2.includes(dest) || SEWER_LEVEL_3.includes(dest) || SEWER_LEVEL_4.includes(dest) || SEWER_LEVEL_5.includes(dest)) {
+        await setFlag(db, uid, "first_sewer_visit", 1);
+      }
+
+      let destExits = Object.keys(destRoom.exits || {});
+      let destExitMap = { ...(destRoom.exits || {}) };
+      if (dest === "market_square") {
+        destExits = [...destExits, "down"];
+        destExitMap.down = "sewer_entrance";
+      }
+      if (dest === "scar_outer_vein") {
+        const echoTriggered = await getFlag(db, uid, "first_echo_triggered", 0);
+        if (echoTriggered) {
+          destExits = [...destExits.filter((e) => e !== "west"), "west"];
+          destExitMap.west = "scar_root_passage";
+        }
+      }
+      if (dest === "cinder_cells_block" && (row.crime_heat ?? 0) < 11) {
+        destExits = destExits.filter(e => e !== "deeper");
+        delete destExitMap.deeper;
+      }
+      const destGate = FLOOR_GATES[dest];
+      if (destGate && destGate.requires_flag) {
+        const hasFlag = await getFlag(db, uid, destGate.requires_flag, 0);
+        const hasAlt = destGate.alt_flag ? await getFlag(db, uid, destGate.alt_flag, 0) : 0;
+        if (!hasFlag && !hasAlt) {
+          destExits = destExits.filter(e => e !== destGate.exit_dir);
+          delete destExitMap[destGate.exit_dir];
+          destDescription += " The gate ahead is sealed. Beyond it, something older waits.";
+        }
+      }
+      const destBlocked = await getBlockedRoutes(db);
+      for (const e of [...destExits]) {
+        if (destBlocked.includes(destExitMap[e])) {
+          destExits = destExits.filter(x => x !== e);
+          delete destExitMap[e];
+        }
+      }
+      let npcsHere = Object.entries(NPC_LOCATIONS)
+        .filter(([,l]) => l === dest).map(([id]) => id);
+      if (dest === "cinder_cells_hall" && (row.crime_heat ?? 0) >= 4 && !npcsHere.includes("warden")) {
+        npcsHere = [...npcsHere, "warden"];
+      }
+
+      const deathDrops = await getUnclaimedDropsAtLocation(db, dest);
+      if (deathDrops.length > 0) {
+        destDescription += "\n\nSomething glints near the drain. Ash Marks — someone left them here quickly.";
+      }
+      const inSewerDest = SEWER_LOCATIONS.has(dest) || dest === "sewer_entrance" || dest === "sewer_deep_foundation";
+      if (inSewerDest) {
+        const mapOriginUnderstood = await getFlag(db, uid, "map_origin_understood", 0);
+        if (mapOriginUnderstood) destDescription += "\n\nThe layout here matches the map. The streets beneath the streets.";
+      }
+
+      // Act 1 Sewer Arc: breathing moment (flooded_hall, 15% on entry, once per player)
+      if (dest === "flooded_hall") {
+        const seenBreathe = await getFlag(db, uid, "seen_sewer_breathe", 0);
+        if (!seenBreathe && Math.random() < 0.15) {
+          await setFlag(db, uid, "seen_sewer_breathe", 1);
+          destDescription += "\n\nAs you step onto the walkway, the pipes along the wall shudder.\n\nNot a crack. Not a collapse.\nA single, slow contraction — the whole structure compressing slightly and then releasing, like a ribcage.\n\nThe water in the cistern does not ripple.\nThe air pressure changes for exactly one second.\n\nThen it stops.\n\nThe city was not passive just now.";
+        }
+      }
+
+      // Act 1 Sewer Arc: dynamic condition description mods (move)
+      let destActiveCondition = null;
+      const destCond = await getActiveSewerCondition(db);
+      if (destCond?.description_mods?.[dest]) {
+        destDescription += destCond.description_mods[dest];
+        destActiveCondition = { id: destCond.id, name: destCond.name };
+      }
+
+      let hazardData = null;
+      let hazardEncounterBonus = 0;
+      if (!hubMove) {
+      const now = Date.now();
+      const activeHazard = await dbGet(db, "SELECT * FROM sewer_hazards WHERE location=? AND expires_at>?", [dest, now]);
+      if (activeHazard) {
+        const def = HAZARD_DEFS[activeHazard.hazard_type];
+        if (def) {
+          const dmg = Math.floor(Math.random() * (def.damage.max - def.damage.min + 1)) + def.damage.min;
+          const hp = await getPlayerHp(db, uid, row);
+          const newHp = Math.max(0, hp.current - dmg);
+          await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [newHp, uid]);
+          if (def.one_shot) {
+            await dbRun(db, "DELETE FROM sewer_hazards WHERE location=? AND hazard_type=?", [dest, activeHazard.hazard_type]);
+          }
+          hazardData = {
+            type: activeHazard.hazard_type,
+            label: def.label,
+            cue_enter: def.cue_enter,
+            cue_damage: def.cue_damage.replace("{dmg}", String(dmg)),
+            damage: dmg,
+            player_hp: newHp,
+            player_hp_max: hp.max,
+          };
+          if (def.encounter_bonus) hazardEncounterBonus = def.encounter_bonus;
+        }
+      }
+
+      // Phase 3: Boss telegraph check — before normal encounter
+      let encounterData = null;
+      const telegraphRow = await dbGet(db, "SELECT boss_id, tick FROM boss_telegraph_state WHERE user_id=?", [uid]);
+      if (telegraphRow) {
+        const def = BOSS_DEFS[telegraphRow.boss_id];
+        if (def && def.spawn_room === dest) {
+          const telegraphTick = (telegraphRow.tick || 1) + 1;
+          if (telegraphTick >= def.telegraph.length) {
+            await dbRun(db, "DELETE FROM boss_telegraph_state WHERE user_id=?", [uid]);
+            const baseEnemy = COMBAT_DATA.enemies[def.enemy_id];
+            const enemy = baseEnemy ? { ...baseEnemy, hp: def.hp_override ?? baseEnemy.hp } : null;
+            if (enemy) {
+              const hp = await getPlayerHp(db, uid, row);
+              const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
+              let weaponDie = 6, armorReduction = 0, shieldBonus = 0;
+              for (const eq of eqRows) {
+                const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
+                const tier = Math.min(invRow?.tier ?? 1, 3);
+                if (eq.slot === "weapon_main") weaponDie = [6, 8, 10, 12][tier];
+                else if (eq.slot === "chest") armorReduction = [0, 2, 4, 6][tier];
+                else if (eq.slot === "weapon_offhand") shieldBonus = 2;
+              }
+              const state = {
+                enemy_id: def.enemy_id,
+                enemy_name: def.name,
+                enemy_hp: enemy.hp,
+                enemy_hp_max: enemy.hp,
+                player_hp: hp.current,
+                player_hp_max: hp.max,
+                ability_cooldown: 0, ability_used: false, npc_ability_used: false, statuses: {}, enemy_statuses: {}, player_statuses: {}, fade_used: false, hearth_healed: false,
+                turn: 1, turn_count: 1,
+                round: 1,
+                location: dest,
+                weapon_die: weaponDie,
+                armor_reduction: armorReduction,
+                shield_bonus: shieldBonus,
+                enemy_staggered: false,
+                status_effects: [],
+                trait_state: {},
+                armor_break_effects: [],
+                active_buffs: [],
+                auto_triggered: true,
+                boss: true,
+                boss_id: telegraphRow.boss_id,
+                boss_reward: def.reward,
+              };
+              await decrementCombatBuffs(db, uid, dest);
+              await dbRun(db,
+                "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
+                [uid, JSON.stringify(state)]);
+              encounterData = {
+                triggered: true,
+                boss: true,
+                cue: def.arrival,
+                enemy_name: def.name,
+                enemy_desc: "",
+                combat_state: state,
+              };
+            }
+          } else {
+            await dbRun(db, "UPDATE boss_telegraph_state SET tick=? WHERE user_id=?", [telegraphTick, uid]);
+            ambient = (ambient ? ambient + "\n\n" : "") + def.telegraph[telegraphTick - 1];
+          }
+        }
+      }
+
+      // Phase 3: Check for new boss conditions if no telegraph active
+      if (!telegraphRow) {
+        const bossMatch = await checkBossConditions(db, uid, dest);
+        if (bossMatch) {
+          await dbRun(db, "INSERT OR REPLACE INTO boss_telegraph_state(user_id, boss_id, tick) VALUES(?,?,1)", [uid, bossMatch.bossId]);
+          ambient = (ambient ? ambient + "\n\n" : "") + bossMatch.def.telegraph[0];
+        }
+      }
+
+      // ── Dynamic encounter check ───────────────────────────────────
+      const predRow = await dbGet(db, "SELECT predator_id, predator_ticks FROM predator_tracking WHERE user_id=?", [uid]);
+      if (predRow) {
+        if (FIGHTABLE_LOCATIONS.has(dest)) {
+          const newTicks = (predRow.predator_ticks || 0) + 1;
+          await dbRun(db, "UPDATE predator_tracking SET predator_ticks=? WHERE user_id=?", [newTicks, uid]);
+          if (newTicks >= 2) {
+            await dbRun(db, "DELETE FROM predator_tracking WHERE user_id=?", [uid]);
+            const enemy = COMBAT_DATA.enemies[predRow.predator_id];
+            if (enemy) {
+              const hp = await getPlayerHp(db, uid, row);
+              const now = Date.now();
+              await dbRun(db, "UPDATE players SET last_encounter_at=? WHERE user_id=?", [now, uid]);
+              const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
+              let weaponDie = 6, armorReduction = 0, shieldBonus = 0;
+              for (const eq of eqRows) {
+                const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
+                const tier = Math.min(invRow?.tier ?? 1, 3);
+                if (eq.slot === "weapon_main") weaponDie = [6, 8, 10, 12][tier];
+                else if (eq.slot === "chest") armorReduction = [0, 2, 4, 6][tier];
+                else if (eq.slot === "weapon_offhand") shieldBonus = 2;
+              }
+              const state = {
+                enemy_id: enemy.id,
+                enemy_name: enemy.name,
+                enemy_hp: enemy.hp,
+                enemy_hp_max: enemy.hp,
+                player_hp: hp.current,
+                player_hp_max: hp.max,
+                ability_cooldown: 0, ability_used: false, npc_ability_used: false, statuses: {}, enemy_statuses: {}, player_statuses: {}, fade_used: false, hearth_healed: false,
+                turn: 1, turn_count: 1,
+                round: 1,
+                location: dest,
+                weapon_die: weaponDie,
+                armor_reduction: armorReduction,
+                shield_bonus: shieldBonus,
+                enemy_staggered: false,
+                status_effects: [],
+                trait_state: {},
+                armor_break_effects: [],
+                active_buffs: [],
+                auto_triggered: true,
+              };
+              await decrementCombatBuffs(db, uid, dest);
+              await dbRun(db,
+                "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
+                [uid, JSON.stringify(state)]);
+              encounterData = {
+                triggered: true,
+                predator_strike: true,
+                cue: "*It found you.*",
+                enemy_name: enemy.name,
+                enemy_desc: enemy.desc || "",
+                combat_state: state,
+              };
+            }
+          }
+        } else {
+          await dbRun(db, "DELETE FROM predator_tracking WHERE user_id=?", [uid]);
+          ambient = "*Whatever was following you has stopped. For now.*";
+        }
+      }
+
+      // Reputation: high crime in city — bounty hunter
+      if (!encounterData && REPUTATION_CITY_LOCATIONS.has(dest) && (row.crime_heat ?? 0) >= 8 && Math.random() < 0.6) {
+        const enemy = COMBAT_DATA.enemies.city_watchman;
+        if (enemy) {
+          const hp = await getPlayerHp(db, uid, row);
+          const now = Date.now();
+          await dbRun(db, "UPDATE players SET last_encounter_at=? WHERE user_id=?", [now, uid]);
+          const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
+          let weaponDie = 6, armorReduction = 0, shieldBonus = 0;
+          for (const eq of eqRows) {
+            const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
+            const tier = Math.min(invRow?.tier ?? 1, 3);
+            if (eq.slot === "weapon_main") weaponDie = [6, 8, 10, 12][tier];
+            else if (eq.slot === "chest") armorReduction = [0, 2, 4, 6][tier];
+            else if (eq.slot === "weapon_offhand") shieldBonus = 2;
+          }
+          const state = {
+            enemy_id: enemy.id,
+            enemy_name: enemy.name,
+            enemy_hp: enemy.hp,
+            enemy_hp_max: enemy.hp,
+            player_hp: hp.current,
+            player_hp_max: hp.max,
+            ability_cooldown: 0, ability_used: false, npc_ability_used: false, statuses: {}, enemy_statuses: {}, player_statuses: {}, fade_used: false, hearth_healed: false,
+            turn: 1, turn_count: 1,
+            round: 1,
+            location: dest,
+            weapon_die: weaponDie,
+            armor_reduction: armorReduction,
+            shield_bonus: shieldBonus,
+            enemy_staggered: false,
+            status_effects: [],
+            trait_state: {},
+            armor_break_effects: [],
+                auto_triggered: true,
+          };
+          await decrementCombatBuffs(db, uid, dest);
+          await dbRun(db,
+            "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
+            [uid, JSON.stringify(state)]);
+          encounterData = {
+            triggered: true,
+            cue: "*The watch has your description. They have had it for a while.*",
+            enemy_name: enemy.name,
+            enemy_desc: enemy.desc || "",
+            combat_state: state,
+          };
+        }
+      }
+
+      if (!encounterData && FIGHTABLE_LOCATIONS.has(dest)) {
+        const now = Date.now();
+        const lastEnc = row.last_encounter_at || 0;
+        const onCooldown = (now - lastEnc) < 12000;
+
+        if (!onCooldown) {
+          const hp = await getPlayerHp(db, uid, row);
+          const hpPct = hp.max > 0 ? hp.current / hp.max : 1;
+          const woundedBonus = hpPct < 0.5 ? 20 : 0;
+
+          let crimeHeatBonus = 0;
+          if ((row.crime_heat ?? 0) >= 7) crimeHeatBonus = 15;
+
+          const postFight = await getFlag(db, uid, "post_fight_noise", 0);
+          const postFightBonus = postFight ? 15 : 0;
+          if (postFight) await setFlag(db, uid, "post_fight_noise", 0);
+
+          let scentBonus = 0, scentLabel = null;
+          const invRows = await dbAll(db, "SELECT item FROM inventory WHERE user_id=? AND qty>0", [uid]);
+          for (const r of invRows) {
+            const def = SCENT_ITEMS[r.item];
+            if (def && def.bonus > scentBonus) { scentBonus = def.bonus; scentLabel = def.label; }
+          }
+
+          const order = row.alignment_order ?? 0;
+          const morality = row.alignment_morality ?? 0;
+          let reputationBonus = 0;
+          let woundedNpcChance = 0;
+          if (order <= -15) reputationBonus += 20;
+          if (order >= 15) reputationBonus += -15;
+          if (morality >= 15) woundedNpcChance = 0.25;
+
+          const triggered = rollEncounter(dest, {
+            woundedBonus,
+            crimeHeatBonus,
+            postFightBonus,
+            scentBonus,
+            reputationBonus,
+            hazardBonus: hazardEncounterBonus,
+          });
+
+          if (triggered) {
+            await dbRun(db, "UPDATE players SET last_encounter_at=? WHERE user_id=?", [now, uid]);
+
+            const rawCue = getEncounterCue(dest);
+            const cue = scentLabel ? `${scentLabel}\n\n${rawCue}` : rawCue;
+            const activeCondition = await getActiveSewerCondition(db);
+            const enemy = randomEnemy(dest, activeCondition);
+
+            const predDef = PREDATOR_ENEMIES[enemy.id];
+            if (predDef && predDef.eligible.has(dest) && Math.random() < predDef.chance && !predRow) {
+              await dbRun(db, "INSERT OR REPLACE INTO predator_tracking(user_id, predator_id, predator_ticks) VALUES(?,?,0)", [uid, enemy.id]);
+              encounterData = {
+                triggered: false,
+                predator_detected: true,
+                cue: getPredatorCue(dest, enemy.id),
+              };
+            } else {
+            const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
+            let weaponDie = 6, armorReduction = 0, shieldBonus = 0;
+            for (const eq of eqRows) {
+              const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
+              const tier = Math.min(invRow?.tier ?? 1, 3);
+              if (eq.slot === "weapon_main") weaponDie = [6, 8, 10, 12][tier];
+              else if (eq.slot === "chest") armorReduction = [0, 2, 4, 6][tier];
+              else if (eq.slot === "weapon_offhand") shieldBonus = 2;
+            }
+
+            const state = {
+              enemy_id: enemy.id,
+              enemy_name: enemy.name,
+              enemy_hp: enemy.hp,
+              enemy_hp_max: enemy.hp,
+              player_hp: hp.current,
+              player_hp_max: hp.max,
+              ability_cooldown: 0, statuses: {}, enemy_statuses: {}, player_statuses: {}, fade_used: false, hearth_healed: false,
+              turn: 1, turn_count: 1,
+              round: 1,
+              location: dest,
+              weapon_die: weaponDie,
+              armor_reduction: armorReduction,
+              shield_bonus: shieldBonus,
+              enemy_staggered: false,
+              status_effects: [],
+              trait_state: {},
+              armor_break_effects: [],
+              auto_triggered: true,
+            };
+            await decrementCombatBuffs(db, uid, dest);
+            await dbRun(db,
+              "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
+              [uid, JSON.stringify(state)]);
+
+            encounterData = {
+              triggered: true,
+              cue,
+              enemy_name: enemy.name,
+              enemy_desc: enemy.desc || "",
+              combat_state: state,
+            };
+            }
+          }
+        }
+      }
+      }
+      // ── End encounter check ─────────────────────────────────────────
+
+      let narrativeEncounter = null;
+      if (!hubMove && !skipNarrativeAndScene && !encounterData) {
+        const lastEncMove = await getFlag(db, uid, "last_encounter_move", 0);
+        if (shouldFireEncounter(dest, moveCount, lastEncMove)) {
+          const flagRows = await dbAll(
+            db,
+            "SELECT flag, value FROM player_flags WHERE user_id=?",
+            [uid],
+          );
+          const flagsObj = {};
+          for (const r of flagRows) flagsObj[r.flag] = r.value;
+          const pick = pickEncounter(dest, flagsObj);
+          if (pick) {
+            destDescription += formatNarrativeEncounterAppend(
+              pick.tier,
+              pick.encounter,
+            );
+            await setFlag(db, uid, "last_encounter_move", moveCount);
+            if (pick.tier === "social" || pick.tier === "lore") {
+              const nidx = getNarrativeEncounterListIndex(
+                pick.tier,
+                pick.encounter.id,
+              );
+              if (nidx > 0) {
+                await setFlag(db, uid, "active_narrative_encounter", nidx);
+              }
+              narrativeEncounter = {
+                tier: pick.tier,
+                id: pick.encounter.id,
+                awaiting_choice: true,
+              };
+            } else {
+              narrativeEncounter = {
+                tier: pick.tier,
+                id: pick.encounter.id,
+                awaiting_choice: false,
+              };
+            }
+          }
+        }
+      }
+
+      let npcSceneMeta = null;
+      if (!hubMove && !skipNarrativeAndScene && !narrativeEncounter && Math.random() < 0.03) {
+        const sceneFlagRows = await dbAll(
+          db,
+          "SELECT flag, value FROM player_flags WHERE user_id=?",
+          [uid],
+        );
+        const sceneFlags = {};
+        for (const r of sceneFlagRows) sceneFlags[r.flag] = r.value;
+        const npcTrust = {
+          seris: await getEffectiveTrust(db, dbGet, uid, "seris", getFlag),
+          trader: await getEffectiveTrust(db, dbGet, uid, "trader", getFlag),
+          warden: await getEffectiveTrust(db, dbGet, uid, "grommash", getFlag),
+        };
+        const eligible = getEligibleScenes(dest, sceneFlags, npcTrust, moveCount);
+        const scenePick = pickScene(eligible);
+        if (scenePick) {
+          destDescription += formatNpcSceneAppend(scenePick);
+          await setFlag(
+            db,
+            uid,
+            `last_scene_${scenePick.id}_move`,
+            moveCount,
+          );
+          const sceneIndex = NPC_SCENE_LIST.indexOf(scenePick);
+          if (sceneIndex >= 0) {
+            await setFlag(db, uid, "active_scene", sceneIndex + 1);
+          }
+          if (scenePick.effects) {
+            await applyNarrativeEncounterEffects(
+              db,
+              uid,
+              setFlag,
+              scenePick.effects,
+            );
+          }
+          npcSceneMeta = {
+            id: scenePick.id,
+            interactive: !!scenePick.interactive,
+            awaiting_choice: true,
+          };
+        }
+      }
+
+      // PvPvE: Ash Heart Chamber group warning when solo
+      let pvpveWarning = null;
+      if (dest === "ash_heart_chamber") {
+        const partyMembers = await getPartyMembers(db, dbAll, uid);
+        if (partyMembers.length === 0) {
+          pvpveWarning = "The cathedral floor demanded more than one. The guardians have always known this.";
+        }
+      }
+
+      const movePayload = {
+        location: dest, name: destRoom.name, district: destRoom.district || "", description: destDescription,
+        exits: normalizeExits(destExitMap),
+        exit_map: destExitMap,
+        objects: Object.keys(destRoom.objects || {}),
+        items: [], npcs: npcsHere, ambient,
+        fightable: FIGHTABLE_LOCATIONS.has(dest),
+        death_drops_present: deathDrops.length > 0,
+        encounter: encounterData,
+        ...(narrativeEncounter
+          ? { narrative_encounter: narrativeEncounter }
+          : {}),
+        ...(npcSceneMeta ? { npc_scene: npcSceneMeta } : {}),
+      };
+      if (hazardData) movePayload.hazard = hazardData;
+      if (destRoom.pvpve) movePayload.pvpve = destRoom.pvpve;
+      if (pvpveWarning) movePayload.pvpve_warning = pvpveWarning;
+      if (destActiveCondition) movePayload.active_condition = destActiveCondition;
+      return movePayload;
+}
+
 // ─────────────────────────────────────────────────────────────
 // ROUTER
 // ─────────────────────────────────────────────────────────────
@@ -2140,601 +2847,173 @@ if (path === "/api/admin/command" && method === "POST") {
         }
       }
 
-      const room = WORLD[row.location];
-      let directionUsed = direction;
-      let dest = room?.exits?.[direction];
-      if (body.target) {
-        const exitMap = { ...(room?.exits || {}) };
-        if (row.location === "market_square") exitMap.down = "sewer_entrance";
-        directionUsed = Object.entries(exitMap).find(([, t]) => t === body.target)?.[0];
-        dest = directionUsed ? exitMap[directionUsed] : null;
+      const chain = body.chain;
+      if (chain != null && !Array.isArray(chain)) {
+        return err("chain must be an array of direction tokens.", 400);
       }
-      if (row.location === "market_square" && directionUsed === "down") dest = "sewer_entrance";
-      if (row.location === "cinder_cells_block" && directionUsed === "deeper" && (row.crime_heat ?? 0) < 11) {
-        dest = null;
+      if (Array.isArray(chain) && chain.length === 0) {
+        return err("chain cannot be empty.", 400);
       }
-      // Floor gates: block deeper/down if player lacks required boss flag
-      const gate = FLOOR_GATES[row.location];
-      if (gate && directionUsed === gate.exit_dir && gate.requires_flag) {
-        const hasFlag = await getFlag(db, uid, gate.requires_flag, 0);
-        const hasAlt = gate.alt_flag ? await getFlag(db, uid, gate.alt_flag, 0) : 0;
-        if (!hasFlag && !hasAlt) dest = null;
-      }
-      const blocked = await getBlockedRoutes(db);
-      if (dest && blocked.includes(dest)) return err("The passage is impassable. The noticeboard warned of this.", 400);
-      if (!dest) return err(`You can't go ${directionUsed || direction || "there"} from here.`);
-      if (!WORLD[dest]) return err("That path leads nowhere.");
-
-      const pendingNarrative = await getFlag(db, uid, "active_narrative_encounter", 0);
-      if (pendingNarrative > 0) {
-        await setFlag(db, uid, "active_narrative_encounter", 0);
-      }
-      const pendingScene = await getFlag(db, uid, "active_scene", 0);
-      if (pendingScene > 0) {
-        await setFlag(db, uid, "active_scene", 0);
-      }
-
-      await dbRun(db, "UPDATE players SET location=? WHERE user_id=?", [dest, uid]);
-
-      const moveCount = (await getFlag(db, uid, "move_count", 0)) + 1;
-      await setFlag(db, uid, "move_count", moveCount);
-
-      // Ambient events
-      let ambient = null;
-      if (dest === "flooded_hall") {
-        const r = Math.random();
-        if (r < 0.1) ambient = "*A single bubble rises from the still water. The surface does not ripple.*";
-        else if (r < 0.225) ambient = "*Something skitters just beyond your torchlight. The sound stops the moment you turn.*";
-      }
-
-      // Phase 3: Footstep cue — roamer in adjacent room
-      const neighbors = getRoomNeighbors(dest);
-      if (neighbors.length > 0) {
-        const placeholders = neighbors.map(() => "?").join(",");
-        const roamersNearby = await dbAll(db,
-          `SELECT * FROM roamers WHERE active=1 AND location IN (${placeholders})`,
-          neighbors);
-        if (roamersNearby.length > 0) {
-          const nearRoamer = roamersNearby[Math.floor(Math.random() * roamersNearby.length)];
-          const def = ROAMER_DEFS[nearRoamer.id];
-          if (def) {
-            const cue = def.approach_cues[Math.floor(Math.random() * def.approach_cues.length)];
-            ambient = ambient ? ambient + "\n\n" + cue : cue;
+      if (Array.isArray(chain) && chain.length > 0) {
+        if (body.target != null || body.direction != null) {
+          return err("Do not combine chain with direction or target.", 400);
+        }
+        const pNStart = await getFlag(db, uid, "active_narrative_encounter", 0);
+        const pSStart = await getFlag(db, uid, "active_scene", 0);
+        if (pNStart > 0 || pSStart > 0) {
+          return err("Something waits for your answer before you walk away.", 400);
+        }
+        const chain_moves = [];
+        let stopped_early = false;
+        let stop_reason = null;
+        let lastPayload = null;
+        for (let si = 0; si < chain.length; si++) {
+          row = await getPlayerSheet(db, uid);
+          const inChainCombat = await dbGet(db, "SELECT 1 FROM combat_state WHERE user_id=?", [uid]);
+          if (inChainCombat) {
+            stopped_early = true;
+            stop_reason = "You're in combat.";
+            break;
           }
-        }
-      }
-
-      const destRoom = WORLD[dest];
-      let destDescription = destRoom.description;
-      if (dest === "tavern") {
-        const hasSeenAwakening = await getFlag(db, uid, "has_seen_awakening", 0);
-        if (hasSeenAwakening === 0) {
-          destDescription = AWAKENING_ROOM_DESCRIPTION;
-          await setFlag(db, uid, "has_seen_awakening", 1);
-        }
-      } else {
-        const visitFlag = dest === "market_square" ? "has_seen_market_square" : dest === "crucible" ? "seen_crucible" : "visited_" + dest;
-        const hadVisited = await getFlag(db, uid, visitFlag, 0);
-        if (FIRST_VISIT_INTROS[dest] && hadVisited === 0) {
-          destDescription = FIRST_VISIT_INTROS[dest] + destRoom.description;
-        }
-      }
-      const exitType = ENTER_TARGETS.has(dest) ? "enter" : "travel";
-      const narration = getTravelNarration(room, destRoom, exitType);
-      destDescription = `*${narration}*\n\n${destDescription}`;
-
-      // Depth flag (sewer floors 2–5)
-      if (SEWER_LEVEL_2.includes(dest) || SEWER_LEVEL_3.includes(dest) || SEWER_LEVEL_4.includes(dest) || SEWER_LEVEL_5.includes(dest)) {
-        await setFlag(db, uid, "warned_mid_sewer", 1);
-      }
-      if (row.location === "market_square" && dest === "sewer_entrance") {
-        const se = await getFlag(db, uid, "sewer_expeditions", 0);
-        await setFlag(db, uid, "sewer_expeditions", se + 1);
-      }
-      if (dest === "market_square") {
-        await setFlag(db, uid, "has_seen_market_square", 1);
-      }
-      await setFlag(db, uid, dest === "crucible" ? "seen_crucible" : "visited_" + dest, 1);
-      if (dest === "crucible") await setFlag(db, uid, "visited_crucible", 1);
-      if (SEWER_LEVEL_1.includes(dest) || SEWER_LEVEL_2.includes(dest) || SEWER_LEVEL_3.includes(dest) || SEWER_LEVEL_4.includes(dest) || SEWER_LEVEL_5.includes(dest)) {
-        await setFlag(db, uid, "first_sewer_visit", 1);
-      }
-
-      let destExits = Object.keys(destRoom.exits || {});
-      let destExitMap = { ...(destRoom.exits || {}) };
-      if (dest === "market_square") {
-        destExits = [...destExits, "down"];
-        destExitMap.down = "sewer_entrance";
-      }
-      if (dest === "cinder_cells_block" && (row.crime_heat ?? 0) < 11) {
-        destExits = destExits.filter(e => e !== "deeper");
-        delete destExitMap.deeper;
-      }
-      const destGate = FLOOR_GATES[dest];
-      if (destGate && destGate.requires_flag) {
-        const hasFlag = await getFlag(db, uid, destGate.requires_flag, 0);
-        const hasAlt = destGate.alt_flag ? await getFlag(db, uid, destGate.alt_flag, 0) : 0;
-        if (!hasFlag && !hasAlt) {
-          destExits = destExits.filter(e => e !== destGate.exit_dir);
-          delete destExitMap[destGate.exit_dir];
-          destDescription += " The gate ahead is sealed. Beyond it, something older waits.";
-        }
-      }
-      const destBlocked = await getBlockedRoutes(db);
-      for (const e of [...destExits]) {
-        if (destBlocked.includes(destExitMap[e])) {
-          destExits = destExits.filter(x => x !== e);
-          delete destExitMap[e];
-        }
-      }
-      let npcsHere = Object.entries(NPC_LOCATIONS)
-        .filter(([,l]) => l === dest).map(([id]) => id);
-      if (dest === "cinder_cells_hall" && (row.crime_heat ?? 0) >= 4 && !npcsHere.includes("warden")) {
-        npcsHere = [...npcsHere, "warden"];
-      }
-
-      const deathDrops = await getUnclaimedDropsAtLocation(db, dest);
-      if (deathDrops.length > 0) {
-        destDescription += "\n\nSomething glints near the drain. Ash Marks — someone left them here quickly.";
-      }
-      const inSewerDest = SEWER_LOCATIONS.has(dest) || dest === "sewer_entrance" || dest === "sewer_deep_foundation";
-      if (inSewerDest) {
-        const mapOriginUnderstood = await getFlag(db, uid, "map_origin_understood", 0);
-        if (mapOriginUnderstood) destDescription += "\n\nThe layout here matches the map. The streets beneath the streets.";
-      }
-
-      // Act 1 Sewer Arc: breathing moment (flooded_hall, 15% on entry, once per player)
-      if (dest === "flooded_hall") {
-        const seenBreathe = await getFlag(db, uid, "seen_sewer_breathe", 0);
-        if (!seenBreathe && Math.random() < 0.15) {
-          await setFlag(db, uid, "seen_sewer_breathe", 1);
-          destDescription += "\n\nAs you step onto the walkway, the pipes along the wall shudder.\n\nNot a crack. Not a collapse.\nA single, slow contraction — the whole structure compressing slightly and then releasing, like a ribcage.\n\nThe water in the cistern does not ripple.\nThe air pressure changes for exactly one second.\n\nThen it stops.\n\nThe city was not passive just now.";
-        }
-      }
-
-      // Act 1 Sewer Arc: dynamic condition description mods (move)
-      let destActiveCondition = null;
-      const destCond = await getActiveSewerCondition(db);
-      if (destCond?.description_mods?.[dest]) {
-        destDescription += destCond.description_mods[dest];
-        destActiveCondition = { id: destCond.id, name: destCond.name };
-      }
-
-      // Phase 3: Environmental hazard check
-      let hazardData = null;
-      let hazardEncounterBonus = 0;
-      const now = Date.now();
-      const activeHazard = await dbGet(db, "SELECT * FROM sewer_hazards WHERE location=? AND expires_at>?", [dest, now]);
-      if (activeHazard) {
-        const def = HAZARD_DEFS[activeHazard.hazard_type];
-        if (def) {
-          const dmg = Math.floor(Math.random() * (def.damage.max - def.damage.min + 1)) + def.damage.min;
-          const hp = await getPlayerHp(db, uid, row);
-          const newHp = Math.max(0, hp.current - dmg);
-          await dbRun(db, "UPDATE characters SET current_hp=? WHERE user_id=?", [newHp, uid]);
-          if (def.one_shot) {
-            await dbRun(db, "DELETE FROM sewer_hazards WHERE location=? AND hazard_type=?", [dest, activeHazard.hazard_type]);
+          const pN = await getFlag(db, uid, "active_narrative_encounter", 0);
+          const pS = await getFlag(db, uid, "active_scene", 0);
+          if (pN > 0 || pS > 0) {
+            stopped_early = true;
+            stop_reason = "Something waits for your answer.";
+            break;
           }
-          hazardData = {
-            type: activeHazard.hazard_type,
-            label: def.label,
-            cue_enter: def.cue_enter,
-            cue_damage: def.cue_damage.replace("{dmg}", String(dmg)),
-            damage: dmg,
-            player_hp: newHp,
-            player_hp_max: hp.max,
-          };
-          if (def.encounter_bonus) hazardEncounterBonus = def.encounter_bonus;
-        }
-      }
-
-      // Phase 3: Boss telegraph check — before normal encounter
-      let encounterData = null;
-      const telegraphRow = await dbGet(db, "SELECT boss_id, tick FROM boss_telegraph_state WHERE user_id=?", [uid]);
-      if (telegraphRow) {
-        const def = BOSS_DEFS[telegraphRow.boss_id];
-        if (def && def.spawn_room === dest) {
-          const telegraphTick = (telegraphRow.tick || 1) + 1;
-          if (telegraphTick >= def.telegraph.length) {
-            await dbRun(db, "DELETE FROM boss_telegraph_state WHERE user_id=?", [uid]);
-            const baseEnemy = COMBAT_DATA.enemies[def.enemy_id];
-            const enemy = baseEnemy ? { ...baseEnemy, hp: def.hp_override ?? baseEnemy.hp } : null;
-            if (enemy) {
-              const hp = await getPlayerHp(db, uid, row);
-              const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
-              let weaponDie = 6, armorReduction = 0, shieldBonus = 0;
-              for (const eq of eqRows) {
-                const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
-                const tier = Math.min(invRow?.tier ?? 1, 3);
-                if (eq.slot === "weapon_main") weaponDie = [6, 8, 10, 12][tier];
-                else if (eq.slot === "chest") armorReduction = [0, 2, 4, 6][tier];
-                else if (eq.slot === "weapon_offhand") shieldBonus = 2;
-              }
-              const state = {
-                enemy_id: def.enemy_id,
-                enemy_name: def.name,
-                enemy_hp: enemy.hp,
-                enemy_hp_max: enemy.hp,
-                player_hp: hp.current,
-                player_hp_max: hp.max,
-                ability_cooldown: 0, ability_used: false, npc_ability_used: false, statuses: {}, enemy_statuses: {}, player_statuses: {}, fade_used: false, hearth_healed: false,
-                turn: 1, turn_count: 1,
-                round: 1,
-                location: dest,
-                weapon_die: weaponDie,
-                armor_reduction: armorReduction,
-                shield_bonus: shieldBonus,
-                enemy_staggered: false,
-                status_effects: [],
-                trait_state: {},
-                armor_break_effects: [],
-                active_buffs: [],
-                auto_triggered: true,
-                boss: true,
-                boss_id: telegraphRow.boss_id,
-                boss_reward: def.reward,
-              };
-              await decrementCombatBuffs(db, uid, dest);
-              await dbRun(db,
-                "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
-                [uid, JSON.stringify(state)]);
-              encounterData = {
-                triggered: true,
-                boss: true,
-                cue: def.arrival,
-                enemy_name: def.name,
-                enemy_desc: "",
-                combat_state: state,
-              };
-            }
-          } else {
-            await dbRun(db, "UPDATE boss_telegraph_state SET tick=? WHERE user_id=?", [telegraphTick, uid]);
-            ambient = (ambient ? ambient + "\n\n" : "") + def.telegraph[telegraphTick - 1];
+          const tok = String(chain[si] ?? "").trim().toLowerCase();
+          const nd = normalizeMoveDirectionToken(tok);
+          if (!nd || nd === "__hub__" || nd === "__back__") {
+            stopped_early = true;
+            stop_reason = !nd ? "Invalid direction in chain." : "Chain cannot use hub or back shortcuts.";
+            break;
           }
-        }
-      }
-
-      // Phase 3: Check for new boss conditions if no telegraph active
-      if (!telegraphRow) {
-        const bossMatch = await checkBossConditions(db, uid, dest);
-        if (bossMatch) {
-          await dbRun(db, "INSERT OR REPLACE INTO boss_telegraph_state(user_id, boss_id, tick) VALUES(?,?,1)", [uid, bossMatch.bossId]);
-          ambient = (ambient ? ambient + "\n\n" : "") + bossMatch.def.telegraph[0];
-        }
-      }
-
-      // ── Dynamic encounter check ───────────────────────────────────
-      const predRow = await dbGet(db, "SELECT predator_id, predator_ticks FROM predator_tracking WHERE user_id=?", [uid]);
-      if (predRow) {
-        if (FIGHTABLE_LOCATIONS.has(dest)) {
-          const newTicks = (predRow.predator_ticks || 0) + 1;
-          await dbRun(db, "UPDATE predator_tracking SET predator_ticks=? WHERE user_id=?", [newTicks, uid]);
-          if (newTicks >= 2) {
-            await dbRun(db, "DELETE FROM predator_tracking WHERE user_id=?", [uid]);
-            const enemy = COMBAT_DATA.enemies[predRow.predator_id];
-            if (enemy) {
-              const hp = await getPlayerHp(db, uid, row);
-              const now = Date.now();
-              await dbRun(db, "UPDATE players SET last_encounter_at=? WHERE user_id=?", [now, uid]);
-              const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
-              let weaponDie = 6, armorReduction = 0, shieldBonus = 0;
-              for (const eq of eqRows) {
-                const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
-                const tier = Math.min(invRow?.tier ?? 1, 3);
-                if (eq.slot === "weapon_main") weaponDie = [6, 8, 10, 12][tier];
-                else if (eq.slot === "chest") armorReduction = [0, 2, 4, 6][tier];
-                else if (eq.slot === "weapon_offhand") shieldBonus = 2;
-              }
-              const state = {
-                enemy_id: enemy.id,
-                enemy_name: enemy.name,
-                enemy_hp: enemy.hp,
-                enemy_hp_max: enemy.hp,
-                player_hp: hp.current,
-                player_hp_max: hp.max,
-                ability_cooldown: 0, ability_used: false, npc_ability_used: false, statuses: {}, enemy_statuses: {}, player_statuses: {}, fade_used: false, hearth_healed: false,
-                turn: 1, turn_count: 1,
-                round: 1,
-                location: dest,
-                weapon_die: weaponDie,
-                armor_reduction: armorReduction,
-                shield_bonus: shieldBonus,
-                enemy_staggered: false,
-                status_effects: [],
-                trait_state: {},
-                armor_break_effects: [],
-                active_buffs: [],
-                auto_triggered: true,
-              };
-              await decrementCombatBuffs(db, uid, dest);
-              await dbRun(db,
-                "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
-                [uid, JSON.stringify(state)]);
-              encounterData = {
-                triggered: true,
-                predator_strike: true,
-                cue: "*It found you.*",
-                enemy_name: enemy.name,
-                enemy_desc: enemy.desc || "",
-                combat_state: state,
-              };
-            }
+          const exitMapCh = await getExitMapForMove(db, uid, row, row.location);
+          let directionUsedCh = nd;
+          let destCh = exitMapCh[directionUsedCh];
+          if (row.location === "market_square" && directionUsedCh === "down") destCh = "sewer_entrance";
+          if (row.location === "cinder_cells_block" && directionUsedCh === "deeper" && (row.crime_heat ?? 0) < 11) {
+            destCh = null;
           }
-        } else {
-          await dbRun(db, "DELETE FROM predator_tracking WHERE user_id=?", [uid]);
-          ambient = "*Whatever was following you has stopped. For now.*";
-        }
-      }
-
-      // Reputation: high crime in city — bounty hunter
-      if (!encounterData && REPUTATION_CITY_LOCATIONS.has(dest) && (row.crime_heat ?? 0) >= 8 && Math.random() < 0.6) {
-        const enemy = COMBAT_DATA.enemies.city_watchman;
-        if (enemy) {
-          const hp = await getPlayerHp(db, uid, row);
-          const now = Date.now();
-          await dbRun(db, "UPDATE players SET last_encounter_at=? WHERE user_id=?", [now, uid]);
-          const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
-          let weaponDie = 6, armorReduction = 0, shieldBonus = 0;
-          for (const eq of eqRows) {
-            const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
-            const tier = Math.min(invRow?.tier ?? 1, 3);
-            if (eq.slot === "weapon_main") weaponDie = [6, 8, 10, 12][tier];
-            else if (eq.slot === "chest") armorReduction = [0, 2, 4, 6][tier];
-            else if (eq.slot === "weapon_offhand") shieldBonus = 2;
+          const gateCh = FLOOR_GATES[row.location];
+          if (gateCh && directionUsedCh === gateCh.exit_dir && gateCh.requires_flag) {
+            const hasFlagCh = await getFlag(db, uid, gateCh.requires_flag, 0);
+            const hasAltCh = gateCh.alt_flag ? await getFlag(db, uid, gateCh.alt_flag, 0) : 0;
+            if (!hasFlagCh && !hasAltCh) destCh = null;
           }
-          const state = {
-            enemy_id: enemy.id,
-            enemy_name: enemy.name,
-            enemy_hp: enemy.hp,
-            enemy_hp_max: enemy.hp,
-            player_hp: hp.current,
-            player_hp_max: hp.max,
-            ability_cooldown: 0, ability_used: false, npc_ability_used: false, statuses: {}, enemy_statuses: {}, player_statuses: {}, fade_used: false, hearth_healed: false,
-            turn: 1, turn_count: 1,
-            round: 1,
-            location: dest,
-            weapon_die: weaponDie,
-            armor_reduction: armorReduction,
-            shield_bonus: shieldBonus,
-            enemy_staggered: false,
-            status_effects: [],
-            trait_state: {},
-            armor_break_effects: [],
-                auto_triggered: true,
-          };
-          await decrementCombatBuffs(db, uid, dest);
-          await dbRun(db,
-            "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
-            [uid, JSON.stringify(state)]);
-          encounterData = {
-            triggered: true,
-            cue: "*The watch has your description. They have had it for a while.*",
-            enemy_name: enemy.name,
-            enemy_desc: enemy.desc || "",
-            combat_state: state,
-          };
-        }
-      }
-
-      if (!encounterData && FIGHTABLE_LOCATIONS.has(dest)) {
-        const now = Date.now();
-        const lastEnc = row.last_encounter_at || 0;
-        const onCooldown = (now - lastEnc) < 12000;
-
-        if (!onCooldown) {
-          const hp = await getPlayerHp(db, uid, row);
-          const hpPct = hp.max > 0 ? hp.current / hp.max : 1;
-          const woundedBonus = hpPct < 0.5 ? 20 : 0;
-
-          let crimeHeatBonus = 0;
-          if ((row.crime_heat ?? 0) >= 7) crimeHeatBonus = 15;
-
-          const postFight = await getFlag(db, uid, "post_fight_noise", 0);
-          const postFightBonus = postFight ? 15 : 0;
-          if (postFight) await setFlag(db, uid, "post_fight_noise", 0);
-
-          let scentBonus = 0, scentLabel = null;
-          const invRows = await dbAll(db, "SELECT item FROM inventory WHERE user_id=? AND qty>0", [uid]);
-          for (const r of invRows) {
-            const def = SCENT_ITEMS[r.item];
-            if (def && def.bonus > scentBonus) { scentBonus = def.bonus; scentLabel = def.label; }
+          const blockedCh = await getBlockedRoutes(db);
+          if (destCh && blockedCh.includes(destCh)) {
+            stopped_early = true;
+            stop_reason = "The passage is impassable.";
+            break;
           }
-
-          const order = row.alignment_order ?? 0;
-          const morality = row.alignment_morality ?? 0;
-          let reputationBonus = 0;
-          let woundedNpcChance = 0;
-          if (order <= -15) reputationBonus += 20;
-          if (order >= 15) reputationBonus += -15;
-          if (morality >= 15) woundedNpcChance = 0.25;
-
-          const triggered = rollEncounter(dest, {
-            woundedBonus,
-            crimeHeatBonus,
-            postFightBonus,
-            scentBonus,
-            reputationBonus,
-            hazardBonus: hazardEncounterBonus,
+          if (!destCh || !WORLD[destCh]) {
+            stopped_early = true;
+            stop_reason = "You can't go that way.";
+            break;
+          }
+          const isFinal = si === chain.length - 1;
+          const payload = await processMoveTransition(db, uid, row, row.location, destCh, directionUsedCh, {
+            skipNarrativeAndScene: !isFinal,
           });
-
-          if (triggered) {
-            await dbRun(db, "UPDATE players SET last_encounter_at=? WHERE user_id=?", [now, uid]);
-
-            const rawCue = getEncounterCue(dest);
-            const cue = scentLabel ? `${scentLabel}\n\n${rawCue}` : rawCue;
-            const activeCondition = await getActiveSewerCondition(db);
-            const enemy = randomEnemy(dest, activeCondition);
-
-            const predDef = PREDATOR_ENEMIES[enemy.id];
-            if (predDef && predDef.eligible.has(dest) && Math.random() < predDef.chance && !predRow) {
-              await dbRun(db, "INSERT OR REPLACE INTO predator_tracking(user_id, predator_id, predator_ticks) VALUES(?,?,0)", [uid, enemy.id]);
-              encounterData = {
-                triggered: false,
-                predator_detected: true,
-                cue: getPredatorCue(dest, enemy.id),
-              };
-            } else {
-            const eqRows = await dbAll(db, "SELECT slot, item FROM equipment_slots WHERE user_id=?", [uid]);
-            let weaponDie = 6, armorReduction = 0, shieldBonus = 0;
-            for (const eq of eqRows) {
-              const invRow = await dbGet(db, "SELECT tier FROM inventory WHERE user_id=? AND item=?", [uid, eq.item]);
-              const tier = Math.min(invRow?.tier ?? 1, 3);
-              if (eq.slot === "weapon_main") weaponDie = [6, 8, 10, 12][tier];
-              else if (eq.slot === "chest") armorReduction = [0, 2, 4, 6][tier];
-              else if (eq.slot === "weapon_offhand") shieldBonus = 2;
-            }
-
-            const state = {
-              enemy_id: enemy.id,
-              enemy_name: enemy.name,
-              enemy_hp: enemy.hp,
-              enemy_hp_max: enemy.hp,
-              player_hp: hp.current,
-              player_hp_max: hp.max,
-              ability_cooldown: 0, statuses: {}, enemy_statuses: {}, player_statuses: {}, fade_used: false, hearth_healed: false,
-              turn: 1, turn_count: 1,
-              round: 1,
-              location: dest,
-              weapon_die: weaponDie,
-              armor_reduction: armorReduction,
-              shield_bonus: shieldBonus,
-              enemy_staggered: false,
-              status_effects: [],
-              trait_state: {},
-              armor_break_effects: [],
-              auto_triggered: true,
-            };
-            await decrementCombatBuffs(db, uid, dest);
-            await dbRun(db,
-              "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
-              [uid, JSON.stringify(state)]);
-
-            encounterData = {
-              triggered: true,
-              cue,
-              enemy_name: enemy.name,
-              enemy_desc: enemy.desc || "",
-              combat_state: state,
-            };
-            }
+          chain_moves.push({
+            step: si + 1,
+            direction: tok,
+            destination: WORLD[destCh].name,
+          });
+          lastPayload = payload;
+          if (payload.encounter?.triggered && payload.encounter?.combat_state) {
+            stopped_early = true;
+            stop_reason = "Combat started.";
+            break;
+          }
+          if (payload.hazard?.player_hp != null && payload.hazard.player_hp <= 0) {
+            stopped_early = true;
+            stop_reason = "You collapse.";
+            break;
           }
         }
-      }
-      // ── End encounter check ─────────────────────────────────────────
-
-      let narrativeEncounter = null;
-      if (!encounterData) {
-        const lastEncMove = await getFlag(db, uid, "last_encounter_move", 0);
-        if (shouldFireEncounter(dest, moveCount, lastEncMove)) {
-          const flagRows = await dbAll(
-            db,
-            "SELECT flag, value FROM player_flags WHERE user_id=?",
-            [uid],
-          );
-          const flagsObj = {};
-          for (const r of flagRows) flagsObj[r.flag] = r.value;
-          const pick = pickEncounter(dest, flagsObj);
-          if (pick) {
-            destDescription += formatNarrativeEncounterAppend(
-              pick.tier,
-              pick.encounter,
-            );
-            await setFlag(db, uid, "last_encounter_move", moveCount);
-            if (pick.tier === "social" || pick.tier === "lore") {
-              const nidx = getNarrativeEncounterListIndex(
-                pick.tier,
-                pick.encounter.id,
-              );
-              if (nidx > 0) {
-                await setFlag(db, uid, "active_narrative_encounter", nidx);
-              }
-              narrativeEncounter = {
-                tier: pick.tier,
-                id: pick.encounter.id,
-                awaiting_choice: true,
-              };
-            } else {
-              narrativeEncounter = {
-                tier: pick.tier,
-                id: pick.encounter.id,
-                awaiting_choice: false,
-              };
-            }
-          }
+        if (!lastPayload) {
+          return err(stop_reason || "Chain could not complete.", 400);
         }
+        return json({
+          ...lastPayload,
+          chain_moves,
+          final_location: lastPayload.location,
+          final_description: lastPayload.description,
+          stopped_early,
+          stop_reason: stopped_early ? stop_reason : null,
+        });
       }
 
-      let npcSceneMeta = null;
-      if (!narrativeEncounter && Math.random() < 0.03) {
-        const sceneFlagRows = await dbAll(
-          db,
-          "SELECT flag, value FROM player_flags WHERE user_id=?",
-          [uid],
-        );
-        const sceneFlags = {};
-        for (const r of sceneFlagRows) sceneFlags[r.flag] = r.value;
-        const npcTrust = {
-          seris: await getEffectiveTrust(db, dbGet, uid, "seris", getFlag),
-          trader: await getEffectiveTrust(db, dbGet, uid, "trader", getFlag),
-          warden: await getEffectiveTrust(db, dbGet, uid, "grommash", getFlag),
-        };
-        const eligible = getEligibleScenes(dest, sceneFlags, npcTrust, moveCount);
-        const scenePick = pickScene(eligible);
-        if (scenePick) {
-          destDescription += formatNpcSceneAppend(scenePick);
-          await setFlag(
-            db,
-            uid,
-            `last_scene_${scenePick.id}_move`,
-            moveCount,
-          );
-          const sceneIndex = NPC_SCENE_LIST.indexOf(scenePick);
-          if (sceneIndex >= 0) {
-            await setFlag(db, uid, "active_scene", sceneIndex + 1);
-          }
-          if (scenePick.effects) {
-            await applyNarrativeEncounterEffects(
-              db,
-              uid,
-              setFlag,
-              scenePick.effects,
-            );
-          }
-          npcSceneMeta = {
-            id: scenePick.id,
-            interactive: !!scenePick.interactive,
-            awaiting_choice: true,
+      const resolved = await (async () => {
+        const fromLoc = row.location;
+        const normFromBody = body.direction != null ? normalizeMoveDirectionToken(String(body.direction)) : null;
+        if (normFromBody === "__hub__") {
+          return {
+            ok: true,
+            fromLoc,
+            dest: "tavern",
+            directionUsed: "hub",
+            moveOpts: { hubMove: true, skipMoveCount: true, travelNarrationOverride: HUB_TRAVEL_LINE },
           };
         }
-      }
-
-      // PvPvE: Ash Heart Chamber group warning when solo
-      let pvpveWarning = null;
-      if (dest === "ash_heart_chamber") {
-        const partyMembers = await getPartyMembers(db, dbAll, uid);
-        if (partyMembers.length === 0) {
-          pvpveWarning = "The cathedral floor demanded more than one. The guardians have always known this.";
+        if (normFromBody === "__back__") {
+          const prevIdx = await getFlag(db, uid, "previous_location", 0);
+          const prev = decodePreviousLocation(prevIdx);
+          if (!prev) return { ok: false, error: "There is no going back from here. Not yet." };
+          return { ok: true, fromLoc, dest: prev, directionUsed: "back", moveOpts: {} };
         }
+        const exitMap = await getExitMapForMove(db, uid, row, fromLoc);
+        let directionUsed;
+        let dest;
+        if (body.target) {
+          directionUsed = Object.entries(exitMap).find(([, t]) => t === body.target)?.[0];
+          dest = directionUsed ? exitMap[directionUsed] : null;
+        } else if (normFromBody) {
+          directionUsed = normFromBody;
+          dest = exitMap[directionUsed];
+        } else if (body.direction != null) {
+          directionUsed = body.direction;
+          dest = exitMap[directionUsed];
+        } else {
+          return { ok: false, error: "direction, target, or chain required." };
+        }
+        if (fromLoc === "market_square" && directionUsed === "down") dest = "sewer_entrance";
+        if (fromLoc === "cinder_cells_block" && directionUsed === "deeper" && (row.crime_heat ?? 0) < 11) {
+          dest = null;
+        }
+        const gate = FLOOR_GATES[fromLoc];
+        if (gate && directionUsed === gate.exit_dir && gate.requires_flag) {
+          const hasFlag = await getFlag(db, uid, gate.requires_flag, 0);
+          const hasAlt = gate.alt_flag ? await getFlag(db, uid, gate.alt_flag, 0) : 0;
+          if (!hasFlag && !hasAlt) dest = null;
+        }
+        const blocked = await getBlockedRoutes(db);
+        if (dest && blocked.includes(dest)) {
+          return { ok: false, error: "The passage is impassable. The noticeboard warned of this.", status: 400 };
+        }
+        if (!dest || !WORLD[dest]) {
+          return { ok: false, error: `You can't go ${directionUsed || body.direction || "there"} from here.` };
+        }
+        return { ok: true, fromLoc, dest, directionUsed, moveOpts: {} };
+      })();
+
+      if (!resolved.ok) {
+        if (resolved.status === 400) return err(resolved.error, 400);
+        return err(resolved.error);
       }
 
-      const movePayload = {
-        location: dest, name: destRoom.name, district: destRoom.district || "", description: destDescription,
-        exits: normalizeExits(destExitMap),
-        exit_map: destExitMap,
-        objects: Object.keys(destRoom.objects || {}),
-        items: [], npcs: npcsHere, ambient,
-        fightable: FIGHTABLE_LOCATIONS.has(dest),
-        death_drops_present: deathDrops.length > 0,
-        encounter: encounterData,
-        ...(narrativeEncounter
-          ? { narrative_encounter: narrativeEncounter }
-          : {}),
-        ...(npcSceneMeta ? { npc_scene: npcSceneMeta } : {}),
-      };
-      if (hazardData) movePayload.hazard = hazardData;
-      if (destRoom.pvpve) movePayload.pvpve = destRoom.pvpve;
-      if (pvpveWarning) movePayload.pvpve_warning = pvpveWarning;
-      if (destActiveCondition) movePayload.active_condition = destActiveCondition;
+      const movePayload = await processMoveTransition(
+        db,
+        uid,
+        row,
+        resolved.fromLoc,
+        resolved.dest,
+        resolved.directionUsed,
+        resolved.moveOpts,
+      );
       return json(movePayload);
     }
 
