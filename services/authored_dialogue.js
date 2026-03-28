@@ -286,6 +286,7 @@ export async function handleNpcOptionsGet(
     dbGet,
     uid,
     getFlag,
+    setFlag,
     getPlayerSheet,
   } = deps;
   const resolved = resolveRouteNpc(routeSegment);
@@ -301,7 +302,95 @@ export async function handleNpcOptionsGet(
 
   const trust = await getEffectiveTrust(db, dbGet, uid, canonicalId, getFlag);
   const level = getCharacterLevel(row);
-  const greeting = await resolveAuthoredGreeting(dialogue, db, uid, getFlag, dbGet);
+  let greeting = await resolveAuthoredGreeting(dialogue, db, uid, getFlag, dbGet);
+  if (
+    canonicalId === "seris" &&
+    trust === 0 &&
+    String(row.race || "").toLowerCase() === "ashborn" &&
+    !(await getFlag(db, uid, "seris_ashborn_first_greeting_shown", 0))
+  ) {
+    greeting =
+      (greeting || "") +
+      "\n\n*She looks at you for a moment longer than necessary.*";
+    await setFlag(db, uid, "seris_ashborn_first_greeting_shown", 1);
+  }
+  if (
+    canonicalId === "seris" &&
+    trust === 0 &&
+    String(row.race || "").toLowerCase() === "dakaridari" &&
+    !(await getFlag(db, uid, "seris_dakaridari_first_greeting_shown", 0))
+  ) {
+    greeting =
+      (greeting || "") +
+      "\n\n*She glances at the lower level of the room before looking at you. As if checking what you came up from.*";
+    await setFlag(db, uid, "seris_dakaridari_first_greeting_shown", 1);
+  }
+  if (
+    canonicalId === "seris" &&
+    trust === 0 &&
+    String(row.race || "").toLowerCase() === "panaridari" &&
+    !(await getFlag(db, uid, "seris_panaridari_first_greeting_shown", 0))
+  ) {
+    greeting =
+      (greeting || "") +
+      "\n\n*She watches you enter before you finish entering. As if she expected you slightly earlier.*";
+    await setFlag(db, uid, "seris_panaridari_first_greeting_shown", 1);
+  }
+  if (
+    canonicalId === "seris" &&
+    trust === 0 &&
+    String(row.race || "").toLowerCase() === "cambral" &&
+    !(await getFlag(db, uid, "seris_cambral_first_greeting_shown", 0))
+  ) {
+    greeting =
+      (greeting || "") +
+      "\n\n*She looks at your hands before she looks at your face. Old habit, maybe. Or something she learned from the records.*";
+    await setFlag(db, uid, "seris_cambral_first_greeting_shown", 1);
+  }
+  if (
+    canonicalId === "seris" &&
+    trust === 0 &&
+    String(row.race || "").toLowerCase() === "silth" &&
+    !(await getFlag(db, uid, "seris_silth_first_greeting_shown", 0))
+  ) {
+    greeting =
+      (greeting || "") +
+      "\n\n*She pauses — just briefly. Then: 'You were engineered.' Not a question. She moves on before you can confirm or deny it.*";
+    await setFlag(db, uid, "seris_silth_first_greeting_shown", 1);
+  }
+  if (
+    canonicalId === "seris" &&
+    trust === 0 &&
+    String(row.race || "").toLowerCase() === "human" &&
+    !(await getFlag(db, uid, "seris_human_first_greeting_shown", 0))
+  ) {
+    greeting =
+      (greeting || "") +
+      "\n\n*She looks at you for a moment. Then: 'You came through on your own.' It is not a question. Something about it amuses her — briefly, and then it doesn't.*";
+    await setFlag(db, uid, "seris_human_first_greeting_shown", 1);
+  }
+  if (
+    canonicalId === "seris" &&
+    trust === 0 &&
+    String(row.race || "").toLowerCase() === "darmerians" &&
+    !(await getFlag(db, uid, "seris_darmerian_first_greeting_shown", 0))
+  ) {
+    greeting =
+      (greeting || "") +
+      "\n\n*She doesn't ask where you're from. She asks: 'When did the sea change?' She already knows the answer. She wants to know if you do.*";
+    await setFlag(db, uid, "seris_darmerian_first_greeting_shown", 1);
+  }
+  if (
+    canonicalId === "seris" &&
+    trust === 0 &&
+    String(row.race || "").toLowerCase() === "malaridari" &&
+    !(await getFlag(db, uid, "seris_malaridari_first_greeting_shown", 0))
+  ) {
+    greeting =
+      (greeting || "") +
+      "\n\n*She studies you for a moment. Not with suspicion. With something closer to relief — and then she sets it aside.*";
+    await setFlag(db, uid, "seris_malaridari_first_greeting_shown", 1);
+  }
   const options = await getVisibleOptions(
     dialogue,
     db,
@@ -331,6 +420,14 @@ export async function handleNpcSelectPost(deps, routeSegment, body) {
     setFlag,
     getPlayerSheet,
     addItemToInventory,
+    getAshbornLedgerFlavor,
+    getDakAridariLedgerFlavor,
+    getPanAridariLedgerFlavor,
+    getMalAridariLedgerFlavor,
+    getCambralLedgerFlavor,
+    getSilthLedgerFlavor,
+    getDarmerianLedgerFlavor,
+    getHumanLedgerFlavor,
   } = deps;
   const resolved = resolveRouteNpc(routeSegment);
   if (!resolved) return { error: "Unknown NPC.", status: 404 };
@@ -508,6 +605,41 @@ export async function handleNpcSelectPost(deps, routeSegment, body) {
       ].join("\n");
       responseOut = (responseOut || "") + ledgerNarrative;
       await setFlag(db, uid, "ledger_gautrorn_confirmed", 1);
+      if (String(row.race || "").toLowerCase() === "ashborn" && getAshbornLedgerFlavor) {
+        const flavor = await getAshbornLedgerFlavor(row.race);
+        if (flavor) responseOut += flavor;
+      }
+      if (String(row.race || "").toLowerCase() === "dakaridari" && getDakAridariLedgerFlavor) {
+        const dakFlavor = await getDakAridariLedgerFlavor(row.race);
+        if (dakFlavor) responseOut += dakFlavor;
+      }
+      if (String(row.race || "").toLowerCase() === "panaridari" && getPanAridariLedgerFlavor) {
+        const panFlavor = await getPanAridariLedgerFlavor(row.race);
+        if (panFlavor) responseOut += panFlavor;
+      }
+      if (String(row.race || "").toLowerCase() === "cambral" && getCambralLedgerFlavor) {
+        const camFlavor = await getCambralLedgerFlavor(row.race);
+        if (camFlavor) responseOut += camFlavor;
+      }
+      if (String(row.race || "").toLowerCase() === "malaridari" && getMalAridariLedgerFlavor) {
+        const malFlavor = await getMalAridariLedgerFlavor(row.race);
+        if (malFlavor) responseOut += malFlavor;
+      }
+      if (String(row.race || "").toLowerCase() === "silth" && getSilthLedgerFlavor) {
+        const silFlavor = await getSilthLedgerFlavor(row.race);
+        if (silFlavor) responseOut += silFlavor;
+      }
+      if (
+        String(row.race || "").toLowerCase() === "darmerians" &&
+        getDarmerianLedgerFlavor
+      ) {
+        const darFlavor = await getDarmerianLedgerFlavor(row.race);
+        if (darFlavor) responseOut += darFlavor;
+      }
+      if (String(row.race || "").toLowerCase() === "human" && getHumanLedgerFlavor) {
+        const humanFlavor = await getHumanLedgerFlavor(row.race);
+        if (humanFlavor) responseOut += humanFlavor;
+      }
     }
   }
 

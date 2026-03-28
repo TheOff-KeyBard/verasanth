@@ -711,6 +711,327 @@ async function setFlag(db, uid, flag, value = 1) {
   );
 }
 
+/** Stored in player_flags.value as 1|2|3 (D1 flags are numeric). */
+const ASHBORN_MARK_FLAG = { tempered: 1, kindled: 2, hollowed: 3 };
+
+async function getAshbornLedgerFlavor(db, uid, race, getFlag) {
+  if (String(race || "").toLowerCase() !== "ashborn") return null;
+  const markNum = await getFlag(db, uid, "ashborn_mark", 0);
+  const mark =
+    markNum === ASHBORN_MARK_FLAG.tempered
+      ? "tempered"
+      : markNum === ASHBORN_MARK_FLAG.kindled
+        ? "kindled"
+        : markNum === ASHBORN_MARK_FLAG.hollowed
+          ? "hollowed"
+          : null;
+  if (mark === "tempered") {
+    return (
+      "\n\n*The Ledger pauses on your entry. " +
+      "A moment — then it continues. " +
+      "As if deciding.*"
+    );
+  }
+  if (mark === "kindled") {
+    return (
+      "\n\n*The Ledger's ink shifts when " +
+      "you're near. Not a mistake. " +
+      "A recognition.*"
+    );
+  }
+  if (mark === "hollowed") {
+    return (
+      "\n\n*Your entry in the Ledger is " +
+      "present. But the origin field is blank." +
+      " It has always been blank.*"
+    );
+  }
+  return (
+    "\n\n*The Ledger hesitates. " +
+    "Your entry flickers. " +
+    "Record incomplete. Origin: [UNKNOWN]*"
+  );
+}
+
+/** Stored in player_flags.value as 1|2|3 (D1 flags are numeric). */
+const DAK_ADAPTATION_FLAG = { echo_sensed: 1, veil_walked: 2, stone_blooded: 3 };
+
+async function getDakAridariLedgerFlavor(db, uid, race, getFlag) {
+  if (String(race || "").toLowerCase() !== "dakaridari") return null;
+  const adaptNum = await getFlag(db, uid, "dak_adaptation", 0);
+  const adapt =
+    adaptNum === DAK_ADAPTATION_FLAG.echo_sensed
+      ? "echo_sensed"
+      : adaptNum === DAK_ADAPTATION_FLAG.veil_walked
+        ? "veil_walked"
+        : adaptNum === DAK_ADAPTATION_FLAG.stone_blooded
+          ? "stone_blooded"
+          : null;
+  if (adapt === "echo_sensed") {
+    return (
+      "\n\n*The Ledger records you with " +
+      "unusual precision. Your entry includes " +
+      "data it does not normally capture.*"
+    );
+  }
+  if (adapt === "veil_walked") {
+    return (
+      "\n\n*The Ledger's entry for you is " +
+      "present. Certain fields update only " +
+      "when you are not looking directly " +
+      "at them.*"
+    );
+  }
+  if (adapt === "stone_blooded") {
+    return (
+      "\n\n*The Ledger records you cleanly. " +
+      "A note appended: subject presence " +
+      "stabilizes lower-strata readings.*"
+    );
+  }
+  return (
+    "\n\n*The Ledger records you. " +
+    "It recommends observation.*"
+  );
+}
+
+/** Stored in player_flags.value as 1|2|3 (D1 flags are numeric). */
+const PAN_ATTUNEMENT_FLAG = { the_current: 1, the_still: 2, the_drift: 3 };
+
+async function getPanAridariLedgerFlavor(db, uid, race, getFlag) {
+  if (String(race || "").toLowerCase() !== "panaridari") return null;
+  const attuneNum = await getFlag(db, uid, "pan_attunement", 0);
+  const attune =
+    attuneNum === PAN_ATTUNEMENT_FLAG.the_current
+      ? "the_current"
+      : attuneNum === PAN_ATTUNEMENT_FLAG.the_still
+        ? "the_still"
+        : attuneNum === PAN_ATTUNEMENT_FLAG.the_drift
+          ? "the_drift"
+          : null;
+  if (attune === "the_current") {
+    return (
+      "\n\n*The Ledger records your entry " +
+      "with a note: subject movement patterns " +
+      "defy standard pathfinding logic.*"
+    );
+  }
+  if (attune === "the_still") {
+    return (
+      "\n\n*The Ledger records you. A secondary " +
+      "note: subject identified structural " +
+      "anomaly in current zone. Flagged " +
+      "for review.*"
+    );
+  }
+  if (attune === "the_drift") {
+    return (
+      "\n\n*The Ledger records you. Entry " +
+      "incomplete — subject was not where " +
+      "the system expected them to be.*"
+    );
+  }
+  return (
+    "\n\n*The Ledger records you. Movement " +
+    "history flagged as atypical.*"
+  );
+}
+
+/** Stored in player_flags.value as 1|2|3 (D1 flags are numeric). */
+const MAL_ROOT_FLAG = { the_rooted: 1, the_wandered: 2, the_thorned: 3 };
+
+async function getMalAridariLedgerFlavor(db, uid, race, getFlag) {
+  if (String(race || "").toLowerCase() !== "malaridari") return null;
+  const rootNum = await getFlag(db, uid, "mal_root", 0);
+  const root =
+    rootNum === MAL_ROOT_FLAG.the_rooted
+      ? "the_rooted"
+      : rootNum === MAL_ROOT_FLAG.the_wandered
+        ? "the_wandered"
+        : rootNum === MAL_ROOT_FLAG.the_thorned
+          ? "the_thorned"
+          : null;
+  if (root === "the_rooted") {
+    return (
+      "\n\n*The Ledger records you. A note: " +
+      "subject presence reduces environmental " +
+      "read instability. Cause unknown.*"
+    );
+  }
+  if (root === "the_wandered") {
+    return (
+      "\n\n*The Ledger records you. Movement " +
+      "history unusual — subject appears in " +
+      "locations before events register.*"
+    );
+  }
+  if (root === "the_thorned") {
+    return (
+      "\n\n*The Ledger records you. Flag: " +
+      "subject response pattern suggests " +
+      "protective instinct. Cross-reference: " +
+      "injury events.*"
+    );
+  }
+  return (
+    "\n\n*The Ledger records you. " +
+    "External origin detected. " +
+    "Classification: pending.*"
+  );
+}
+
+/** Stored in player_flags.value as 1|2|3 (D1 flags are numeric). */
+const CAM_LINE_FLAG = { resonant: 1, deep_bound: 2, hollow_forged: 3 };
+
+async function getCambralLedgerFlavor(db, uid, race, getFlag) {
+  if (String(race || "").toLowerCase() !== "cambral") return null;
+  const lineNum = await getFlag(db, uid, "cam_line", 0);
+  const line =
+    lineNum === CAM_LINE_FLAG.resonant
+      ? "resonant"
+      : lineNum === CAM_LINE_FLAG.deep_bound
+        ? "deep_bound"
+        : lineNum === CAM_LINE_FLAG.hollow_forged
+          ? "hollow_forged"
+          : null;
+  if (line === "resonant") {
+    return (
+      "\n\n*The Ledger pauses. Something in " +
+      "your entry pattern matches an early " +
+      "imprint it didn't expect to encounter " +
+      "again.*"
+    );
+  }
+  if (line === "deep_bound") {
+    return (
+      "\n\n*The Ledger records you. A flag: " +
+      "subject exhibits resistance to standard " +
+      "recording pressure. Proximity history " +
+      "detected.*"
+    );
+  }
+  if (line === "hollow_forged") {
+    return (
+      "\n\n*The Ledger records you. Entry " +
+      "stable. A secondary note: subject has " +
+      "been recorded before. Entry predates " +
+      "current cycle.*"
+    );
+  }
+  return (
+    "\n\n*The Ledger records you. Structural " +
+    "origin detected. Filing under: " +
+    "Stone Host.*"
+  );
+}
+
+/** Stored in player_flags.value as 1|2|3 (D1 flags are numeric). */
+const SIL_LINE_FLAG = { redline: 1, ironvein: 2, greyborn: 3 };
+
+async function getSilthLedgerFlavor(db, uid, race, getFlag) {
+  if (String(race || "").toLowerCase() !== "silth") return null;
+  const lineNum = await getFlag(db, uid, "sil_line", 0);
+  const line =
+    lineNum === SIL_LINE_FLAG.redline
+      ? "redline"
+      : lineNum === SIL_LINE_FLAG.ironvein
+        ? "ironvein"
+        : lineNum === SIL_LINE_FLAG.greyborn
+          ? "greyborn"
+          : null;
+  if (line === "redline") {
+    return (
+      "\n\n*The Ledger records you. Note: " +
+      "subject exhibits combat-pattern " +
+      "metabolic signature. Classification: " +
+      "Blood Host, active line.*"
+    );
+  }
+  if (line === "ironvein") {
+    return (
+      "\n\n*The Ledger records you. " +
+      "Structural resilience flagged. Note: " +
+      "subject resistance to standard " +
+      "recording pressure — not Cambral in " +
+      "origin. Classify separately.*"
+    );
+  }
+  if (line === "greyborn") {
+    return (
+      "\n\n*The Ledger records you. " +
+      "Adaptation index unusual. Note: " +
+      "subject has survived conditions that " +
+      "should have produced different data.*"
+    );
+  }
+  return (
+    "\n\n*The Ledger records you. " +
+    "Origin: external. Purpose: unknown. " +
+    "Note: subject was made, not shaped.*"
+  );
+}
+
+/** Stored in player_flags.value as 1|2|3 (D1 flags are numeric). */
+const DAR_MARK_FLAG = { tide_marked: 1, storm_called: 2, deep_sung: 3 };
+
+async function getDarmerianLedgerFlavor(db, uid, race, getFlag) {
+  if (String(race || "").toLowerCase() !== "darmerians") return null;
+  const markNum = await getFlag(db, uid, "dar_mark", 0);
+  const mark =
+    markNum === DAR_MARK_FLAG.tide_marked
+      ? "tide_marked"
+      : markNum === DAR_MARK_FLAG.storm_called
+        ? "storm_called"
+        : markNum === DAR_MARK_FLAG.deep_sung
+          ? "deep_sung"
+          : null;
+  if (mark === "tide_marked") {
+    return (
+      "\n\n*The Ledger records you. External " +
+      "origin. Note: subject has survived " +
+      "conditions that destabilized local " +
+      "systems. Cross-reference: coastal " +
+      "rupture event.*"
+    );
+  }
+  if (mark === "storm_called") {
+    return (
+      "\n\n*The Ledger records you. " +
+      "Behavioral pattern: high-momentum " +
+      "response. Note: subject does not " +
+      "hesitate. The Ledger finds this " +
+      "statistically notable.*"
+    );
+  }
+  if (mark === "deep_sung") {
+    return (
+      "\n\n*The Ledger records you. A " +
+      "secondary note: subject perceives " +
+      "environmental signals the Ledger " +
+      "has not yet categorized. Flagged " +
+      "for review.*"
+    );
+  }
+  return (
+    "\n\n*The Ledger records you. Origin: " +
+    "coastal region, destabilized. Note: " +
+    "subject arrived following environmental " +
+    "rupture trail. Connection: pending.*"
+  );
+}
+
+async function getHumanLedgerFlavor(db, uid, race) {
+  if (race !== "human") return null;
+  return (
+    "\n\n*The Ledger records you. Origin: " +
+    "threshold crossing, voluntary. " +
+    "Classification: human. Note: subject " +
+    "entered without compulsion. The Ledger " +
+    "does not have a category for this. " +
+    "It creates one.*"
+  );
+}
+
 function buildAuthoredDialogueDeps(db, uid) {
   return {
     db,
@@ -721,6 +1042,20 @@ function buildAuthoredDialogueDeps(db, uid) {
     setFlag,
     getPlayerSheet,
     addItemToInventory,
+    getAshbornLedgerFlavor: (race) => getAshbornLedgerFlavor(db, uid, race, getFlag),
+    getDakAridariLedgerFlavor: (race) => getDakAridariLedgerFlavor(db, uid, race, getFlag),
+    getPanAridariLedgerFlavor: (race) => getPanAridariLedgerFlavor(db, uid, race, getFlag),
+    getMalAridariLedgerFlavor: (race) => getMalAridariLedgerFlavor(db, uid, race, getFlag),
+    getCambralLedgerFlavor: (race) => getCambralLedgerFlavor(db, uid, race, getFlag),
+    getSilthLedgerFlavor: (race) => getSilthLedgerFlavor(db, uid, race, getFlag),
+    getDarmerianLedgerFlavor: (race) =>
+      getDarmerianLedgerFlavor(db, uid, race, getFlag),
+    getHumanLedgerFlavor: (race) =>
+      getHumanLedgerFlavor(
+        db,
+        uid,
+        String(race || "").toLowerCase() === "human" ? "human" : race,
+      ),
   };
 }
 
@@ -2418,6 +2753,42 @@ if (path === "/api/admin/command" && method === "POST") {
       const items = STARTING_ITEMS[instinctKey] || [];
       for (const item of items) {
         await dbRun(db, "INSERT INTO inventory (user_id, item, qty) VALUES (?, ?, 1) ON CONFLICT(user_id, item) DO UPDATE SET qty = qty + 1", [uid, item]);
+      }
+
+      if (raceKey === "ashborn" && body.ashborn_mark != null) {
+        const raw = String(body.ashborn_mark).trim().toLowerCase();
+        const code = ASHBORN_MARK_FLAG[raw];
+        if (code) await setFlag(db, uid, "ashborn_mark", code);
+      }
+      if (raceKey === "dakaridari" && body.dak_adaptation != null) {
+        const rawDak = String(body.dak_adaptation).trim().toLowerCase();
+        const dakCode = DAK_ADAPTATION_FLAG[rawDak];
+        if (dakCode) await setFlag(db, uid, "dak_adaptation", dakCode);
+      }
+      if (raceKey === "panaridari" && body.pan_attunement != null) {
+        const rawPan = String(body.pan_attunement).trim().toLowerCase();
+        const panCode = PAN_ATTUNEMENT_FLAG[rawPan];
+        if (panCode) await setFlag(db, uid, "pan_attunement", panCode);
+      }
+      if (raceKey === "malaridari" && body.mal_root != null) {
+        const rawMal = String(body.mal_root).trim().toLowerCase();
+        const malCode = MAL_ROOT_FLAG[rawMal];
+        if (malCode) await setFlag(db, uid, "mal_root", malCode);
+      }
+      if (raceKey === "cambral" && body.cam_line != null) {
+        const rawCam = String(body.cam_line).trim().toLowerCase();
+        const camCode = CAM_LINE_FLAG[rawCam];
+        if (camCode) await setFlag(db, uid, "cam_line", camCode);
+      }
+      if (raceKey === "silth" && body.sil_line != null) {
+        const rawSil = String(body.sil_line).trim().toLowerCase();
+        const silCode = SIL_LINE_FLAG[rawSil];
+        if (silCode) await setFlag(db, uid, "sil_line", silCode);
+      }
+      if (raceKey === "darmerians" && body.dar_mark != null) {
+        const rawDar = String(body.dar_mark).trim().toLowerCase();
+        const darCode = DAR_MARK_FLAG[rawDar];
+        if (darCode) await setFlag(db, uid, "dar_mark", darCode);
       }
 
       // has_seen_awakening is set on first /api/look when we serve the awakening room description
@@ -4764,7 +5135,59 @@ But he is not the only one that was made."`,
       }
       const combined = [...npc, ...rowsWithOwn];
       combined.sort((a, b) => (b.pinned - a.pinned) || ((b.created_at || 0) - (a.created_at || 0)));
-      return json({ notices: combined });
+      const sheetRow = await getPlayerSheet(db, uid);
+      let ashborn_ledger_flavor = null;
+      if (sheetRow && String(sheetRow.race || "").toLowerCase() === "ashborn") {
+        ashborn_ledger_flavor = await getAshbornLedgerFlavor(db, uid, "ashborn", getFlag);
+      }
+      let dak_ledger_flavor = null;
+      if (sheetRow && String(sheetRow.race || "").toLowerCase() === "dakaridari") {
+        dak_ledger_flavor = await getDakAridariLedgerFlavor(db, uid, "dakaridari", getFlag);
+      }
+      let pan_ledger_flavor = null;
+      if (sheetRow && String(sheetRow.race || "").toLowerCase() === "panaridari") {
+        pan_ledger_flavor = await getPanAridariLedgerFlavor(db, uid, "panaridari", getFlag);
+      }
+      let cam_ledger_flavor = null;
+      if (sheetRow && String(sheetRow.race || "").toLowerCase() === "cambral") {
+        cam_ledger_flavor = await getCambralLedgerFlavor(db, uid, "cambral", getFlag);
+      }
+      let mal_ledger_flavor = null;
+      if (sheetRow && String(sheetRow.race || "").toLowerCase() === "malaridari") {
+        mal_ledger_flavor = await getMalAridariLedgerFlavor(db, uid, "malaridari", getFlag);
+      }
+      let sil_ledger_flavor = null;
+      if (sheetRow && String(sheetRow.race || "").toLowerCase() === "silth") {
+        sil_ledger_flavor = await getSilthLedgerFlavor(db, uid, "silth", getFlag);
+      }
+      let dar_ledger_flavor = null;
+      if (sheetRow && String(sheetRow.race || "").toLowerCase() === "darmerians") {
+        dar_ledger_flavor = await getDarmerianLedgerFlavor(
+          db,
+          uid,
+          "darmerians",
+          getFlag,
+        );
+      }
+      let human_ledger_flavor = null;
+      if (sheetRow && String(sheetRow.race || "").toLowerCase() === "human") {
+        human_ledger_flavor = await getHumanLedgerFlavor(
+          db,
+          uid,
+          "human",
+        );
+      }
+      return json({
+        notices: combined,
+        ashborn_ledger_flavor,
+        dak_ledger_flavor,
+        pan_ledger_flavor,
+        cam_ledger_flavor,
+        mal_ledger_flavor,
+        sil_ledger_flavor,
+        dar_ledger_flavor,
+        human_ledger_flavor,
+      });
     }
 
     // ── GET: Conditions (Phase 3 — hazards + roamers for noticeboard/world state) ──
