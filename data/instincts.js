@@ -3,7 +3,7 @@
  * Eligibility: `guild` + race `guild_affinity` (see index.js / races.js). Roster size is not assumed elsewhere.
  *
  * Phase 2 (TODO): third instinct per guild—add keys here; mirror in INSTINCT_DEFS, STARTER_LOADOUTS,
- * LEVEL_5_UPGRADES (×3 actives each), INSTINCT_AFFINITIES, ALIGN_INSTINCT_BIAS, GUILD_INSTINCT trial map.
+ * LEVEL_5_UPGRADES (×3 actives each), INSTINCT_AFFINITIES, ALIGN_INSTINCT_BIAS; guild trials use `guild` + services/guild_family.js.
  */
 
 export const INSTINCTS = {

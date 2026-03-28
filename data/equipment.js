@@ -64,8 +64,9 @@ export function createEmptyEquipmentLoadout() {
 }
 
 // ── Instinct gear affinities (bonuses/penalties by tag) ──────────────────────
-// Six anchor rows; ids missing here get no tag bonus/penalty in applyInstinctAffinities (equipment_stats.js).
-// Phase 2 (TODO): add rows for 3rd instinct/guild + optional parity for existing guild alts; count not fixed.
+// Twelve keys (two per guild family): the six anchors below, plus six aliases that share the same object
+// reference as their partner (pale_marked→ember_touched, etc.). Consumed by applyInstinctAffinities /
+// getAffinityHint via INSTINCT_AFFINITIES[instinct].
 export const INSTINCT_AFFINITIES = {
   ironblood: {
     tag_bonuses: {
@@ -157,6 +158,15 @@ export const INSTINCT_AFFINITIES = {
   },
 };
 
+Object.assign(INSTINCT_AFFINITIES, {
+  pale_marked: INSTINCT_AFFINITIES.ember_touched,
+  lifebinder: INSTINCT_AFFINITIES.hearthborn,
+  quickstep: INSTINCT_AFFINITIES.streetcraft,
+  war_forged: INSTINCT_AFFINITIES.ironblood,
+  grave_whisper: INSTINCT_AFFINITIES.shadowbound,
+  sentinel: INSTINCT_AFFINITIES.warden,
+});
+
 // ── Sewer starter equipment catalog ─────────────────────────────────────────
 function eq(id, name, slot, subType, overrides = {}) {
   const base = {
@@ -214,6 +224,7 @@ export const EQUIPMENT_DATA = {
     lore: "Good for gutting. And other things.",
   }),
   drain_spear: eq("drain_spear", "Drain Spear", "weapon_main", "spear", {
+    tags: ["sewer", "two_handed"],
     stat_modifiers: { ...createEmptyStatModifiers(), melee_power: 2, initiative: 1 },
     value_am: 18,
     lore: "Salvaged from a grate. Keeps things at arm's length.",
@@ -365,6 +376,7 @@ export const EQUIPMENT_DATA = {
     lore: "Soles thin but intact.",
   }),
   slickstep_boots: eq("slickstep_boots", "Slickstep Boots", "feet", "boots", {
+    tags: ["sewer", "light_armor"],
     stat_modifiers: { ...createEmptyStatModifiers(), dodge: 1, initiative: 1 },
     value_am: 14,
     lore: "Light. Quick.",
@@ -491,7 +503,7 @@ export const EQUIPMENT_DATA = {
     lore: "Three bone beads on a cord. They click only when your timing is right.",
   }),
   drill_line_ring: eq("drill_line_ring", "Drill-Line Ring", "ring_1", "ring", {
-    tags: ["sewer", "perception"],
+    tags: ["sewer", "heavy"],
     stat_modifiers: { ...createEmptyStatModifiers(), perception: 1 },
     value_am: 14,
     lore: "Notched inner band—marks for distance, depth, breath. The Low Quarter did not invent patience; it engraved it.",
@@ -537,7 +549,7 @@ export const EQUIPMENT_DATA = {
     lore: "The flame never quite goes out.",
   }),
   ash_bitten_cloak: eq("ash_bitten_cloak", "Ash-Bitten Cloak", "cloak", "cloak", {
-    tags: ["sewer", "stealth", "corruption"],
+    tags: ["sewer", "stealth", "corruption", "shadow"],
     stat_modifiers: { ...createEmptyStatModifiers(), dodge: 2, resist_fire: 1 },
     value_am: 45,
     quality: "corrupted",

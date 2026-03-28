@@ -1,11 +1,12 @@
 /**
  * Guild Initiation Trials — Standing 0 to 1.
  * @see cursor_guild_trials_initiation.md
- * Phase 2 (TODO): handler branches use specific instinct ids—extend for new guild-family instincts.
+ * Mechanic branches use instinct *family* (data/instincts.js `guild`); see services/guild_family.js.
  */
 
 import { COMBAT_DATA } from "../data/combat.js";
 import { statMod, rollDie } from "./combat.js";
+import { instinctGuildFamily } from "./guild_family.js";
 
 export const GUILD_LOCATIONS = {
   vaelith: "ashen_archive_hall",
@@ -82,6 +83,17 @@ export function getInitialTrialState(guild, playerHp, playerHpMax, instinct) {
         turn: 0,
         stalls_retrieved: {},
       };
+    case "serix":
+      return {
+        guild: "serix",
+        phase: "active",
+        trial_type: "veil_recognition",
+        turn: 0,
+        clarity: 50,
+        truths_found: 0,
+        illusions_active: true,
+        current_echo: null,
+      };
     default:
       return null;
   }
@@ -146,6 +158,23 @@ The Watchers are the market's own security — the city's
 institutional memory for who belongs and who doesn't. They
 have been here longer than Lirael has. She has never fully
 understood their jurisdiction.`,
+    serix: `The hall is empty.
+
+You are certain of that.
+
+Then you are not.
+
+Something stands in the center of the room — or you remember
+that something should be there.
+
+Serix's voice does not come from any direction.
+
+"Not everything here is false," he says.
+"That would be simple."
+
+"Find what remains true."
+
+The room shifts slightly. You are no longer certain you moved.`,
   };
   return intros[guild] || "";
 }
@@ -165,6 +194,7 @@ export function handleTrialAction(state, action, character, instinct) {
     halden: handleHalden,
     rhyla: handleRhyla,
     lirael: handleLirael,
+    serix: handleSerix,
   }[guild];
   if (!handler) return { result: "failed", message: "Unknown trial.", state, actions: [] };
   return handler(state, action, character, instinct);
@@ -190,7 +220,7 @@ function handleVaelith(state, action, character, instinct) {
       message = "There is no leak to attack.";
       return { result: "ongoing", message, state: s, actions };
     }
-    if (instinct === "ember_touched") {
+    if (instinctGuildFamily(instinct) === "ember") {
       s.leaks_defeated += 1;
       s.leak_active = false;
       message = "The flame in you recognizes the leak. It collapses before you touch it.";
@@ -301,7 +331,7 @@ You can return when you're ready.`,
   if (action === "fight") {
     const strMod = statMod(character?.strength ?? 10);
     const playerRoll = rollDie(8) + strMod;
-    const playerDmg = rollDie(6) + 8 + (instinct === "ironblood" ? 2 : 0);
+    const playerDmg = rollDie(6) + 8 + (instinctGuildFamily(instinct) === "iron" ? 2 : 0);
     const enemyDef = enemy.defense ?? 0;
     const enemyHp = enemy.hp ?? 22;
     const dr = enemy.damage ? { min: enemy.damage.min, max: enemy.damage.max } : { min: 2, max: 6 };
@@ -315,7 +345,7 @@ You can return when you're ready.`,
     s.rounds_survived = (s.rounds_survived ?? 0) + 1;
 
     if (killed) {
-      const flavor = instinct === "ironblood" ? " The pressure in your chest is familiar. You've been here before." : "";
+      const flavor = instinctGuildFamily(instinct) === "iron" ? " The pressure in your chest is familiar. You've been here before." : "";
       message = `You strike true. ${enemy.name} goes down.${flavor}`;
     } else if (hit) {
       message = `You land a blow but it's not enough. ${enemy.name} retaliates.`;
@@ -366,7 +396,7 @@ function handleHalden(state, action, character, instinct) {
   let message = "";
 
   const passiveDrain = 5 + (s.enemies_present ? 8 : 0);
-  const tendAmount = instinct === "hearthborn" ? 35 : 20;
+  const tendAmount = instinctGuildFamily(instinct) === "hearth" ? 35 : 20;
 
   if (action === "advance") {
     s.distance_traveled += 1;
@@ -377,7 +407,7 @@ function handleHalden(state, action, character, instinct) {
     if (!s.enemies_present && Math.random() < 0.3) s.enemies_present = 1;
   } else if (action === "tend_flame") {
     s.flame_energy = Math.min(100, (s.flame_energy ?? 100) - passiveDrain + tendAmount);
-    message = instinct === "hearthborn"
+    message = instinctGuildFamily(instinct) === "hearth"
       ? "The flame recognizes something in you. It brightens before you even touch it."
       : "You cup the flame. It responds to the attention.";
   } else if (action === "fight_shadow") {
@@ -487,12 +517,13 @@ You can try again when you're ready.`,
       s.at_pillar = true;
       message = "You brace against the pillar. The room shudders but holds.";
     } else if (action === "hold_position") {
+      const wardenFamily = instinctGuildFamily(instinct) === "warden";
       if (s.at_pillar) {
         s.pillars_held = (s.pillars_held ?? 0) + 1;
-        message = instinct === "warden"
+        message = wardenFamily
           ? "The structure speaks to you. You know where to stand before the tremor reaches you."
           : "The tremor passes. The pillar held.";
-      } else if (instinct !== "warden") {
+      } else if (!wardenFamily) {
         s.player_hp = Math.max(0, (s.player_hp ?? 20) - 8);
         message = "The ground throws you. You hit the wall hard.";
       } else {
@@ -574,7 +605,7 @@ function handleLirael(state, action, character, instinct) {
   let s = { ...state };
   s.stalls_retrieved = s.stalls_retrieved || {};
   let message = "";
-  const streetcraft = instinct === "streetcraft";
+  const streetFamily = instinctGuildFamily(instinct) === "street";
 
   const idx = WATCHER_PATROL.indexOf(s.watcher_at);
   s.watcher_at = WATCHER_PATROL[(idx + 1) % WATCHER_PATROL.length];
@@ -586,7 +617,7 @@ function handleLirael(state, action, character, instinct) {
     const stall = action.replace("move_to_stall_", "stall_");
     if (stalls.includes(stall)) {
       s.position = stall;
-      if (!streetcraft) s.watcher_alert = Math.min(100, (s.watcher_alert ?? 0) + 5);
+      if (!streetFamily) s.watcher_alert = Math.min(100, (s.watcher_alert ?? 0) + 5);
       message = `You move to ${stall.replace("_", " ").toUpperCase()}.`;
     }
   } else if (action === "move_to_exit") {
@@ -618,7 +649,7 @@ The items were hers to begin with.`,
     } else {
       s.stalls_retrieved[s.position] = true;
       s.items_retrieved += 1;
-      s.watcher_alert = Math.min(100, (s.watcher_alert ?? 0) + (streetcraft ? 10 : 20));
+      s.watcher_alert = Math.min(100, (s.watcher_alert ?? 0) + (streetFamily ? 10 : 20));
       const itemNarr = {
         stall_a: "A bronze sigil on a leather cord. The thread marks it.",
         stall_b: "A rolled document. The thread is tied around it twice.",
@@ -663,12 +694,116 @@ You can try again.`,
   return { result: "ongoing", message, state: s, actions };
 }
 
+const SERIX_ECHO_CYCLE = ["figure", "door", "voice", "memory"];
+
+function handleSerix(state, action, character, instinct) {
+  const actions = ["observe", "interact", "deny", "center"];
+  let s = { ...state };
+  let message = "";
+  const shadowFamily = instinctGuildFamily(instinct) === "shadow";
+
+  function spawnEchoIfNeeded() {
+    if (s.current_echo == null) {
+      const i = (s.truths_found + s.turn) % SERIX_ECHO_CYCLE.length;
+      s.current_echo = SERIX_ECHO_CYCLE[i];
+    }
+  }
+
+  if (action === "observe") {
+    if (shadowFamily) {
+      s.clarity = Math.min(100, (s.clarity ?? 50) + 10);
+      message =
+        "You hold still. The edges of the room refuse to agree with each other — but one line stays straight. You fix on it until the rest settles.";
+    } else {
+      s.clarity = Math.max(0, (s.clarity ?? 50) - 5);
+      message =
+        "You look hard. The harder you look, the more the hall offers versions of itself. None of them commit.";
+    }
+  } else if (action === "interact") {
+    spawnEchoIfNeeded();
+    const echo = s.current_echo;
+    const roll = rollDie(6);
+    if (shadowFamily || roll >= 4) {
+      s.truths_found = (s.truths_found ?? 0) + 1;
+      s.current_echo = null;
+      const echoNarr = {
+        figure: "Your hand passes through where a face should be. What remains is not a person — only the fact that something was believed.",
+        door: "The frame is wrong until you stop asking for a room beyond it. What remains is threshold — honest, useless, true.",
+        voice: "The words dissolve. What remains is rhythm without meaning — the shape of speech with nothing sold.",
+        memory: "The image tears. What remains is not the scene — only that you once thought it was yours.",
+      };
+      message = echoNarr[echo] || "Something holds. The rest drains away.";
+    } else {
+      s.clarity = Math.max(0, (s.clarity ?? 50) - 15);
+      message =
+        "You grasp at shape. Your fingers close on agreement that was never offered. The veil tightens.";
+    }
+  } else if (action === "deny") {
+    spawnEchoIfNeeded();
+    const roll = rollDie(6);
+    if (shadowFamily || roll >= 4) {
+      s.current_echo = null;
+      message =
+        "You refuse it. Not with force — with a simple no the room cannot spend. The echo starves and lets go.";
+    } else {
+      s.clarity = Math.max(0, (s.clarity ?? 50) - 10);
+      message = "You push it away. It leans closer, pleased you noticed it.";
+    }
+  } else if (action === "center") {
+    s.clarity = Math.min(100, (s.clarity ?? 50) + 15);
+    message = shadowFamily
+      ? "You name the floor under you. Not the story of it — the weight. The hall stops borrowing your balance."
+      : "You breathe until the room runs out of arguments. It does not forgive you — it waits.";
+  } else {
+    message = "The veil holds. Choose an action.";
+  }
+
+  s.turn = (s.turn ?? 0) + 1;
+
+  if ((s.clarity ?? 0) <= 0) {
+    return {
+      result: "failed",
+      message: `The last of it slips.
+
+You reach for something solid. Your hands close on empty air.
+
+Serix does not move. The hall is empty again — clearly, certainly empty.
+
+"You mistook noise for signal," he says. "The Covenant notes it."
+
+The door opens. The cold on the stairs is honest.`,
+      state: s,
+      actions: [],
+    };
+  }
+
+  if ((s.truths_found ?? 0) >= 3) {
+    return {
+      result: "complete",
+      message: `Three threads hold. The rest falls away.
+
+Serix inclines his head — not approval. Recognition.
+
+"What remains is yours to keep," he says. "The rest was never here."
+
+The hall steadies. For the first time, the floor agrees with your feet.
+
+You leave with one certainty you did not bring in: truth is not loud. It is what survives when everything eloquent has spent itself.`,
+      state: s,
+      actions: [],
+    };
+  }
+
+  return { result: "ongoing", message, state: s, actions };
+}
+
 export function getTrialActions(guild, state) {
   const byType = {
     containment: ["stand_on_sigil", "attack_leak", "leave_sigil"],
     pressure_valve: ["fight", "hold", "flee"],
     the_feeding: ["advance", "tend_flame", "fight_shadow", "retreat"],
     foundation_support: ["attack_construct", "move_to_pillar", "hold_position", "flee"],
+    veil_recognition: ["observe", "interact", "deny", "center"],
     asset_retrieval: (s) => {
       const a = ["move_to_stall_a", "move_to_stall_b", "move_to_stall_c", "retrieve_item", "wait"];
       if (s?.items_retrieved >= 3) a.push("move_to_exit");
@@ -691,6 +826,8 @@ export function getTrialStatusBar(state) {
       return `Construct HP: ${state.construct_hp ?? 60}/${state.construct_hp_max ?? 60} | HP: ${state.player_hp ?? 0}/${state.player_hp_max ?? 20} | Tremor in: ${state.tremor_countdown ?? 3} turns`;
     case "asset_retrieval":
       return `Items: ${state.items_retrieved ?? 0}/3 | Alert: ${state.watcher_alert ?? 0}%`;
+    case "veil_recognition":
+      return `Clarity: ${state.clarity ?? 50}% | Truths Found: ${state.truths_found ?? 0}/3`;
     default:
       return "";
   }
@@ -716,4 +853,8 @@ export const ACTION_LABELS = {
   retrieve_item: "Retrieve Item",
   move_to_exit: "Move to Exit",
   wait: "Wait",
+  observe: "Observe",
+  interact: "Reach for Echo",
+  deny: "Reject Echo",
+  center: "Center Yourself",
 };

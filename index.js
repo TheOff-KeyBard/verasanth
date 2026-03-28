@@ -46,6 +46,7 @@ import { getEquipmentSlot, resolveLegacySlot, isValidEquipmentSlot, canEquipItem
 import { aggregateEquipmentStats, applyInstinctAffinities, applyRaceAffinities, getItemEffectiveStats } from "./services/equipment_stats.js";
 import { GUILD_LOCATIONS, getInitialTrialState, getTrialIntro, getTrialActions, handleTrialAction, getTrialStatusBar, ACTION_LABELS } from "./services/trials.js";
 import { handleGuildTrial } from "./services/guild_trials.js";
+import { instinctBelongsToFaction, instinctBelongsToLeaderHall } from "./services/guild_family.js";
 import {
   shouldFireEncounter,
   pickEncounter,
@@ -4176,17 +4177,7 @@ The city knows.`,
       const standing = await getGuildStanding(db, uid, guild);
       const instinct = (row.instinct || "").toLowerCase();
 
-      // Phase 2 (TODO): replace one-instinct-per-guild check with guild → Set/array of allowed ids (3/guild).
-      const GUILD_INSTINCT = {
-        ashen_archive: "shadowbound",
-        broken_banner: "ironblood",
-        quiet_sanctum: "hearthborn",
-        veil_market: "streetcraft",
-        umbral_covenant: "ember_touched",
-        stone_watch: "warden",
-      };
-
-      if (GUILD_INSTINCT[guild] !== instinct) {
+      if (!instinctBelongsToFaction(instinct, guild)) {
         return err("Your instinct does not align with this guild.");
       }
 
@@ -5417,7 +5408,11 @@ But he is not the only one that was made."`,
       if (trialActive) return err("A trial is already active.");
       const inCombat = await dbGet(db, "SELECT 1 FROM combat_state WHERE user_id=?", [uid]);
       if (inCombat) return err("You cannot start a trial while in combat.");
-      if (guild === "serix") return err("Serix watches you. She says nothing. She is not ready for you yet.");
+
+      const instinctKey = (row.instinct || "").toLowerCase();
+      if (!instinctBelongsToLeaderHall(instinctKey, guild)) {
+        return err("Your instinct does not align with this guild.");
+      }
 
       const hp = await getPlayerHp(db, uid, row);
       const state = getInitialTrialState(guild, hp.current, hp.max, row.instinct || "");
