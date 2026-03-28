@@ -2289,7 +2289,7 @@
     background: var(--bg2);
     border: 1px solid var(--ember-dim);
     box-shadow: 0 0 24px rgba(196,98,42,0.3);
-    width: min(420px, 94vw);
+    width: min(460px, calc(100vw - 24px));
     max-height: min(92dvh, 100%);
     margin-top: 8px;
     display: flex;
@@ -2303,24 +2303,44 @@
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
-    padding: 24px 24px 12px;
+    padding: 22px 20px 16px;
+  }
+  @media (min-width: 400px) {
+    .tw-modal-body { padding: 26px 26px 18px; }
   }
   .tw-modal-footer {
     flex-shrink: 0;
-    padding: 12px 24px 20px;
+    padding: 14px 20px 20px;
     padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
     background: var(--bg2);
     border-top: 1px solid var(--border-warm);
     box-shadow: 0 -8px 24px rgba(0,0,0,0.35);
   }
-  .tw-modal h2 { font-family: var(--font-title); font-size: 1.1rem; color: var(--ember-glow); margin-bottom: 12px; }
-  .tw-hint { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 16px; }
+  @media (min-width: 400px) {
+    .tw-modal-footer { padding-left: 26px; padding-right: 26px; }
+  }
+  .tw-modal h2 {
+    font-family: var(--font-title);
+    font-size: clamp(1.15rem, 2.8vw, 1.35rem);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--ember-glow);
+    margin: 0 0 18px;
+    line-height: 1.25;
+  }
+  .tw-hint {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin: 0 0 14px;
+  }
+  .tw-hint + .tw-hint { margin-top: -6px; margin-bottom: 16px; }
   .tw-race-grid {
     display: flex;
     flex-direction: column;
     flex-wrap: nowrap;
-    gap: 10px;
-    margin-bottom: 16px;
+    gap: 12px;
+    margin-bottom: 20px;
     max-height: min(50dvh, 360px);
     overflow-y: auto;
     overflow-x: hidden;
@@ -2337,32 +2357,80 @@
   }
   .tw-race-card, .tw-instinct-card {
     text-align: left;
-    padding: 12px 14px;
-    min-width: 140px;
+    padding: 14px 16px;
+    min-width: 0;
     border: 1px solid var(--border-warm);
     background: var(--bg2);
     color: var(--ash-light);
     font-size: 0.85rem;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: border-color 0.15s, color 0.15s, box-shadow 0.15s, filter 0.15s;
     flex: 1 1 200px;
     overflow: hidden;
     position: relative;
+    border-radius: 2px;
   }
   .tw-race-card {
-    min-height: 44px;
+    min-height: 48px;
+  }
+  .tw-race-card > strong {
+    display: block;
+    font-family: var(--font-title);
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+    line-height: 1.3;
+  }
+  .tw-instinct-card strong:first-of-type {
+    display: block;
+    font-family: var(--font-title);
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 8px;
+    line-height: 1.3;
+  }
+  .tw-stat-mods {
+    display: block;
+    font-size: 0.74rem;
+    line-height: 1.4;
+    color: var(--gold-dim);
+    letter-spacing: 0.02em;
   }
   .tw-instinct-card {
-    min-width: 240px;
-    min-height: 80px;
-    line-height: 1.35;
+    min-width: 0;
+    min-height: 88px;
+    line-height: 1.4;
     overflow-wrap: break-word;
+  }
+  .tw-instinct-card .tw-memory {
+    display: block;
+    font-style: italic;
+    font-size: 0.82rem;
+    color: var(--ember-glow);
+    opacity: 0.9;
+    margin-bottom: 6px;
+  }
+  .tw-instinct-card .tw-role {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gold-dim);
+    margin-bottom: 8px;
+  }
+  .tw-instinct-card .tw-ability {
+    display: block;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: var(--text-dim);
   }
   .tw-race-card .tw-race-desc {
     display: none;
-    margin-top: 8px;
-    font-size: 0.76rem;
-    line-height: 1.38;
+    margin-top: 10px;
+    font-size: 0.78rem;
+    line-height: 1.45;
     color: var(--text-dim);
     font-weight: normal;
     overflow-wrap: break-word;
@@ -2384,31 +2452,47 @@
   .tw-instinct-card.affinity { border-color: var(--gold-dim); }
   .tw-instinct-card.affinity .tw-affinity-badge { display: inline; font-size: 0.75rem; color: var(--gold); margin-bottom: 4px; }
   .tw-instinct-card .tw-affinity-badge { display: none; }
-  .tw-affinity-bonus { font-size: 0.85rem; color: var(--gold); margin-bottom: 10px; }
-  .tw-confirm-card { background: var(--bg2); border: 1px solid var(--border-warm); padding: 16px; margin-bottom: 16px; font-size: 0.9rem; }
-  .tw-confirm-card h3 { font-family: var(--font-title); font-size: 1rem; margin-bottom: 8px; color: var(--ember-glow); }
-  .tw-confirm-card .tw-stats-preview { margin: 10px 0; color: var(--text-dim); }
-  .tw-confirm-card .tw-equipment { margin-top: 10px; color: var(--ash-light); }
+  .tw-affinity-bonus {
+    font-size: 0.84rem;
+    line-height: 1.45;
+    color: var(--gold);
+    margin: 0 0 14px;
+    padding: 8px 12px;
+    background: rgba(196, 98, 42, 0.08);
+    border-left: 3px solid var(--gold-dim);
+  }
+  .tw-confirm-card { background: var(--bg2); border: 1px solid var(--border-warm); padding: 18px; margin-bottom: 16px; font-size: 0.9rem; border-radius: 2px; }
+  .tw-confirm-card h3 { font-family: var(--font-title); font-size: 1rem; margin-bottom: 10px; color: var(--ember-glow); }
+  .tw-confirm-card .tw-stats-preview { margin: 12px 0; color: var(--text-dim); line-height: 1.5; }
+  .tw-confirm-card .tw-equipment { margin-top: 12px; color: var(--ash-light); line-height: 1.5; }
   .tw-instinct-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 10px;
-    margin-bottom: 16px;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
   }
-  .tw-instinct-grid button {
-    background: var(--bg3); border: 1px solid var(--border); color: var(--text);
-    padding: 10px 14px; font-family: var(--font-body); cursor: pointer;
-    text-align: left;
-    min-width: 0;
+  @media (min-width: 380px) {
+    .tw-instinct-grid {
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+    }
   }
-  .tw-instinct-grid button.selected { border-color: var(--ember); color: var(--ember-glow); }
+  .tw-instinct-grid .tw-instinct-card {
+    background: var(--bg2);
+    border: 1px solid var(--border-warm);
+    color: var(--ash-light);
+    font-family: var(--font-body);
+    min-height: 0;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
   .tw-stats-grid { display: grid; gap: 8px; margin-bottom: 12px; }
   .tw-stats-grid label { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
   .tw-stats-grid input { width: 56px; }
   .tw-pool { font-size: 0.9rem; color: var(--text-dim); margin-bottom: 12px; }
-  .tw-msg { min-height: 1.2em; font-size: 0.9rem; margin-bottom: 12px; }
+  .tw-msg { min-height: 1.25em; font-size: 0.88rem; line-height: 1.45; margin: 8px 0 0; }
   .tw-msg.err { color: var(--danger); }
-  .tw-actions { margin-top: 0; display: flex; gap: 10px; flex-wrap: wrap; }
+  .tw-actions { margin-top: 0; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .tw-modal-footer .btn-ember { min-height: 44px; padding: 12px 22px; }
   .btn-ember.secondary { background: transparent; color: var(--ash-light); border-color: var(--border-warm); }
   .btn-ember.secondary:hover { border-color: var(--gold-dim); color: var(--gold); }
   .tw-step-sheet {
@@ -2418,9 +2502,9 @@
     -webkit-overflow-scrolling: touch;
   }
   .tw-sheet-scroll { min-height: 0; }
-  .tw-sheet-section { margin-bottom: 24px; }
-  .tw-sheet-section-title { font-family: var(--font-title); font-size: 1rem; color: var(--ember-glow); margin-bottom: 4px; }
-  .tw-sheet-section-sub { font-style: italic; color: var(--text-dim); font-size: 0.9rem; margin-bottom: 12px; }
+  .tw-sheet-section { margin-bottom: 28px; }
+  .tw-sheet-section-title { font-family: var(--font-title); font-size: 1.05rem; color: var(--ember-glow); margin: 0 0 8px; line-height: 1.3; }
+  .tw-sheet-section-sub { font-style: italic; color: var(--text-dim); font-size: 0.9rem; line-height: 1.45; margin: 0 0 14px; }
   .stat-title { animation: revealUneven 0.8s ease forwards; }
   .stat-subtitle { animation: fadeInSlow 1s ease 0.2s forwards; opacity: 0; }
   .tw-create-name-input {
@@ -4679,17 +4763,17 @@ let twSheetBaseStats = { strength: 5, dexterity: 5, constitution: 5, intelligenc
 // Mirror data/starter_loadouts.js keys 1:1 (Phase 2: add entry per new instinct for summary preview).
 const STARTER_LOADOUTS_DISPLAY = {
   ember_touched: { weapon_main: 'sewer_wand', chest: 'mold_stained_vest', relic: 'ash_script_token' },
-  pale_marked: { weapon_main: 'sewer_wand', cloak: 'ash_bitten_cloak', charm: 'salt_thread_token' },
+  pale_marked: { weapon_main: 'sewer_wand', cloak: 'ash_bitten_cloak', charm: 'salt_thread_token', relic: 'pale_wax_disk' },
   hearthborn: { weapon_offhand: 'bone_focus', chest: 'patchwork_jerkin', charm: 'sewer_saint_knot' },
-  lifebinder: { weapon_offhand: 'bone_focus', chest: 'mold_stained_vest', charm: 'salt_thread_token' },
+  lifebinder: { weapon_offhand: 'bone_focus', chest: 'mold_stained_vest', charm: 'pulse_knot_charm' },
   streetcraft: { weapon_main: 'hooked_knife', chest: 'sewer_leathers', feet: 'footwraps' },
-  quickstep: { weapon_main: 'pipe_shiv', chest: 'sewer_leathers', feet: 'slickstep_boots' },
+  quickstep: { weapon_main: 'pipe_shiv', chest: 'sewer_leathers', feet: 'slickstep_boots', charm: 'stride_bead_charm' },
   ironblood: { weapon_main: 'worn_mace', chest: 'riveted_coat', weapon_offhand: 'scrap_shield' },
-  war_forged: { weapon_main: 'drain_spear', chest: 'patchwork_jerkin', ring_2: 'iron_band' },
+  war_forged: { weapon_main: 'drain_spear', chest: 'patchwork_jerkin', ring_1: 'drill_line_ring', ring_2: 'iron_band' },
   shadowbound: { weapon_main: 'hooked_knife', cloak: 'ash_bitten_cloak', relic: 'whisper_stone_fragment' },
-  grave_whisper: { weapon_main: 'sewer_wand', cloak: 'drip_cloak', relic: 'cracked_reliquary_shard' },
+  grave_whisper: { weapon_main: 'sewer_wand', cloak: 'drip_cloak', relic: 'hollow_coin_relic' },
   warden: { weapon_main: 'rusted_blade', chest: 'riveted_coat', weapon_offhand: 'cracked_buckler' },
-  sentinel: { weapon_main: 'rusted_blade', chest: 'patchwork_jerkin', charm: 'rat_bone_charm' },
+  sentinel: { weapon_main: 'rusted_blade', chest: 'patchwork_jerkin', charm: 'post_token_charm' },
 };
 
 function formatStarterLoadoutSummary(loadout) {

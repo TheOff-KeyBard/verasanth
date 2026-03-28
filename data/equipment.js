@@ -471,6 +471,44 @@ export const EQUIPMENT_DATA = {
     lore: "Script you can't read. You feel it.",
   }),
 
+  // Identity trim — Tier 1 alternates (one piece per guild family; conservative stats)
+  pale_wax_disk: eq("pale_wax_disk", "Pale Wax Disk", "relic", "idol", {
+    tags: ["sewer", "arcane", "shadow"],
+    stat_modifiers: { ...createEmptyStatModifiers(), spell_power: 1 },
+    value_am: 22,
+    lore: "White ash pressed into wax. It drinks warmth without flaring—like a mouth that forgot how to burn.",
+  }),
+  pulse_knot_charm: eq("pulse_knot_charm", "Pulse-Knot Charm", "charm", "fetish", {
+    tags: ["sewer", "arcane_focus"],
+    stat_modifiers: { ...createEmptyStatModifiers(), healing_power: 1 },
+    value_am: 16,
+    lore: "Cord tied in a pattern a healer would recognize. The knot tightens when something nearby runs thin.",
+  }),
+  stride_bead_charm: eq("stride_bead_charm", "Stride-Bead Charm", "charm", "charm", {
+    tags: ["sewer", "stealth"],
+    stat_modifiers: { ...createEmptyStatModifiers(), initiative: 1 },
+    value_am: 13,
+    lore: "Three bone beads on a cord. They click only when your timing is right.",
+  }),
+  drill_line_ring: eq("drill_line_ring", "Drill-Line Ring", "ring_1", "ring", {
+    tags: ["sewer", "perception"],
+    stat_modifiers: { ...createEmptyStatModifiers(), perception: 1 },
+    value_am: 14,
+    lore: "Notched inner band—marks for distance, depth, breath. The Low Quarter did not invent patience; it engraved it.",
+  }),
+  hollow_coin_relic: eq("hollow_coin_relic", "Hollow Coin Relic", "relic", "idol", {
+    tags: ["sewer", "shadow"],
+    stat_modifiers: { ...createEmptyStatModifiers(), resist_shadow: 1 },
+    value_am: 20,
+    lore: "Struck thin until the center gave way. What remains listens downward, not across.",
+  }),
+  post_token_charm: eq("post_token_charm", "Post Token Charm", "charm", "token", {
+    tags: ["sewer", "heavy"],
+    stat_modifiers: { ...createEmptyStatModifiers(), block_value: 1 },
+    value_am: 15,
+    lore: "A gate-mark boiled into scrap metal. Carried by those who mean to be the thing others break against.",
+  }),
+
   // Corrupted test items (4)
   bloodbound_pipe_shiv: eq("bloodbound_pipe_shiv", "Bloodbound Pipe Shiv", "weapon_main", "dagger", {
     tags: ["sewer", "light_blade", "corruption"],
