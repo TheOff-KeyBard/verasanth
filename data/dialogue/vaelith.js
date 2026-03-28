@@ -120,6 +120,36 @@ export const dialogue = {
       },
       effects: { trust_delta: 1 },
     },
+    {
+      id: "vaelith_watch_seams_echo",
+      label: "Ask what she sees when she looks at you",
+      requires_trust_min: 0,
+      requires_flag: "sentinel_reads_rhyla",
+      requires_flag_not: null,
+      requires_level_min: null,
+      response: "Someone who has learned to watch the seams.",
+      followup: {
+        label: "What does that mean here?",
+        response:
+          "Rhyla teaches that. The Watch teaches that. It's a different discipline from the Archive's — but the posture is the same. You look for what's about to happen, not what's happening. That's useful here.",
+      },
+      effects: null,
+    },
+    {
+      id: "vaelith_halls_below_echo",
+      label: "Ask if the halls below the guilds are connected",
+      requires_trust_min: 15,
+      requires_flag: "grave_whisper_heard_below",
+      requires_flag_not: null,
+      requires_level_min: null,
+      response: "Not in any way you can walk.",
+      followup: {
+        label: "Then how?",
+        response:
+          "But resonance doesn't follow corridors. If you heard something beneath the Covenant, it heard you too. The Archive has noted it. I'm still deciding what to do with that information.",
+      },
+      effects: null,
+    },
   ],
 
   fallback: "If you need something, ask. If you want reassurance, find a priest.",

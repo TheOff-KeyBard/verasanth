@@ -150,22 +150,204 @@ export async function getEffectiveTrust(
   return Math.max(table, legacy);
 }
 
-export async function resolveAuthoredGreeting(dialogue, db, uid, getFlag, dbGet) {
-  const g = dialogue.greeting;
-  if (!g) return "";
-  if (g.conditional?.length) {
-    for (const c of g.conditional) {
-      if (c.requires_flag && !(await flagTruthy(db, uid, c.requires_flag, getFlag, dbGet)))
-        continue;
-      if (
-        c.requires_flag_not &&
-        !(await flagFalsy(db, uid, c.requires_flag_not, getFlag, dbGet))
-      )
-        continue;
-      return c.text;
+/** Guild leaders only; first matching instinct row wins (one line per interaction). */
+const GUILD_LEADER_INSTINCT_GREETINGS = {
+  vaelith: [
+    {
+      instinct: "grave_whisper",
+      lines: [
+        "You listen differently than most people who come here.",
+        "The Archive has noted it.",
+      ],
+    },
+    {
+      instinct: "sentinel",
+      lines: [
+        "You were reading the room before you spoke.",
+        "The sigils responded.",
+      ],
+    },
+  ],
+  serix: [
+    {
+      instinct: "ember_touched",
+      lines: [
+        "You burn toward things.",
+        "That's not a criticism. But the Covenant reads heat as well as shadow.",
+      ],
+    },
+    {
+      instinct: "pale_marked",
+      lines: [
+        "Something was taken from you. Or gave itself.",
+        "The distinction matters here.",
+      ],
+    },
+  ],
+  garruk: [
+    {
+      instinct: "quickstep",
+      lines: [
+        "You're already halfway through your next move.",
+        "Finish the one you're in first.",
+      ],
+    },
+    {
+      instinct: "streetcraft",
+      lines: [
+        "You came in reading angles.",
+        "Good habit. Just remember the yard doesn't have exits.",
+      ],
+    },
+  ],
+  rhyla: [
+    {
+      instinct: "ironblood",
+      lines: [
+        "You brace before impact. Not after.",
+        "That's earned, not taught.",
+      ],
+    },
+    {
+      instinct: "warden",
+      lines: [
+        "You hold your ground like it means something.",
+        "It does. Don't forget that when the city tries to move you.",
+      ],
+    },
+  ],
+  halden: [
+    {
+      instinct: "shadowbound",
+      lines: [
+        "You carry something quiet with you.",
+        "That's not a warning. Just — sit near the flame when you need to.",
+      ],
+    },
+    {
+      instinct: "grave_whisper",
+      lines: [
+        "You've been listening to the wrong kind of silence.",
+        "The Sanctum has a different kind, if you want it.",
+      ],
+    },
+  ],
+  lirael: [
+    {
+      instinct: "sentinel",
+      lines: [
+        "You entered this room knowing where everyone was before you looked.",
+        "That's useful. Just don't let it make you predictable.",
+      ],
+    },
+    {
+      instinct: "warden",
+      lines: [
+        "You move like you're holding something in place.",
+        "Works fine until the thing you're holding decides to move.",
+      ],
+    },
+  ],
+};
+
+/**
+ * Tier-1 passive instinct prefix for select guild leaders.
+ * @param {string} npcId - Dialogue `npc_id` (e.g. vaelith, serix).
+ * @param {{ instinct?: string } | null | undefined} playerContext
+ * @returns {string | null}
+ */
+export function getInstinctGreetingLine(npcId, playerContext) {
+  const rows = GUILD_LEADER_INSTINCT_GREETINGS[npcId];
+  if (!rows?.length) return null;
+  const instinct = String(playerContext?.instinct || "")
+    .trim()
+    .toLowerCase();
+  if (!instinct) return null;
+  for (const row of rows) {
+    if (row.instinct === instinct) {
+      return row.lines.filter(Boolean).join("\n");
     }
   }
-  return g.default || "";
+  return null;
+}
+
+/** Faction keys → numeric standing (matches /api/talk `playerContext.guild_standings`). */
+export async function loadGuildStandingsMap(db, uid, getFlag) {
+  const vaelith = Number(await getFlag(db, uid, "guild_standing_vaelith", 0)) || 0;
+  const garruk = Number(await getFlag(db, uid, "guild_standing_garruk", 0)) || 0;
+  const halden = Number(await getFlag(db, uid, "guild_standing_halden", 0)) || 0;
+  const lirael = Number(await getFlag(db, uid, "guild_standing_lirael", 0)) || 0;
+  const serix = Number(await getFlag(db, uid, "guild_standing_serix", 0)) || 0;
+  const rhyla = Number(await getFlag(db, uid, "guild_standing_rhyla", 0)) || 0;
+  return {
+    ashen_archive: vaelith,
+    broken_banner: garruk,
+    quiet_sanctum: halden,
+    veil_market: lirael,
+    umbral_covenant: serix,
+    stone_watch: rhyla,
+  };
+}
+
+function greetingGuildStandingOk(c, playerContext) {
+  const key = c.requires_guild_standing_key;
+  const minSt = c.requires_guild_standing_min;
+  if (key == null || minSt == null) return true;
+  const gs = playerContext?.guild_standings;
+  const val = gs ? Number(gs[key]) || 0 : 0;
+  return val >= Number(minSt);
+}
+
+function optionGuildStandingOk(opt, playerContext) {
+  const key = opt.requires_guild_standing_key;
+  const minSt = opt.requires_guild_standing_min;
+  if (key == null || minSt == null) return true;
+  const gs = playerContext?.guild_standings;
+  const val = gs ? Number(gs[key]) || 0 : 0;
+  return val >= Number(minSt);
+}
+
+export async function resolveAuthoredGreeting(
+  dialogue,
+  db,
+  uid,
+  getFlag,
+  dbGet,
+  playerContext = null,
+) {
+  const g = dialogue.greeting;
+  let baseGreeting = "";
+  if (g) {
+    if (g.conditional?.length) {
+      let matched = false;
+      for (const c of g.conditional) {
+        if (c.requires_flag && !(await flagTruthy(db, uid, c.requires_flag, getFlag, dbGet)))
+          continue;
+        if (
+          c.requires_flag_not &&
+          !(await flagFalsy(db, uid, c.requires_flag_not, getFlag, dbGet))
+        )
+          continue;
+        if (!greetingGuildStandingOk(c, playerContext)) continue;
+        baseGreeting = c.text;
+        matched = true;
+        break;
+      }
+      if (!matched) baseGreeting = g.default || "";
+    } else {
+      baseGreeting = g.default || "";
+    }
+  }
+
+  const npcId = dialogue?.npc_id;
+  const instinctLine =
+    npcId && playerContext
+      ? getInstinctGreetingLine(npcId, playerContext)
+      : null;
+  if (instinctLine) {
+    return instinctLine + "\n" + baseGreeting;
+  }
+  return baseGreeting;
 }
 
 function optionVisible(opt, trust, level) {
@@ -176,7 +358,7 @@ function optionVisible(opt, trust, level) {
   return true;
 }
 
-async function optionFlagsOk(opt, db, uid, getFlag, dbGet) {
+async function optionFlagsOk(opt, db, uid, getFlag, dbGet, playerContext = null) {
   if (opt.requires_flag && !(await flagTruthy(db, uid, opt.requires_flag, getFlag, dbGet)))
     return false;
   if (
@@ -184,6 +366,7 @@ async function optionFlagsOk(opt, db, uid, getFlag, dbGet) {
     !(await flagFalsy(db, uid, opt.requires_flag_not, getFlag, dbGet))
   )
     return false;
+  if (!optionGuildStandingOk(opt, playerContext)) return false;
   return true;
 }
 
@@ -195,11 +378,12 @@ export async function getVisibleOptions(
   dbGet,
   trust,
   level,
+  playerContext = null,
 ) {
   const out = [];
   for (const opt of dialogue.options || []) {
     if (!optionVisible(opt, trust, level)) continue;
-    if (!(await optionFlagsOk(opt, db, uid, getFlag, dbGet))) continue;
+    if (!(await optionFlagsOk(opt, db, uid, getFlag, dbGet, playerContext))) continue;
     out.push({ id: opt.id, label: opt.label });
   }
   return out;
@@ -302,7 +486,19 @@ export async function handleNpcOptionsGet(
 
   const trust = await getEffectiveTrust(db, dbGet, uid, canonicalId, getFlag);
   const level = getCharacterLevel(row);
-  let greeting = await resolveAuthoredGreeting(dialogue, db, uid, getFlag, dbGet);
+  const guild_standings = await loadGuildStandingsMap(db, uid, getFlag);
+  const dialoguePlayerContext = {
+    instinct: row.instinct,
+    guild_standings,
+  };
+  let greeting = await resolveAuthoredGreeting(
+    dialogue,
+    db,
+    uid,
+    getFlag,
+    dbGet,
+    dialoguePlayerContext,
+  );
   if (
     canonicalId === "seris" &&
     trust === 0 &&
@@ -399,6 +595,7 @@ export async function handleNpcOptionsGet(
     dbGet,
     trust,
     level,
+    dialoguePlayerContext,
   );
 
   return {
@@ -442,6 +639,11 @@ export async function handleNpcSelectPost(deps, routeSegment, body) {
 
   const trust = await getEffectiveTrust(db, dbGet, uid, canonicalId, getFlag);
   const level = getCharacterLevel(row);
+  const guild_standings = await loadGuildStandingsMap(db, uid, getFlag);
+  const dialoguePlayerContext = {
+    instinct: row.instinct,
+    guild_standings,
+  };
 
   const optionId = body?.option_id;
   const takeFollowup = !!body?.followup;
@@ -461,6 +663,7 @@ export async function handleNpcSelectPost(deps, routeSegment, body) {
       dbGet,
       trust,
       level,
+      dialoguePlayerContext,
     );
     const t = freeText.toLowerCase();
     let picked = null;
@@ -522,7 +725,7 @@ export async function handleNpcSelectPost(deps, routeSegment, body) {
   const opt = findOptionById(dialogue, optionId);
   if (!opt) return { error: "Unknown option.", status: 400 };
   if (!optionVisible(opt, trust, level)) return { error: "Option locked.", status: 400 };
-  if (!(await optionFlagsOk(opt, db, uid, getFlag, dbGet)))
+  if (!(await optionFlagsOk(opt, db, uid, getFlag, dbGet, dialoguePlayerContext)))
     return { error: "Option locked.", status: 400 };
 
   if (opt.use_ai) return { useAi: true };

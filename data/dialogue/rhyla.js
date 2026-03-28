@@ -120,6 +120,71 @@ export const dialogue = {
       followup: null,
       effects: null,
     },
+    {
+      id: "rhyla_carrying_too_much_echo",
+      label: "Ask what she sees when someone's carrying too much",
+      requires_trust_min: 15,
+      requires_flag: "hearth_tender_cost_revealed",
+      requires_flag_not: null,
+      requires_level_min: null,
+      response:
+        "The weight distribution changes. They lean without knowing it.",
+      followup: {
+        label: "Where does she see it?",
+        response:
+          "You learn to spot it on patrol. Someone giving everything to hold a line who doesn't notice the line has already moved. The Sanctum has that problem. Good people. Poor load management.",
+      },
+      effects: null,
+    },
+    {
+      id: "rhyla_preparation_echo",
+      label: "Ask if preparation matters more than response",
+      requires_trust_min: 0,
+      requires_flag: "streetcraft_angle_doctrine",
+      requires_flag_not: null,
+      requires_level_min: null,
+      response: "Yes.",
+      followup: {
+        label: "Same as the Watch?",
+        response:
+          "The Market teaches it through positioning. The Watch teaches it through structure. Different surfaces. Same principle. If you're reacting, something already went wrong.",
+      },
+      effects: null,
+    },
+    {
+      id: "rhyla_covenant_read_echo",
+      label: "How do you read someone trained in the Covenant?",
+      requires_trust_min: 0,
+      requires_flag: null,
+      requires_flag_not: null,
+      requires_level_min: null,
+      requires_guild_standing_key: "umbral_covenant",
+      requires_guild_standing_min: 3,
+      response: "Carefully.",
+      followup: {
+        label: "Why carefully?",
+        response:
+          "They see the fault before it opens. That's useful. It's also the kind of perception that finds threats that aren't there yet — and sometimes makes them real by responding too early. I watch for that.",
+      },
+      effects: null,
+    },
+    {
+      id: "rhyla_market_movement_echo",
+      label: "Can you read Market-trained movement?",
+      requires_trust_min: 0,
+      requires_flag: null,
+      requires_flag_not: null,
+      requires_level_min: null,
+      requires_guild_standing_key: "veil_market",
+      requires_guild_standing_min: 3,
+      response: "Less than I'd like.",
+      followup: {
+        label: "What do you do about that?",
+        response:
+          "Watch training reads patterns. The Market trains people to break patterns before you finish reading them. You're either already through the gap or you were never where I thought you were. I respect that. I'm still mapping it.",
+      },
+      effects: null,
+    },
   ],
 
   fallback: "If you're not reinforcing something, don't get in the way.",

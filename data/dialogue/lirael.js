@@ -121,6 +121,54 @@ export const dialogue = {
       followup: null,
       effects: null,
     },
+    {
+      id: "lirael_grief_surface_echo",
+      label:
+        "You read people quickly. What do you see when someone's carrying grief?",
+      requires_trust_min: 0,
+      requires_flag: "lifebinder_grief_surface",
+      requires_flag_not: null,
+      requires_level_min: null,
+      response: "Timing.",
+      followup: {
+        label: "Timing how?",
+        response:
+          "Grief slows some people. Speeds others. Makes them reach too soon or not at all.\n\nYou've been near someone who held on too tightly. I can see it in how you watch the exits — like you're waiting for someone who isn't coming back.\n\nDon't let it choose your moment for you.",
+      },
+      effects: null,
+    },
+    {
+      id: "lirael_hesitation_cost_echo",
+      label: "Ever hesitated at the wrong moment?",
+      requires_trust_min: 0,
+      requires_flag: "banner_bruiser_hesitation_cost",
+      requires_flag_not: null,
+      requires_level_min: null,
+      response: "Once.",
+      followup: {
+        label: "And after?",
+        response:
+          "Everyone does. The trick is not pretending it didn't happen.\n\nYou've spoken to someone who learned that lesson the hard way. I can see it — the way you check the gap before you move.\n\nGood. Just don't let the memory of the miss slow you down.",
+      },
+      effects: null,
+    },
+    {
+      id: "lirael_banner_standing_echo",
+      label: "Do you read Banner-trained fighters differently?",
+      requires_trust_min: 0,
+      requires_flag: null,
+      requires_flag_not: null,
+      requires_level_min: null,
+      requires_guild_standing_key: "broken_banner",
+      requires_guild_standing_min: 3,
+      response: "Yes. You commit.",
+      followup: {
+        label: "Is that a problem?",
+        response:
+          "Most people I work with stay fluid — keep options open. You've trained the hesitation out. That's impressive. It also means I can see exactly what you're about to do.",
+      },
+      effects: null,
+    },
   ],
 
   fallback: "If you're not buying or running, you're wasting daylight.",

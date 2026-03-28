@@ -120,6 +120,21 @@ export const dialogue = {
       followup: null,
       effects: null,
     },
+    {
+      id: "garruk_bad_commitment_echo",
+      label: "Ask about learning from a bad commitment",
+      requires_trust_min: 10,
+      requires_flag: "quickstep_overcommit_acknowledged",
+      requires_flag_not: null,
+      requires_level_min: null,
+      response: "You went for something that wasn't there.",
+      followup: {
+        label: "Is that common?",
+        response:
+          "Everyone does it once. The ones who survive it move differently after. Less confident. More accurate. That's not a bad trade.",
+      },
+      effects: null,
+    },
   ],
 
   fallback: "If you're done talking, pick up a weapon.",

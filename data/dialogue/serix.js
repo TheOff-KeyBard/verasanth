@@ -15,6 +15,18 @@ export const dialogue = {
         text: "You're touched by something old. Not Covenant work. Something beneath us.",
       },
       {
+        requires_flag: "pale_marked_old_sight",
+        requires_flag_not: null,
+        text: "Something shifted in you recently. Not the Covenant's work. Something the Archive touched. Or something that touched the Archive through you. The distinction matters. I haven't decided which yet.",
+      },
+      {
+        requires_flag: null,
+        requires_flag_not: null,
+        requires_guild_standing_key: "ashen_archive",
+        requires_guild_standing_min: 3,
+        text: "The Archive has been working on you.\n\nNot against you. The flame remembers what it touches. You've been touched enough times that the memory is accumulating. The Covenant reads that as a kind of debt. I haven't decided yet whether you owe it or it owes you.",
+      },
+      {
         requires_flag: "guild_standing_serix",
         requires_flag_not: null,
         text: "You've walked the lower halls. They've noticed. So have I.",

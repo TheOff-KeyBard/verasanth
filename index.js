@@ -25,6 +25,7 @@ import {
   tryAuthoredTalkFromTopic,
   isPhaseAGameNpc,
   resolveAuthoredGreeting,
+  loadGuildStandingsMap,
   incrementPhaseAVisit,
   getEffectiveTrust,
 } from "./services/authored_dialogue.js";
@@ -4888,7 +4889,11 @@ But he is not the only one that was made."`,
           const canon = GAME_NPC_TO_CANONICAL[npc];
           const dlg = DIALOGUE_REGISTRY[canon];
           if (dlg) {
-            const gr = await resolveAuthoredGreeting(dlg, db, uid, getFlag, dbGet);
+            const guild_standings = await loadGuildStandingsMap(db, uid, getFlag);
+            const gr = await resolveAuthoredGreeting(dlg, db, uid, getFlag, dbGet, {
+              instinct: row.instinct,
+              guild_standings,
+            });
             await incrementPhaseAVisit(db, uid, npc, getFlag, setFlag, row);
             await assignNextQuestIfAvailable(db, dbGet, dbAll, dbRun, uid, npc, getFlag);
             return json({

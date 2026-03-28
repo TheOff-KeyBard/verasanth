@@ -118,6 +118,55 @@ export const dialogue = {
       followup: null,
       effects: null,
     },
+    {
+      id: "halden_flame_remember_echo",
+      label: "Have you ever felt the flame remember something through you?",
+      requires_trust_min: 0,
+      requires_flag: "ember_adept_flame_memory",
+      requires_flag_not: null,
+      requires_level_min: null,
+      response: "Not the flame. But something like it.",
+      followup: {
+        label: "What is it, then?",
+        response:
+          "There are moments when you carry more than you meant to — a memory that isn't yours, a weight that didn't start with you. Most people think that's exhaustion. It isn't. It's being used as a vessel.\n\nYou're not the first. And you won't be the last. Just don't mistake it for strength.",
+      },
+      effects: null,
+    },
+    {
+      id: "halden_archive_mark_echo",
+      label: "Does the Archive leave a mark on people?",
+      requires_trust_min: 0,
+      requires_flag: null,
+      requires_flag_not: null,
+      requires_level_min: null,
+      requires_guild_standing_key: "ashen_archive",
+      requires_guild_standing_min: 3,
+      response: "A different kind than the sewer does.",
+      followup: {
+        label: "What kind?",
+        response:
+          "What the Archive takes isn't warmth. It's something older. I can tend to grief. I can tend to exhaustion. What you're carrying — I can sit with it. I can't fix it. That distinction matters.",
+      },
+      effects: null,
+    },
+    {
+      id: "halden_banner_cost_echo",
+      label: "Is there a cost to Banner training over time?",
+      requires_trust_min: 0,
+      requires_flag: null,
+      requires_flag_not: null,
+      requires_level_min: null,
+      requires_guild_standing_key: "broken_banner",
+      requires_guild_standing_min: 3,
+      response: "Yes. You've already started paying it.",
+      followup: {
+        label: "Paying how?",
+        response:
+          "The Banner teaches you to absorb. Pressure, impact, consequence. That's discipline, not recklessness. But the body learns to expect impact. After a while it stops registering the smaller ones. That's the cost — not injury. Numbness.\n\nCome here when you notice it. That's all I ask.",
+      },
+      effects: null,
+    },
   ],
 
   fallback:
