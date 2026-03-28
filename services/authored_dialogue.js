@@ -321,6 +321,12 @@ function findGreetingByFlag(greetingBlock, flagName) {
   return c?.text ?? null;
 }
 
+function greetingCrimeHeatMinOk(c, playerContext) {
+  if (c.requires_crime_heat_min == null) return true;
+  const ch = Number(playerContext?.crime_heat) || 0;
+  return ch >= Number(c.requires_crime_heat_min);
+}
+
 async function greetingConditionalRowMatches(
   c,
   db,
@@ -337,6 +343,16 @@ async function greetingConditionalRowMatches(
   )
     return false;
   if (!greetingGuildStandingOk(c, playerContext)) return false;
+  if (!greetingCrimeHeatMinOk(c, playerContext)) return false;
+  return true;
+}
+
+/** Heat-only greeting rows: crime tier, no standing or flag key (string) required. */
+function isHeatTierGreetingRow(c) {
+  if (c.requires_crime_heat_min == null) return false;
+  if (c.requires_guild_standing_key != null) return false;
+  const rf = c.requires_flag;
+  if (typeof rf === "string" && rf.length > 0) return false;
   return true;
 }
 
@@ -349,8 +365,9 @@ async function greetingConditionalRowMatches(
  * 4. flag has_corruption
  * 5. flag pale_marked_old_sight            (mythic contact / Tier 2 echo)
  * 6. flag guild_standing_serix             (trial completion)
- * 7. instinct ember_touched | pale_marked only (Tier 1; same lines as GUILD_LEADER_INSTINCT_GREETINGS.serix)
- * 8. greeting.default
+ * 7. Heat (requires_crime_heat_min, highest matching tier first)
+ * 8. instinct ember_touched | pale_marked only (Tier 1; same lines as GUILD_LEADER_INSTINCT_GREETINGS.serix)
+ * 9. greeting.default
  */
 async function resolveSerixGreeting(
   dialogue,
@@ -389,6 +406,13 @@ async function resolveSerixGreeting(
     const t = findGreetingByFlag(g, "guild_standing_serix");
     if (t) return t;
   }
+  const heatRowsSerix = (g?.conditional || []).filter(isHeatTierGreetingRow);
+  for (const c of [...heatRowsSerix].sort(
+    (a, b) => Number(b.requires_crime_heat_min) - Number(a.requires_crime_heat_min),
+  )) {
+    if (await greetingConditionalRowMatches(c, db, uid, getFlag, dbGet, playerContext))
+      return c.text;
+  }
   const instinctKey = String(playerContext?.instinct || "").trim().toLowerCase();
   if (instinctKey === "ember_touched" || instinctKey === "pale_marked") {
     const line = getInstinctGreetingLine("serix", playerContext);
@@ -398,7 +422,8 @@ async function resolveSerixGreeting(
 }
 
 /**
- * Other leaders — one path only: standing 4 → standing 3 → flag-only rows (JSON order) → instinct → default.
+ * Other leaders — one path only:
+ * standing 4 → standing 3 → flag-only rows (JSON order) → heat (highest tier first) → instinct → default.
  */
 async function resolveLayeredGenericGreeting(
   dialogue,
@@ -434,6 +459,13 @@ async function resolveLayeredGenericGreeting(
       (c.requires_guild_standing_key == null || c.requires_guild_standing_min == null),
   );
   for (const c of flagRows) {
+    if (await greetingConditionalRowMatches(c, db, uid, getFlag, dbGet, playerContext))
+      return c.text;
+  }
+  const heatRows = list.filter(isHeatTierGreetingRow);
+  for (const c of [...heatRows].sort(
+    (a, b) => Number(b.requires_crime_heat_min) - Number(a.requires_crime_heat_min),
+  )) {
     if (await greetingConditionalRowMatches(c, db, uid, getFlag, dbGet, playerContext))
       return c.text;
   }
@@ -622,6 +654,7 @@ export async function handleNpcOptionsGet(
   const dialoguePlayerContext = {
     instinct: row.instinct,
     guild_standings,
+    crime_heat: row.crime_heat ?? 0,
   };
   let greeting = await resolveAuthoredGreeting(
     dialogue,
@@ -775,6 +808,7 @@ export async function handleNpcSelectPost(deps, routeSegment, body) {
   const dialoguePlayerContext = {
     instinct: row.instinct,
     guild_standings,
+    crime_heat: row.crime_heat ?? 0,
   };
 
   const optionId = body?.option_id;

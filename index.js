@@ -41,6 +41,7 @@ import { getRelationship, setRelationship, getPartyMembers, triggerBetrayalCasca
 import { handleQuestDialogue, recordEnemyKill, checkQuestProgressForItem, assignNextQuestIfAvailable } from "./services/quests.js";
 import { QUEST_BY_ID } from "./data/quests.js";
 import { rotateSewerCondition } from "./services/sewer_rotation.js";
+import { getGameTime } from "./services/game_clock.js";
 import { LEGACY_SLOT_MAP, EQUIPMENT_SLOTS, EQUIPMENT_DATA, INSTINCT_AFFINITIES } from "./data/equipment.js";
 import { STARTER_LOADOUTS, validateStarterLoadoutsAgainstCatalog } from "./data/starter_loadouts.js";
 import { getEquipmentSlot, resolveLegacySlot, isValidEquipmentSlot, canEquipItem, equipItem, unequipItem, getEquippedItemMap, getAffinityHint, getCharacterLevel } from "./services/equipment.js";
@@ -3119,6 +3120,8 @@ if (path === "/api/admin/command" && method === "POST") {
         locPayload.description,
         row.name,
       );
+      const lookGameTime = getGameTime();
+      locPayload.game_time = { hour: lookGameTime.hour, period: lookGameTime.period };
       return json(locPayload);
     }
 
@@ -3305,6 +3308,7 @@ if (path === "/api/admin/command" && method === "POST") {
             const destExitMap = { ...(room?.exits || {}) };
             const npcsHere = Object.entries(NPC_LOCATIONS).filter(([, l]) => l === row.location).map(([id]) => id);
             const deathDrops = await getUnclaimedDropsAtLocation(db, row.location);
+            const moveRoamerGameTime = getGameTime();
             return json({
               location: row.location,
               name: room?.name,
@@ -3317,6 +3321,7 @@ if (path === "/api/admin/command" && method === "POST") {
               ambient: null,
               fightable: FIGHTABLE_LOCATIONS.has(row.location),
               death_drops_present: deathDrops.length > 0,
+              game_time: { hour: moveRoamerGameTime.hour, period: moveRoamerGameTime.period },
               encounter: {
                 triggered: true,
                 roamer: true,
@@ -3429,6 +3434,7 @@ if (path === "/api/admin/command" && method === "POST") {
           lastPayload.description,
           rowChain.name,
         );
+        const moveChainGameTime = getGameTime();
         return json({
           ...lastPayload,
           chain_moves,
@@ -3436,6 +3442,7 @@ if (path === "/api/admin/command" && method === "POST") {
           final_description: lastPayload.description,
           stopped_early,
           stop_reason: stopped_early ? stop_reason : null,
+          game_time: { hour: moveChainGameTime.hour, period: moveChainGameTime.period },
         });
       }
 
@@ -3523,6 +3530,8 @@ if (path === "/api/admin/command" && method === "POST") {
         movePayload.description,
         rowAfterMove.name,
       );
+      const moveGameTime = getGameTime();
+      movePayload.game_time = { hour: moveGameTime.hour, period: moveGameTime.period };
       return json(movePayload);
     }
 
@@ -4340,8 +4349,10 @@ The city knows.`,
       const arc1Climax = await getFlag(db, uid, "arc1_climax_reached", 0);
       const hasResonance = await dbGet(db, "SELECT 1 FROM inventory WHERE user_id=? AND item='ashbound_resonance' AND qty>0", [uid]);
 
+      const { hour, period } = getGameTime();
       const playerContext = {
         items_sold: itemsSold, deaths, morality, depth_tier: depthTier,
+        game_time: { hour, period },
         instinct: row.instinct || null,
         has_corruption: !!(await getFlag(db, uid, "has_corruption")),
         arc1_climax_reached: !!arc1Climax,
@@ -4893,6 +4904,7 @@ But he is not the only one that was made."`,
             const gr = await resolveAuthoredGreeting(dlg, db, uid, getFlag, dbGet, {
               instinct: row.instinct,
               guild_standings,
+              crime_heat: row.crime_heat ?? 0,
             });
             await incrementPhaseAVisit(db, uid, npc, getFlag, setFlag, row);
             await assignNextQuestIfAvailable(db, dbGet, dbAll, dbRun, uid, npc, getFlag);

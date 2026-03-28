@@ -18,6 +18,21 @@ export const dialogue = {
         requires_flag_not: "boss_floor2",
         text: "The Rat King's dealt with. The drains are quieter. Good work — though I'd keep that to yourself if I were you.",
       },
+      {
+        requires_crime_heat_min: 8,
+        text:
+          "I'm not going to ask what happened.\n\nSit down if you need to. The fire doesn't judge. I've learned not to either.",
+      },
+      {
+        requires_crime_heat_min: 5,
+        text:
+          "You're carrying something heavy.\n\nThe room felt it before you sat down.",
+      },
+      {
+        requires_crime_heat_min: 2,
+        text:
+          "The city's been talking about someone.\n\nThe fire's been doing that thing it does.",
+      },
     ],
   },
 

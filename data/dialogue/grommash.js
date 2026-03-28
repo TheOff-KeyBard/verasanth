@@ -12,6 +12,20 @@ export const dialogue = {
         requires_flag: "has_active_bounty",
         text: "You've got heat on you. I can see it. You've got one chance to tell me what happened before I make a decision about what to do with you.",
       },
+      {
+        requires_crime_heat_min: 8,
+        text:
+          "You have a lot of nerve walking up to this post.\n\nI'm going to need you to think very carefully about your next move.",
+      },
+      {
+        requires_crime_heat_min: 5,
+        text:
+          "There's paper on you.\n\nYou know what that means. Don't make this harder than it needs to be.",
+      },
+      {
+        requires_crime_heat_min: 2,
+        text: "Your name's come up.\n\nNot officially. Not yet.",
+      },
     ],
   },
 

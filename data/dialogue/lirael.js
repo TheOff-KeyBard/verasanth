@@ -26,6 +26,21 @@ export const dialogue = {
         requires_flag_not: null,
         text: "You're moving cleaner. Less noise. Good. The Market likes quiet feet.",
       },
+      {
+        requires_crime_heat_min: 8,
+        text:
+          "You walked in here.\n\nBold.\n\nI'm not going to ask why. But you should know the Market has already noticed, and opinions are forming.",
+      },
+      {
+        requires_crime_heat_min: 5,
+        text:
+          "You're worth something right now.\n\nThat's not a compliment. It means someone wants you found.",
+      },
+      {
+        requires_crime_heat_min: 2,
+        text:
+          "You're being watched.\n\nNot by me. But someone in this square is counting your steps.",
+      },
     ],
   },
 
