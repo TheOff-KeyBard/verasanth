@@ -14,6 +14,13 @@ export const dialogue = {
         requires_flag_not: null,
         text: "You've been below the Archive. The stone carries echoes. Some of them are older than the city.",
       },
+      {
+        requires_flag: null,
+        requires_flag_not: null,
+        requires_guild_standing_key: "ashen_archive",
+        requires_guild_standing_min: 4,
+        text: "The brazier recognized you before I did.\n\nNot by heat. By memory. You're referenced now — the way the oldest shelves reference themselves.",
+      },
     ],
   },
 

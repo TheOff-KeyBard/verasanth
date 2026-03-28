@@ -22,6 +22,13 @@ export const dialogue = {
       {
         requires_flag: null,
         requires_flag_not: null,
+        requires_guild_standing_key: "umbral_covenant",
+        requires_guild_standing_min: 4,
+        text: "You don't enter rooms anymore. You subtract something from them.\n\nThe shadows read you before I do. They move around you the way water moves around a hollow in the stone.",
+      },
+      {
+        requires_flag: null,
+        requires_flag_not: null,
         requires_guild_standing_key: "ashen_archive",
         requires_guild_standing_min: 3,
         text: "The Archive has been working on you.\n\nNot against you. The flame remembers what it touches. You've been touched enough times that the memory is accumulating. The Covenant reads that as a kind of debt. I haven't decided yet whether you owe it or it owes you.",

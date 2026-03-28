@@ -15,6 +15,13 @@ export const dialogue = {
         text: "You've been near the deep supports. Good. You know how loud the bones can get.",
       },
       {
+        requires_flag: null,
+        requires_flag_not: null,
+        requires_guild_standing_key: "stone_watch",
+        requires_guild_standing_min: 4,
+        text: "The line settles when you arrive.\n\nI used to check your stance. Now I check mine against yours.",
+      },
+      {
         requires_flag: "guild_standing_rhyla",
         requires_flag_not: null,
         text: "Your stance is better. You're learning to brace instead of dodge. That's Watch discipline.",

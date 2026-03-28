@@ -15,6 +15,13 @@ export const dialogue = {
         text: "Shadow on your heels. Not Covenant work. Something older. Don't let it settle.",
       },
       {
+        requires_flag: null,
+        requires_flag_not: null,
+        requires_guild_standing_key: "veil_market",
+        requires_guild_standing_min: 4,
+        text: "You didn't enter through a door.\n\nYou made one. The room's pattern broke before you stepped in.",
+      },
+      {
         requires_flag: "guild_standing_lirael",
         requires_flag_not: null,
         text: "You're moving cleaner. Less noise. Good. The Market likes quiet feet.",

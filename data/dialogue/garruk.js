@@ -15,6 +15,13 @@ export const dialogue = {
         text: "You've been deeper than most. Good. The city doesn't respect the untested.",
       },
       {
+        requires_flag: null,
+        requires_flag_not: null,
+        requires_guild_standing_key: "broken_banner",
+        requires_guild_standing_min: 4,
+        text: "The yard shifts when you walk in.\n\nNot from fear. From pressure. People commit harder when you're near — allies and enemies both.",
+      },
+      {
         requires_flag: "guild_standing_garruk",
         requires_flag_not: null,
         text: "You're holding your ground better. Banner steel's settling into your bones.",

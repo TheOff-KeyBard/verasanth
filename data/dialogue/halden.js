@@ -15,6 +15,13 @@ export const dialogue = {
         text: "You're carrying something that isn't yours. Let me help before it roots deeper.",
       },
       {
+        requires_flag: null,
+        requires_flag_not: null,
+        requires_guild_standing_key: "quiet_sanctum",
+        requires_guild_standing_min: 4,
+        text: "You're holding more than warmth now.\n\nI don't need to ask how you're doing. I need to ask how you're holding up. That's different.",
+      },
+      {
         requires_flag: "guild_standing_halden",
         requires_flag_not: null,
         text: "You've learned to keep your light steady. Good. Others will need it.",
