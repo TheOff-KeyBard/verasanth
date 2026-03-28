@@ -11,7 +11,6 @@ export const STARTER_LOADOUTS = {
   pale_marked: {
     weapon_main: "sewer_wand",
     cloak: "ash_bitten_cloak",
-    charm: "salt_thread_token",
     relic: "pale_wax_disk",
   },
 
@@ -21,12 +20,7 @@ export const STARTER_LOADOUTS = {
 
   // Street
   streetcraft: { weapon_main: "hooked_knife", chest: "sewer_leathers", feet: "footwraps" },
-  quickstep: {
-    weapon_main: "pipe_shiv",
-    chest: "sewer_leathers",
-    feet: "slickstep_boots",
-    charm: "stride_bead_charm",
-  },
+  quickstep: { weapon_main: "pipe_shiv", chest: "sewer_leathers", feet: "slickstep_boots" },
 
   // Iron
   ironblood: { weapon_main: "worn_mace", chest: "riveted_coat", weapon_offhand: "scrap_shield" },
@@ -34,7 +28,6 @@ export const STARTER_LOADOUTS = {
     weapon_main: "drain_spear",
     chest: "patchwork_jerkin",
     ring_1: "drill_line_ring",
-    ring_2: "iron_band",
   },
 
   // Shadow
