@@ -307,6 +307,142 @@ function optionGuildStandingOk(opt, playerContext) {
   return val >= Number(minSt);
 }
 
+function findGreetingByStanding(greetingBlock, standingKey, standingMin) {
+  const c = greetingBlock?.conditional?.find(
+    (x) =>
+      x.requires_guild_standing_key === standingKey &&
+      Number(x.requires_guild_standing_min) === Number(standingMin),
+  );
+  return c?.text ?? null;
+}
+
+function findGreetingByFlag(greetingBlock, flagName) {
+  const c = greetingBlock?.conditional?.find((x) => x.requires_flag === flagName);
+  return c?.text ?? null;
+}
+
+async function greetingConditionalRowMatches(
+  c,
+  db,
+  uid,
+  getFlag,
+  dbGet,
+  playerContext,
+) {
+  if (c.requires_flag && !(await flagTruthy(db, uid, c.requires_flag, getFlag, dbGet)))
+    return false;
+  if (
+    c.requires_flag_not &&
+    !(await flagFalsy(db, uid, c.requires_flag_not, getFlag, dbGet))
+  )
+    return false;
+  if (!greetingGuildStandingOk(c, playerContext)) return false;
+  return true;
+}
+
+/**
+ * Serix — strict single-path greeting (no stacking with instinct or fallthrough).
+ * Evaluation order (first match wins; identity / primary guild before cross-guild / flags / instinct):
+ * 1. guild_standings.umbral_covenant >= 4  (Standing 4 / Hollow)
+ * 2. guild_standings.ashen_archive >= 3   (Archive reinterpretation)
+ * 3. flag has_ashbound_resonance
+ * 4. flag has_corruption
+ * 5. flag pale_marked_old_sight            (mythic contact / Tier 2 echo)
+ * 6. flag guild_standing_serix             (trial completion)
+ * 7. instinct ember_touched | pale_marked only (Tier 1; same lines as GUILD_LEADER_INSTINCT_GREETINGS.serix)
+ * 8. greeting.default
+ */
+async function resolveSerixGreeting(
+  dialogue,
+  db,
+  uid,
+  getFlag,
+  dbGet,
+  playerContext,
+) {
+  const g = dialogue.greeting;
+  const gs = playerContext?.guild_standings || {};
+  const umbral = Number(gs.umbral_covenant) || 0;
+  const archive = Number(gs.ashen_archive) || 0;
+
+  if (umbral >= 4) {
+    const t = findGreetingByStanding(g, "umbral_covenant", 4);
+    if (t) return t;
+  }
+  if (archive >= 3) {
+    const t = findGreetingByStanding(g, "ashen_archive", 3);
+    if (t) return t;
+  }
+  if (await flagTruthy(db, uid, "has_ashbound_resonance", getFlag, dbGet)) {
+    const t = findGreetingByFlag(g, "has_ashbound_resonance");
+    if (t) return t;
+  }
+  if (await flagTruthy(db, uid, "has_corruption", getFlag, dbGet)) {
+    const t = findGreetingByFlag(g, "has_corruption");
+    if (t) return t;
+  }
+  if (await flagTruthy(db, uid, "pale_marked_old_sight", getFlag, dbGet)) {
+    const t = findGreetingByFlag(g, "pale_marked_old_sight");
+    if (t) return t;
+  }
+  if (await flagTruthy(db, uid, "guild_standing_serix", getFlag, dbGet)) {
+    const t = findGreetingByFlag(g, "guild_standing_serix");
+    if (t) return t;
+  }
+  const instinctKey = String(playerContext?.instinct || "").trim().toLowerCase();
+  if (instinctKey === "ember_touched" || instinctKey === "pale_marked") {
+    const line = getInstinctGreetingLine("serix", playerContext);
+    if (line) return line;
+  }
+  return g?.default || "";
+}
+
+/**
+ * Other leaders — one path only: standing 4 → standing 3 → flag-only rows (JSON order) → instinct → default.
+ */
+async function resolveLayeredGenericGreeting(
+  dialogue,
+  db,
+  uid,
+  getFlag,
+  dbGet,
+  playerContext,
+) {
+  const g = dialogue.greeting;
+  const list = g?.conditional || [];
+  const npcId = dialogue.npc_id;
+
+  const standing4 = list.filter(
+    (c) =>
+      c.requires_guild_standing_key != null && Number(c.requires_guild_standing_min) === 4,
+  );
+  for (const c of standing4) {
+    if (await greetingConditionalRowMatches(c, db, uid, getFlag, dbGet, playerContext))
+      return c.text;
+  }
+  const standing3 = list.filter(
+    (c) =>
+      c.requires_guild_standing_key != null && Number(c.requires_guild_standing_min) === 3,
+  );
+  for (const c of standing3) {
+    if (await greetingConditionalRowMatches(c, db, uid, getFlag, dbGet, playerContext))
+      return c.text;
+  }
+  const flagRows = list.filter(
+    (c) =>
+      c.requires_flag &&
+      (c.requires_guild_standing_key == null || c.requires_guild_standing_min == null),
+  );
+  for (const c of flagRows) {
+    if (await greetingConditionalRowMatches(c, db, uid, getFlag, dbGet, playerContext))
+      return c.text;
+  }
+  const line =
+    npcId && playerContext ? getInstinctGreetingLine(npcId, playerContext) : null;
+  if (line) return line;
+  return g?.default || "";
+}
+
 export async function resolveAuthoredGreeting(
   dialogue,
   db,
@@ -315,39 +451,35 @@ export async function resolveAuthoredGreeting(
   dbGet,
   playerContext = null,
 ) {
-  const g = dialogue.greeting;
-  let baseGreeting = "";
-  if (g) {
-    if (g.conditional?.length) {
-      let matched = false;
-      for (const c of g.conditional) {
-        if (c.requires_flag && !(await flagTruthy(db, uid, c.requires_flag, getFlag, dbGet)))
-          continue;
-        if (
-          c.requires_flag_not &&
-          !(await flagFalsy(db, uid, c.requires_flag_not, getFlag, dbGet))
-        )
-          continue;
-        if (!greetingGuildStandingOk(c, playerContext)) continue;
-        baseGreeting = c.text;
-        matched = true;
-        break;
-      }
-      if (!matched) baseGreeting = g.default || "";
-    } else {
-      baseGreeting = g.default || "";
-    }
+  const g = dialogue?.greeting;
+  if (!g) return "";
+
+  if (dialogue.npc_id === "serix") {
+    return await resolveSerixGreeting(
+      dialogue,
+      db,
+      uid,
+      getFlag,
+      dbGet,
+      playerContext,
+    );
+  }
+
+  if (g.conditional?.length) {
+    return await resolveLayeredGenericGreeting(
+      dialogue,
+      db,
+      uid,
+      getFlag,
+      dbGet,
+      playerContext,
+    );
   }
 
   const npcId = dialogue?.npc_id;
-  const instinctLine =
-    npcId && playerContext
-      ? getInstinctGreetingLine(npcId, playerContext)
-      : null;
-  if (instinctLine) {
-    return instinctLine + "\n" + baseGreeting;
-  }
-  return baseGreeting;
+  const line =
+    npcId && playerContext ? getInstinctGreetingLine(npcId, playerContext) : null;
+  return line || g.default || "";
 }
 
 function optionVisible(opt, trust, level) {
