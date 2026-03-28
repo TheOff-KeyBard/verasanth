@@ -1,6 +1,6 @@
 /**
- * Level 5 instinct upgrades (by instinct id string; no fixed roster count).
- * Phase 2 (TODO): add rows for the third instinct per guild when those ship.
+ * Level 5 upgrades keyed by upgrade id; each row references `instinct` (string). Filter/group by instinct in UI/API.
+ * Phase 2 (TODO): add 3 actives per new instinct id; extend upgrade_resolver switch if templates are insufficient.
  * @see verasanth_level5_upgrades_spec.md Section 3
  */
 

@@ -1,6 +1,7 @@
 /**
  * Guild Initiation Trials — Standing 0 to 1.
  * @see cursor_guild_trials_initiation.md
+ * Phase 2 (TODO): handler branches use specific instinct ids—extend for new guild-family instincts.
  */
 
 import { COMBAT_DATA } from "../data/combat.js";

@@ -194,8 +194,7 @@ export function resolveUpgradeAbility(upgrade, character, state, enemy, equipped
       break;
     }
     default: {
-      // Phase 1+ instincts: structurally complete upgrades keyed in upgrades.js without a
-      // dedicated case above. Conservative templates only — no new combat engine features.
+      // Upgrades without a case above resolve via templates (data/upgrades.js). Phase 2: add `case` blocks if new actives need bespoke math.
       if (upgrade.type === "passive") {
         narrative = upgrade.combat_log_passive || upgrade.combat_log_player || "";
         break;

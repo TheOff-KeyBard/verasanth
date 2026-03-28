@@ -5,6 +5,8 @@ import { NPC_DIALOGUE_LINES } from "../data/npc_dialogue_lines.js";
 
 export { boardNPCReaction };
 
+// Phase 2 (TODO): template branches that compare `instinct === '…'` need new ids when roster grows.
+
 const STATIC_DIALOGUE_CHANCE = 0.3;
 
 function buildCrossTalkContext(npcId, guildStanding) {

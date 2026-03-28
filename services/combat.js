@@ -84,11 +84,11 @@ export const STATUS_DEFS = {
   },
 };
 
-// Instinct definitions — primary abilities and passives (keys should match data/instincts.js).
-// Phase 1: 12 entries. Phase 2 (TODO): 18—add combat packages for new ids; resolvePlayerAction is key-driven.
+// Instinct definitions — primary abilities and passives (keys must match data/instincts.js).
+// Phase 2 (TODO): add INSTINCT_DEFS entries for new ids; missing key + ability press → normal-attack fallback in resolvePlayerAction.
 export const INSTINCT_DEFS = {
   ember_touched: {
-    role: "burst / DoT",
+    role: "burst / burn mark",
     primary: {
       name: "Kindle",
       cadence: 3,
@@ -98,7 +98,7 @@ export const INSTINCT_DEFS = {
         return { dmg, status_on_enemy: "burning", status_duration_enemy: 3 };
       },
     },
-    passive: { name: "Smolder", desc: "Burning enemies take +1 damage from all sources." },
+    passive: { name: "Smolder", desc: "Burning enemies take +1 damage from your weapon strikes." },
   },
   hearthborn: {
     role: "sustain / support",
@@ -135,7 +135,7 @@ export const INSTINCT_DEFS = {
         return { dmg, wounded, narrative_tag: crit ? "crit" : "", skip_retaliation: false };
       },
     },
-    passive: { name: "Slip", desc: "You read openings faster than most." },
+    passive: { name: "Slip", desc: "The Low Quarter taught you to cut where the guard is lazy." },
   },
   ironblood: {
     role: "frontliner / control",
@@ -175,7 +175,10 @@ export const INSTINCT_DEFS = {
         return { dmg, heal, wounded: heal, skip_retaliation: false };
       },
     },
-    passive: { name: "Fade", desc: "First attack each combat has +10% crit chance (roll twice, take higher)." },
+    passive: {
+      name: "Fade",
+      desc: "First normal attack each combat rolls twice on the to-hit and keeps the better total.",
+    },
   },
   warden: {
     role: "protector / tank",
@@ -256,7 +259,7 @@ export const INSTINCT_DEFS = {
         };
       },
     },
-    passive: { name: "Rhythm", desc: "After your ability, their aim spoils for a moment." },
+    passive: { name: "Rhythm", desc: "You leave the line before their answer lands." },
   },
   war_forged: {
     role: "tactical / control",
@@ -276,7 +279,7 @@ export const INSTINCT_DEFS = {
         };
       },
     },
-    passive: { name: "Drill", desc: "They swing wide after you show them the seam." },
+    passive: { name: "Drill", desc: "The first honest strike carries the lesson you drilled." },
   },
   grave_whisper: {
     role: "debuff / drain",
@@ -292,7 +295,7 @@ export const INSTINCT_DEFS = {
         return { dmg, heal, wounded: heal, status_on_enemy: "blind", status_duration_enemy: 1 };
       },
     },
-    passive: { name: "Hollow Touch", desc: "Your whispers find slack in their grip." },
+    passive: { name: "Hollow Touch", desc: "Silence has weight; you learned where to lean." },
   },
   sentinel: {
     role: "defender / barrier",

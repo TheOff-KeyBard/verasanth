@@ -1,8 +1,6 @@
 /**
- * Starter gear by instinct id (guild-family characters; see data/instincts.js).
- * Phase 1: one loadout per instinct currently in INSTINCTS (12). Phase 2 (TODO): 18 instincts—
- *   add a row per new id; grant logic does not assume a fixed count.
- * Each value maps real EQUIPMENT_DATA ids to canonical equipment slot names.
+ * Starter gear by instinct id (see data/instincts.js). One row per catalog instinct; grant is key-driven.
+ * Phase 2 (TODO): add a loadout object per new INSTINCTS key; keep validateStarterLoadoutsAgainstCatalog green.
  */
 
 import { EQUIPMENT_DATA } from "./equipment.js";

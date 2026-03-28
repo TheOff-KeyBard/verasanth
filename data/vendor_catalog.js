@@ -18,6 +18,8 @@ const WEAPONSMITH_ITEM_IDS = [
   "ash_caked_club",
   "worn_mace",
   "sewer_wand",
+  // Ember arcane upgrade (catalog tier 2; buy = value_am, unchanged)
+  "charred_staff",
 ];
 
 /** patchwork_jerkin = chest piece closest to "patchwork_rags"; shields: scrap_shield, cracked_buckler. */
@@ -30,6 +32,19 @@ const ARMORSMITH_ITEM_IDS = [
   "cracked_buckler",
   "cloth_wraps",
   "tinker_gloves",
+  // Sewer vendor coverage for starter-adjacent slots (full Phase 1 roster; expand when catalog/instincts grow)
+  "bone_focus",
+  "footwraps",
+  "slickstep_boots",
+  "faded_mantle",
+  "drip_cloak",
+  "sewer_saint_knot",
+  "salt_thread_token",
+  "rat_bone_charm",
+  "iron_band",
+  "ash_script_token",
+  "whisper_stone_fragment",
+  "cracked_reliquary_shard",
 ];
 
 export const THALARA_STOCK = [

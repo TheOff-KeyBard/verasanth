@@ -4676,7 +4676,7 @@ function setTradeHeaderContext(npcId) {
 }
 
 let twSheetBaseStats = { strength: 5, dexterity: 5, constitution: 5, intelligence: 5, wisdom: 5, charisma: 5 };
-// Mirror data/starter_loadouts.js. Phase 2: add keys when new instincts ship (not tied to a fixed count).
+// Mirror data/starter_loadouts.js keys 1:1 (Phase 2: add entry per new instinct for summary preview).
 const STARTER_LOADOUTS_DISPLAY = {
   ember_touched: { weapon_main: 'sewer_wand', chest: 'mold_stained_vest', relic: 'ash_script_token' },
   pale_marked: { weapon_main: 'sewer_wand', cloak: 'ash_bitten_cloak', charm: 'salt_thread_token' },
@@ -5165,9 +5165,7 @@ function formatStatMods(mods) {
 }
 
 /**
- * Guild-family eligibility (True Welcome): if race.guild_affinity exists, instinct.guild must be listed;
- * otherwise legacy race.affinity (instinct ids). Missing instinct.guild under guild mode falls back to id list.
- * Roster size is not hardcoded (Phase 1 = 12 instincts; Phase 2 TODO = 18).
+ * Guild-family eligibility: guild_affinity + instinct.guild, else race.affinity. No fixed instinct count.
  */
 function raceAllowsInstinctClient(race, instinctId, instinctDef) {
   if (!race || !instinctDef) return false;
@@ -5387,6 +5385,7 @@ function renderTwInstinctStep() {
   grid.innerHTML = '';
   const instincts = mainInstinctsData?.instincts || {};
   const race = mainRacesData?.races?.[twSelectedRace];
+  // API-driven list; no hardcoded roster length.
   for (const [id, def] of Object.entries(instincts)) {
     if (!raceAllowsInstinctClient(race, id, def)) continue;
     const card = document.createElement('button');

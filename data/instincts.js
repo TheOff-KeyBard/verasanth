@@ -1,11 +1,9 @@
 /**
  * Player-facing instinct copy (API + character creation cards + sheet).
- * Eligibility is guild-family based (see `guild` + race `guild_affinity` in index / races).
+ * Eligibility: `guild` + race `guild_affinity` (see index.js / races.js). Roster size is not assumed elsewhere.
  *
- * Phase 1: 12 instincts (2 per guild × 6 guilds). Keep role/ability/ability_desc aligned with
- *   services/combat.js INSTINCT_DEFS primaries.
- * Phase 2 (TODO): 18 instincts (3 per guild)—add rows here + INSTINCT_DEFS + STARTER_LOADOUTS +
- *   INSTINCT_AFFINITIES (and any content tables) as needed.
+ * Phase 2 (TODO): third instinct per guild—add keys here; mirror in INSTINCT_DEFS, STARTER_LOADOUTS,
+ * LEVEL_5_UPGRADES (×3 actives each), INSTINCT_AFFINITIES, ALIGN_INSTINCT_BIAS, GUILD_INSTINCT trial map.
  */
 
 export const INSTINCTS = {
@@ -14,9 +12,10 @@ export const INSTINCTS = {
     label: "Ember-Touched",
     memory: "You remember flame.",
     stat_mods: { intelligence: 2, charisma: 1 },
-    role: "Arcane fire",
+    role: "Burn-mark arcanist",
     ability: "Kindle",
-    ability_desc: "Arcane fire; leaves them Burning. While they burn, your own blows bite harder.",
+    ability_desc:
+      "Arcane fire and the Burning mark for a few beats—not a crawling wound. While it holds, your own weapon strikes bite deeper.",
   },
   hearthborn: {
     guild: "hearth",
@@ -25,7 +24,8 @@ export const INSTINCTS = {
     stat_mods: { wisdom: 2, constitution: 1 },
     role: "Mender",
     ability: "Kindle the Hearth",
-    ability_desc: "Mend yourself; Resolve dulls what reaches you. The first mend each fight runs deeper.",
+    ability_desc:
+      "Mend yourself; Resolve shaves a quarter of what reaches you for two beats. The first mend each fight runs a little deeper.",
   },
   streetcraft: {
     guild: "street",
@@ -34,7 +34,8 @@ export const INSTINCTS = {
     stat_mods: { dexterity: 2, charisma: 1 },
     role: "Opportunist blade",
     ability: "Opportunist Strike",
-    ability_desc: "A cruel cut—sometimes it sinks to the hilt. Wounded prey bleed worse.",
+    ability_desc:
+      "A cruel cut; against a bloodied foe you take more. The steel sometimes finds a deeper line—no promised bleed, only weight.",
   },
   ironblood: {
     guild: "iron",
@@ -43,7 +44,8 @@ export const INSTINCTS = {
     stat_mods: { strength: 2, constitution: 1 },
     role: "Frontline bruiser",
     ability: "Crushing Blow",
-    ability_desc: "A heavy swing; you set your stance. Often staggers—when it lands, they miss their answer this turn.",
+    ability_desc:
+      "Heavy steel; you brace and shave what comes back. Often staggers—while staggered, they cannot answer you this beat.",
   },
   shadowbound: {
     guild: "shadow",
@@ -52,7 +54,8 @@ export const INSTINCTS = {
     stat_mods: { dexterity: 2, intelligence: 1 },
     role: "Shadow striker",
     ability: "Veil Cut",
-    ability_desc: "Steel from the dark; the wound pays a little back. Your first swing each fight still takes the kinder die (Fade).",
+    ability_desc:
+      "Steel from the dark; damage and a sip of life back. Between abilities, your first ordinary strike each fight rolls the hit twice and keeps the better (Fade).",
   },
   warden: {
     guild: "warden",
@@ -61,7 +64,8 @@ export const INSTINCTS = {
     stat_mods: { constitution: 2, wisdom: 1 },
     role: "Bastion",
     ability: "Stand Fast",
-    ability_desc: "No blow—only a raised ward, brief, sized to your frame. It eats what comes next.",
+    ability_desc:
+      "No blow—raise a shield that turns harm aside for two beats. Below half life, one less point finds you anyway.",
   },
   pale_marked: {
     guild: "ember",
@@ -77,9 +81,9 @@ export const INSTINCTS = {
     label: "Lifebinder",
     memory: "You remember the pulse.",
     stat_mods: { wisdom: 2, charisma: 1 },
-    role: "Ward and pulse",
+    role: "Ward and mend",
     ability: "Vital Thread",
-    ability_desc: "Knot flesh shut and bind a shield to skin for a handful of turns.",
+    ability_desc: "Mend in one motion; a skin-tight ward absorbs harm for three beats.",
   },
   quickstep: {
     guild: "street",
@@ -88,7 +92,8 @@ export const INSTINCTS = {
     stat_mods: { dexterity: 2, wisdom: 1 },
     role: "Slip-fighter",
     ability: "Flow State",
-    ability_desc: "A light cut, then you are gone from the line—they cannot answer you this turn.",
+    ability_desc:
+      "A light cut; you are Untargetable for the beat—they cannot answer you. Not a true vanish, only pace.",
   },
   war_forged: {
     guild: "iron",
@@ -97,7 +102,7 @@ export const INSTINCTS = {
     stat_mods: { strength: 2, wisdom: 1 },
     role: "Tactical line",
     ability: "Tactical Strike",
-    ability_desc: "Measured steel; their swing dulls for a short span after.",
+    ability_desc: "Measured steel; they carry Weakened—their blows land softer for two beats.",
   },
   grave_whisper: {
     guild: "shadow",
@@ -106,7 +111,8 @@ export const INSTINCTS = {
     stat_mods: { intelligence: 2, wisdom: 1 },
     role: "Hollow curse",
     ability: "Death's Grasp",
-    ability_desc: "Hollow damage; sight frays; you sip a thread of what you took. No crawling rot—only the moment.",
+    ability_desc:
+      "Hollow harm; Blind frays their aim for one beat; you sip life from the gap. No crawling rot—only the instant.",
   },
   sentinel: {
     guild: "warden",
@@ -116,6 +122,6 @@ export const INSTINCTS = {
     role: "Shield wall",
     ability: "Vigilant Guard",
     ability_desc:
-      "Raise a lasting ward; your bearing makes them hold back—not a riposte, only weight and a slack in their arms.",
+      "Raise a stronger ward for three beats; for one beat they carry Weakened—softer blows, not a riposte. Weight and slack in their arms.",
   },
 };

@@ -1,9 +1,9 @@
 import { INSTINCTS } from "./instincts.js";
 
 /**
- * Lineage definitions. Instinct access: prefer `guild_affinity` (guild ids) with `INSTINCTS[].guild`.
- * Legacy `affinity` is an explicit instinct id list when guild matching cannot apply.
- * Phase 2 will add a third instinct per guild; guild_affinity strings stay stable.
+ * Lineage definitions. Instinct access: prefer `guild_affinity` + `INSTINCTS[].guild` (see index.js).
+ * Legacy `affinity` is used when guild mode cannot apply or instinct lacks `guild`.
+ * Phase 2 (TODO): third instinct/guild—usually no race change if guild ids unchanged; verify each race still matches design.
  */
 export const RACES = {
   ashborn: {

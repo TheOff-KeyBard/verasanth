@@ -76,7 +76,8 @@ import {
 // ─────────────────────────────────────────────────────────────
 // CHARACTER CREATION — guild-family instinct eligibility
 // ─────────────────────────────────────────────────────────────
-// Phase 1: 12 instincts (see data/instincts.js). Phase 2 (TODO): 18 (3/guild)—logic below is count-agnostic.
+// Count-agnostic: INSTINCTS keys + race.guild_affinity / race.affinity.
+// Phase 2 (TODO): new instincts need `guild`; new guilds need races’ guild_affinity updated.
 
 /**
  * When race.guild_affinity is set, an instinct is allowed if instinct.guild is listed.
@@ -734,7 +735,8 @@ async function setFlag(db, uid, flag, value = 1) {
 /**
  * Populates inventory and equipment_slots from STARTER_LOADOUTS (EQUIPMENT_DATA only).
  * Replaces legacy STARTING_ITEMS (flat non-catalog ids + inventory-only grant).
- * Missing instinct id in STARTER_LOADOUTS → no gear (add entry in Phase 2+).
+ * Missing instinct id in STARTER_LOADOUTS → no gear granted.
+ * Phase 2 (TODO): add loadout row for each new INSTINCTS key before shipping.
  */
 async function grantStarterEquipmentFromLoadout(db, dbRun, dbGet, uid, instinctKey, characterRow) {
   const loadout = STARTER_LOADOUTS[instinctKey];
@@ -1275,8 +1277,8 @@ function computeArchetype(mercy, order, heat) {
   return "Survivor";
 }
 
-// Alignment deltas [mercy, order] on certain actions. Missing instinct → [0,0] in updateAlignment.
-// Phase 2: add entries for new instinct ids when tuning narrative alignment.
+// Alignment deltas [mercy, order]. Missing id → [0,0]. Not roster-length–dependent.
+// Phase 2 (TODO): add/tune rows for new instinct ids (and current gaps: pale_marked, lifebinder, quickstep, war_forged, grave_whisper, sentinel).
 const ALIGN_INSTINCT_BIAS = {
   hearthborn: [1, 0],
   ember_touched: [0, 0],
@@ -4174,6 +4176,7 @@ The city knows.`,
       const standing = await getGuildStanding(db, uid, guild);
       const instinct = (row.instinct || "").toLowerCase();
 
+      // Phase 2 (TODO): replace one-instinct-per-guild check with guild → Set/array of allowed ids (3/guild).
       const GUILD_INSTINCT = {
         ashen_archive: "shadowbound",
         broken_banner: "ironblood",
