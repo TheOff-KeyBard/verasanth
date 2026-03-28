@@ -3722,7 +3722,6 @@
         <button type="button" class="sheet-tab active" data-cs-tab="identity">Identity</button>
         <button type="button" class="sheet-tab" data-cs-tab="standing">Standing</button>
         <button type="button" class="sheet-tab" data-cs-tab="stats">Stats</button>
-        <button type="button" class="sheet-tab" data-cs-tab="inventory">Inventory</button>
         <button type="button" class="sheet-tab" data-cs-tab="progression">Progression</button>
       </div>
       <div class="sheet-divider"></div>
@@ -3747,10 +3746,6 @@
         <div class="cs-hp-bar"><div id="cs-hp-fill" class="cs-hp-fill"></div></div>
         <div id="cs-stats-rows"></div>
         <p class="cs-muted">XP: <span id="cs-xp">—</span> · Stage: <span id="cs-stage">—</span></p>
-      </div>
-      <div id="cs-tab-inventory" class="sheet-tab-panel" style="display:none;">
-        <div class="cs-currency"><span>◈</span> <span id="cs-ash">0</span> Ash Marks · <span>◆</span> <span id="cs-ember">0</span> Ember Shards · <span>○</span> <span id="cs-soul">0</span> Soul Coins</div>
-        <div id="cs-inv-list" class="cs-inv-list">—</div>
       </div>
       <div id="cs-tab-progression" class="sheet-tab-panel" style="display:none;">
         <div data-debug="true" id="debug-progression">
@@ -3815,21 +3810,11 @@
       <div class="sheet-panel-tabs">
         <button type="button" class="sheet-panel-tab-btn active" data-panel-tab="identity">Identity</button>
         <button type="button" class="sheet-panel-tab-btn" data-panel-tab="stats">Stats</button>
-        <button type="button" class="sheet-panel-tab-btn" data-panel-tab="inventory">Inventory</button>
         <button type="button" class="sheet-panel-tab-btn" data-panel-tab="standing">Standing</button>
         <button type="button" class="sheet-panel-tab-btn" data-panel-tab="ledger">The Ledger</button>
       </div>
       <div id="panel-tab-identity" class="sheet-panel-content"></div>
       <div id="panel-tab-stats" class="sheet-panel-content" style="display:none;"></div>
-      <div id="panel-tab-inventory" class="sheet-panel-content" style="display:none;">
-        <div class="cs-inv-section-label">CURRENCY</div>
-        <div class="cs-stats-divider" aria-hidden="true"></div>
-        <div class="cs-progress-row"><span class="cs-progress-label">Ash Marks</span><span class="cs-progress-val" id="sheet-w-ash">0 AM</span></div>
-        <div class="cs-progress-row"><span class="cs-progress-label">Ember Shards</span><span class="cs-progress-val" id="sheet-w-ember">0</span></div>
-        <div class="cs-progress-row"><span class="cs-progress-label">Soul Coins</span><span class="cs-progress-val" id="sheet-w-soul">0</span></div>
-        <div class="cs-stats-divider cs-inv-after-currency" aria-hidden="true"></div>
-        <div id="sheet-inventory-body"></div>
-      </div>
       <div id="panel-tab-standing" class="sheet-panel-content" style="display:none;"></div>
       <div id="panel-tab-ledger" class="sheet-panel-content" style="display:none;">
         <div class="cs-stats-heading">THE LEDGER</div>
@@ -4616,7 +4601,6 @@ document.addEventListener('click', () => {
 let sheetCache = {
   char: null,
   wallet: null,
-  inv: null,
   flags: null,
   ts: 0,
 };
@@ -6102,11 +6086,7 @@ async function populateCharacterSheet() {
   mainCharacter = char;
   if (!mainRacesData) try { mainRacesData = await GET('/api/data/races'); } catch(e) {}
   if (!mainInstinctsData) try { mainInstinctsData = await GET('/api/data/instincts'); } catch(e) {}
-  let wallet = { ash_marks: 0, ember_shards: 0, soul_coins: 0 };
-  let inv = { items: [] };
   let flags = {};
-  try { wallet = await GET('/api/wallet'); } catch(e) {}
-  try { inv = await GET('/api/inventory'); } catch(e) {}
   try { flags = await GET('/api/character/flags'); } catch(e) {}
   const locName = getLocationName(char.location);
   document.getElementById('cs-name').textContent = char.name || '—';
@@ -6134,20 +6114,6 @@ async function populateCharacterSheet() {
   });
   document.getElementById('cs-xp').textContent = char.xp ?? '—';
   document.getElementById('cs-stage').textContent = char.class_stage ?? '—';
-  document.getElementById('cs-ash').textContent = wallet.formatted_am ?? wallet.ash_marks ?? 0;
-  document.getElementById('cs-ember').textContent = wallet.ember_shards ?? 0;
-  document.getElementById('cs-soul').textContent = wallet.soul_coins ?? 0;
-  const eq = inv.equipment || {};
-  const offhandLocked = !!inv.offhand_locked;
-  const dualWield = !!inv.dual_wield;
-  const idToName = {};
-  (inv.itemDetails || []).forEach(it => { idToName[it.id] = it.display_name || it.id; });
-  const equippedHtml = wrapEquippedSection(htmlEquippedSlotRows(eq, idToName, offhandLocked, dualWield));
-  const invLines = htmlInventoryReadOnlyLines(inv);
-  document.getElementById('cs-inv-list').innerHTML =
-    equippedHtml +
-    '<div class="inv-panel-h inv-inventory-below">INVENTORY</div>' +
-    '<div class="inv-inventory-readonly">' + invLines + '</div>';
   const ul = document.getElementById('cs-flags-list');
   ul.innerHTML = '';
   for (const [id, label] of Object.entries(PROGRESSION_LABELS)) {
@@ -6356,24 +6322,19 @@ async function refreshSheetPanel() {
 
   let char;
   let wallet;
-  let inv;
   let flags;
   if (useCache) {
     char = sheetCache.char;
     wallet = sheetCache.wallet;
-    inv = sheetCache.inv;
     flags = sheetCache.flags;
   } else {
     char = await GET('/api/character');
     wallet = { ash_marks: 0, ember_shards: 0, soul_coins: 0 };
-    inv = { items: [] };
     flags = {};
     try { wallet = await GET('/api/wallet'); } catch(e) {}
-    try { inv = await GET('/api/inventory'); } catch(e) {}
     try { flags = await GET('/api/character/flags'); } catch(e) {}
     sheetCache.char = char;
     sheetCache.wallet = wallet;
-    sheetCache.inv = inv;
     sheetCache.flags = flags;
     sheetCache.ts = Date.now();
   }
@@ -6446,19 +6407,6 @@ async function refreshSheetPanel() {
   });
   statsHtml += '</div>';
   document.getElementById('panel-tab-stats').innerHTML = statsHtml;
-  const eq = inv.equipment || {};
-  const offhandLocked = !!inv.offhand_locked;
-  const dualWield = !!inv.dual_wield;
-  const idToName = {};
-  (inv.itemDetails || []).forEach(it => { idToName[it.id] = it.display_name || it.id; });
-  const invLines = htmlInventoryReadOnlyLines(inv);
-  const invBody = document.getElementById('sheet-inventory-body');
-  if (invBody) {
-    invBody.innerHTML =
-      wrapEquippedSection(htmlEquippedSlotRows(eq, idToName, offhandLocked, dualWield)) +
-      '<div class="inv-panel-h inv-inventory-below">INVENTORY</div>' +
-      '<div class="inv-inventory-readonly">' + invLines + '</div>';
-  }
   updateWallet(wallet);
   let flagsHtml = '<ul>';
   for (const [id, label] of Object.entries(PROGRESSION_LABELS)) {
