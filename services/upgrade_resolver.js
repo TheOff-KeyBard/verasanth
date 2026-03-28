@@ -193,8 +193,118 @@ export function resolveUpgradeAbility(upgrade, character, state, enemy, equipped
       narrative = upgrade.combat_log_solo || upgrade.combat_log_player;
       break;
     }
-    default:
+    default: {
+      // Phase 1+ instincts: structurally complete upgrades keyed in upgrades.js without a
+      // dedicated case above. Conservative templates only — no new combat engine features.
+      if (upgrade.type === "passive") {
+        narrative = upgrade.combat_log_passive || upgrade.combat_log_player || "";
+        break;
+      }
+      if (upgrade.target === "self" && upgrade.heal_percent_max_hp != null) {
+        heal = Math.max(1, Math.floor(playerHpMax * upgrade.heal_percent_max_hp));
+        narrative = upgrade.combat_log_player || "";
+        if (upgrade.combat_log_heal) {
+          narrative += ` *${upgrade.combat_log_heal.replace("{value}", heal)}*`;
+        }
+        break;
+      }
+      if (upgrade.target === "self" && upgrade.shield_percent_max_hp != null) {
+        status_value = Math.max(1, Math.floor(playerHpMax * (upgrade.shield_percent_max_hp ?? 0.25)));
+        status_on_player = "shield";
+        status_duration_player = upgrade.shield_duration ?? 3;
+        narrative = upgrade.combat_log_player;
+        break;
+      }
+      if (upgrade.target === "self" && upgrade.solo_variant_effect) {
+        status_on_player = "damage_resist";
+        status_duration_player = upgrade.solo_variant_effect?.duration ?? 2;
+        state.damage_resist_value = Math.abs(upgrade.solo_variant_effect?.value ?? -0.25);
+        narrative = upgrade.combat_log_solo || upgrade.combat_log_player;
+        break;
+      }
+      if (
+        upgrade.target === "self" &&
+        upgrade.applies_status?.[0]?.effect === "damage_resist"
+      ) {
+        const applied = upgrade.applies_status[0];
+        status_on_player = applied.effect;
+        status_duration_player = applied.duration ?? 2;
+        state.damage_resist_value = upgrade.damage_resist_value ?? 0.3;
+        narrative = upgrade.combat_log_player;
+        break;
+      }
+      if (upgrade.target === "self" && upgrade.applies_status?.[0]) {
+        const applied = upgrade.applies_status[0];
+        status_on_player = applied.effect;
+        status_duration_player = applied.duration ?? 1;
+        if (applied.effect === "untargetable") skip_retaliation = true;
+        narrative = upgrade.combat_log_player;
+        break;
+      }
+      if (
+        upgrade.target === "enemy" &&
+        upgrade.stat_scaling &&
+        upgrade.damage_multiplier != null &&
+        upgrade.lifesteal_percent != null &&
+        upgrade.lifesteal_threshold != null
+      ) {
+        const base = Math.max(0, statMod(stats[upgrade.stat_scaling] ?? 10));
+        dmg = Math.max(1, Math.floor(base * (upgrade.damage_multiplier ?? 1)));
+        if (enemyHpPercent <= (upgrade.lifesteal_threshold ?? 0.5)) {
+          heal = Math.max(1, Math.floor(dmg * (upgrade.lifesteal_percent ?? 0.3)));
+        }
+        narrative = (upgrade.combat_log_enemy || "").replace("{enemy}", enemyName);
+        if (heal > 0 && upgrade.combat_log_heal) {
+          narrative += ` *${upgrade.combat_log_heal.replace("{value}", heal)}*`;
+        }
+        break;
+      }
+      if (
+        upgrade.target === "enemy" &&
+        upgrade.stat_scaling &&
+        upgrade.damage_multiplier != null &&
+        upgrade.lifesteal_percent != null &&
+        upgrade.lifesteal_threshold == null
+      ) {
+        const base = Math.max(0, statMod(stats[upgrade.stat_scaling] ?? 10));
+        dmg = Math.max(1, Math.floor(base * (upgrade.damage_multiplier ?? 1)));
+        heal = Math.max(1, Math.floor(dmg * (upgrade.lifesteal_percent ?? 0.25)));
+        narrative = (upgrade.combat_log_enemy || upgrade.combat_log_player || "").replace(
+          "{enemy}",
+          enemyName,
+        );
+        const applied = upgrade.applies_status?.[0];
+        if (applied) {
+          status_on_enemy = applied.effect;
+          status_duration = applied.duration ?? 1;
+        }
+        if (upgrade.combat_log_heal) {
+          narrative += ` *${upgrade.combat_log_heal.replace("{value}", heal)}*`;
+        }
+        break;
+      }
+      if (upgrade.target === "enemy" && upgrade.stat_scaling && upgrade.damage_multiplier != null) {
+        const base = Math.max(0, statMod(stats[upgrade.stat_scaling] ?? 10));
+        dmg = Math.max(1, Math.floor(base * (upgrade.damage_multiplier ?? 1)));
+        const applied = upgrade.applies_status?.[0];
+        if (applied) {
+          status_on_enemy = applied.effect;
+          status_duration = applied.duration ?? 1;
+        }
+        narrative = upgrade.combat_log_enemy
+          ? upgrade.combat_log_enemy.replace("{enemy}", enemyName)
+          : upgrade.combat_log_player || "";
+        break;
+      }
+      if (upgrade.target === "enemy" && upgrade.applies_status?.[0] && !upgrade.stat_scaling) {
+        const applied = upgrade.applies_status[0];
+        status_on_enemy = applied.effect;
+        status_duration = applied.duration ?? 1;
+        narrative = (upgrade.combat_log_enemy || "").replace("{enemy}", enemyName);
+        break;
+      }
       narrative = upgrade.combat_log_player || "You use your ability.";
+    }
   }
 
   const result = {

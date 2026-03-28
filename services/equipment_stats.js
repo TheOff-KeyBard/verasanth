@@ -73,6 +73,7 @@ export function aggregateEquipmentStats(equippedItemMap) {
 
 /**
  * Apply instinct affinities (tag bonuses/penalties) on top of aggregated stats.
+ * Instincts without an INSTINCT_AFFINITIES row pass through unchanged (expand in Phase 2).
  */
 export function applyInstinctAffinities(aggregatedStats, equippedItemMap, instinct) {
   const affinities = INSTINCT_AFFINITIES[instinct];

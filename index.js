@@ -41,6 +41,7 @@ import { handleQuestDialogue, recordEnemyKill, checkQuestProgressForItem, assign
 import { QUEST_BY_ID } from "./data/quests.js";
 import { rotateSewerCondition } from "./services/sewer_rotation.js";
 import { LEGACY_SLOT_MAP, EQUIPMENT_SLOTS, EQUIPMENT_DATA, INSTINCT_AFFINITIES } from "./data/equipment.js";
+import { STARTER_LOADOUTS, validateStarterLoadoutsAgainstCatalog } from "./data/starter_loadouts.js";
 import { getEquipmentSlot, resolveLegacySlot, isValidEquipmentSlot, canEquipItem, equipItem, unequipItem, getEquippedItemMap, getAffinityHint, getCharacterLevel } from "./services/equipment.js";
 import { aggregateEquipmentStats, applyInstinctAffinities, applyRaceAffinities, getItemEffectiveStats } from "./services/equipment_stats.js";
 import { GUILD_LOCATIONS, getInitialTrialState, getTrialIntro, getTrialActions, handleTrialAction, getTrialStatusBar, ACTION_LABELS } from "./services/trials.js";
@@ -71,6 +72,31 @@ import {
   boardPostAllowed,
   recordBoardPostRate,
 } from "./services/kv_social.js";
+
+// ─────────────────────────────────────────────────────────────
+// CHARACTER CREATION — guild-family instinct eligibility
+// ─────────────────────────────────────────────────────────────
+// Phase 1: 12 instincts (see data/instincts.js). Phase 2 (TODO): 18 (3/guild)—logic below is count-agnostic.
+
+/**
+ * When race.guild_affinity is set, an instinct is allowed if instinct.guild is listed.
+ * Otherwise fall back to legacy race.affinity (instinct id list).
+ * If guild mode is active but an instinct has no guild field, legacy affinity ids still apply.
+ */
+function raceAllowsInstinct(race, instinctKey) {
+  const instinct = INSTINCTS[instinctKey];
+  if (!race || !instinct) return false;
+  if (Array.isArray(race.guild_affinity) && race.guild_affinity.length > 0) {
+    if (instinct.guild) return race.guild_affinity.includes(instinct.guild);
+    return !!(race.affinity && race.affinity.includes(instinctKey));
+  }
+  return !!(race.affinity && race.affinity.includes(instinctKey));
+}
+
+const STARTER_LOADOUT_VALIDATION_ERRORS = validateStarterLoadoutsAgainstCatalog();
+if (STARTER_LOADOUT_VALIDATION_ERRORS.length) {
+  throw new Error(`Invalid STARTER_LOADOUTS: ${STARTER_LOADOUT_VALIDATION_ERRORS.join("; ")}`);
+}
 
 // ─────────────────────────────────────────────────────────────
 // ECONOMY HELPERS
@@ -554,14 +580,8 @@ const STAT_MAX = 18;
 const STAT_KEYS = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"];
 const STAT_TOTAL_EXPECTED = 6 * STAT_BASE + STAT_POOL; // 58
 
-const STARTING_ITEMS = {
-  ember_touched: ["charred_focus_wand", "ash_thread_robe", "ember_charm"],
-  hearthborn:    ["simple_mace", "tattered_vestments", "tarnished_holy_symbol"],
-  streetcraft:   ["rusted_dagger", "patchwork_cloak", "lockpick_kit"],
-  ironblood:     ["worn_longsword", "cracked_shield", "leather_brigandine"],
-  shadowbound:   ["serrated_dagger", "shadow_cloak", "smoke_vial"],
-  warden:        ["iron_spear", "reinforced_shield", "guards_mail"],
-};
+// Legacy starter gear: removed. Old STARTING_ITEMS used non-catalog ids and inventory-only grants.
+// Authoritative starter equipment is STARTER_LOADOUTS in data/starter_loadouts.js (real slots + EQUIPMENT_DATA).
 
 function validatePointBuy(stats) {
   let sum = 0;
@@ -709,6 +729,49 @@ async function setFlag(db, uid, flag, value = 1) {
     "INSERT INTO player_flags(user_id,flag,value) VALUES(?,?,?) ON CONFLICT(user_id,flag) DO UPDATE SET value=excluded.value",
     [uid, flag.toLowerCase(), Number(value)]
   );
+}
+
+/**
+ * Populates inventory and equipment_slots from STARTER_LOADOUTS (EQUIPMENT_DATA only).
+ * Replaces legacy STARTING_ITEMS (flat non-catalog ids + inventory-only grant).
+ * Missing instinct id in STARTER_LOADOUTS → no gear (add entry in Phase 2+).
+ */
+async function grantStarterEquipmentFromLoadout(db, dbRun, dbGet, uid, instinctKey, characterRow) {
+  const loadout = STARTER_LOADOUTS[instinctKey];
+  if (!loadout || typeof loadout !== "object") {
+    return { loadout: {}, item_ids: [] };
+  }
+  const equipOrder = [
+    "weapon_main",
+    "weapon_offhand",
+    "head",
+    "chest",
+    "hands",
+    "legs",
+    "feet",
+    "cloak",
+    "ring_1",
+    "ring_2",
+    "charm",
+    "relic",
+  ];
+  const itemIds = [...new Set(Object.values(loadout))];
+  for (const itemId of itemIds) {
+    await dbRun(
+      db,
+      "INSERT INTO inventory (user_id, item, qty, equipped) VALUES (?, ?, 1, 0) ON CONFLICT(user_id, item) DO UPDATE SET qty = qty + 1",
+      [uid, itemId],
+    );
+  }
+  const flagOpts = { getFlag, setFlag };
+  for (const slot of equipOrder) {
+    const itemId = loadout[slot];
+    if (!itemId) continue;
+    const check = await canEquipItem(characterRow, itemId, slot, { db, uid, getFlag });
+    if (!check.ok) throw new Error(`Starter equip blocked: ${slot} ${itemId} — ${check.message}`);
+    await equipItem(db, dbRun, dbGet, uid, itemId, slot, flagOpts);
+  }
+  return { loadout: { ...loadout }, item_ids: itemIds };
 }
 
 /** Stored in player_flags.value as 1|2|3 (D1 flags are numeric). */
@@ -1212,13 +1275,15 @@ function computeArchetype(mercy, order, heat) {
   return "Survivor";
 }
 
+// Alignment deltas [mercy, order] on certain actions. Missing instinct → [0,0] in updateAlignment.
+// Phase 2: add entries for new instinct ids when tuning narrative alignment.
 const ALIGN_INSTINCT_BIAS = {
   hearthborn: [1, 0],
   ember_touched: [0, 0],
   ironblood: [0, 0],
   streetcraft: [0, -1],
-  shadowbound: [-1, 0],  // chaos-leaning
-  warden: [1, 1],         // moral + ordered
+  shadowbound: [-1, 0], // chaos-leaning
+  warden: [1, 1], // moral + ordered
 };
 
 async function updateAlignment(db, uid, mercyDelta, orderDelta, instinct = "") {
@@ -2691,9 +2756,12 @@ if (path === "/api/admin/command" && method === "POST") {
     if (path === "/api/character/instinct" && method === "POST") {
       const { instinct } = body;
       if (!INSTINCTS[instinct]) return err("Invalid instinct.");
-      const row = await dbGet(db, "SELECT instinct FROM characters WHERE user_id=?", [uid]);
+      const row = await dbGet(db, "SELECT instinct, race FROM characters WHERE user_id=?", [uid]);
       if (!row) return err("No character.", 404);
       if (row.instinct) return err("Instinct already chosen.");
+      const raceDef = RACES[row.race];
+      if (!raceDef || !raceAllowsInstinct(raceDef, instinct))
+        return err("That instinct is not available for your lineage.", 400);
       await dbRun(db, "UPDATE characters SET instinct=? WHERE user_id=?", [instinct, uid]);
       return json({ instinct, label: INSTINCTS[instinct].label, ok: true });
     }
@@ -2706,6 +2774,8 @@ if (path === "/api/admin/command" && method === "POST") {
       if (row.stats_set) return err("Character already complete.", 400);
       if (!RACES[raceKey]) return err("Unknown race.", 400);
       if (!INSTINCTS[instinctKey]) return err("Invalid instinct.", 400);
+      if (!raceAllowsInstinct(RACES[raceKey], instinctKey))
+        return err("That instinct is not available for your lineage.", 400);
 
       const nameTrimmed = characterName != null ? String(characterName).trim() : (row.name || "");
       if (nameTrimmed.length < 2) return err("Name too short.", 400);
@@ -2739,7 +2809,7 @@ if (path === "/api/admin/command" && method === "POST") {
       for (const [stat, mod] of Object.entries(instinct.stat_mods)) {
         finalStats[stat] = (finalStats[stat] ?? 10) + mod;
       }
-      if (race.affinity && race.affinity.includes(instinctKey)) {
+      if (raceAllowsInstinct(race, instinctKey)) {
         const primaryStat = Object.keys(instinct.stat_mods)[0];
         if (primaryStat) finalStats[primaryStat] += 1;
       }
@@ -2750,9 +2820,13 @@ if (path === "/api/admin/command" && method === "POST") {
         intelligence=?, wisdom=?, charisma=?, stats_set=1, current_hp=? WHERE user_id=?`,
         [nameTrimmed, raceKey, instinctKey, strength, dexterity, constitution, intelligence, wisdom, charisma, maxHp, uid]);
 
-      const items = STARTING_ITEMS[instinctKey] || [];
-      for (const item of items) {
-        await dbRun(db, "INSERT INTO inventory (user_id, item, qty) VALUES (?, ?, 1) ON CONFLICT(user_id, item) DO UPDATE SET qty = qty + 1", [uid, item]);
+      const charForEquip = { instinct: instinctKey, class_stage: Number(row.class_stage) || 0 };
+      let starterGrant;
+      try {
+        starterGrant = await grantStarterEquipmentFromLoadout(db, dbRun, dbGet, uid, instinctKey, charForEquip);
+      } catch (e) {
+        console.error("grantStarterEquipmentFromLoadout", e);
+        return err("Starter equipment could not be applied. Please report this.", 500);
       }
 
       if (raceKey === "ashborn" && body.ashborn_mark != null) {
@@ -2792,7 +2866,14 @@ if (path === "/api/admin/command" && method === "POST") {
       }
 
       // has_seen_awakening is set on first /api/look when we serve the awakening room description
-      return json({ ok: true, first_awakening: true, stats: finalStats, max_hp: maxHp, starting_items: items });
+      return json({
+        ok: true,
+        first_awakening: true,
+        stats: finalStats,
+        max_hp: maxHp,
+        starting_loadout: starterGrant.loadout,
+        starting_items: starterGrant.item_ids,
+      });
     }
 
     // ── POST: Set stats ──
@@ -5731,11 +5812,13 @@ if (path === "/api/combat/state" && method === "GET") {
 
       let enemyHp = state.enemy_hp;
 
-      if (attack.heal) {
+      if (attack.heal != null && attack.heal > 0) {
         playerHp = Math.min(playerHp + attack.heal, state.player_hp_max);
-      } else {
+      }
+      const rawPlayerDmg = attack.dmg ?? 0;
+      if (rawPlayerDmg > 0) {
         const guardMod = getTraitDamageModifier(enemy, state);
-        let playerDmg = Math.floor((attack.dmg ?? 0) * guardMod);
+        let playerDmg = Math.floor(rawPlayerDmg * guardMod);
 
         // empowered: +40% damage, 5% HP cost, expires after 2 uses
         if (state.statuses?.empowered && (state.statuses.empowered.uses_remaining ?? 0) > 0 && playerDmg > 0) {
@@ -6995,7 +7078,8 @@ Something about the room has changed.`;
     }
 
     // ── GET: Races / Instincts (public) ──
-    if (path === "/api/data/races")     return json({ races: RACES });
+    if (path === "/api/data/races") return json({ races: RACES });
+    // Client iterates `instincts` object keys; no fixed roster size assumed.
     if (path === "/api/data/instincts") return json({ instincts: INSTINCTS });
 
     // ── POST: Logout ──

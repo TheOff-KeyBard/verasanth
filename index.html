@@ -2389,10 +2389,17 @@
   .tw-confirm-card h3 { font-family: var(--font-title); font-size: 1rem; margin-bottom: 8px; color: var(--ember-glow); }
   .tw-confirm-card .tw-stats-preview { margin: 10px 0; color: var(--text-dim); }
   .tw-confirm-card .tw-equipment { margin-top: 10px; color: var(--ash-light); }
-  .tw-instinct-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+  .tw-instinct-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+  }
   .tw-instinct-grid button {
     background: var(--bg3); border: 1px solid var(--border); color: var(--text);
     padding: 10px 14px; font-family: var(--font-body); cursor: pointer;
+    text-align: left;
+    min-width: 0;
   }
   .tw-instinct-grid button.selected { border-color: var(--ember); color: var(--ember-glow); }
   .tw-stats-grid { display: grid; gap: 8px; margin-bottom: 12px; }
@@ -3584,7 +3591,7 @@
         </div>
       </div>
       <div id="tw-step-instinct" style="display:none;">
-        <p class="tw-hint">Your instinct is permanent. It unlocks a once-per-turn combat ability.</p>
+        <p class="tw-hint">Your instinct is permanent. It unlocks a signature combat ability, ready again after a few exchanges.</p>
         <div id="tw-affinity-bonus" class="tw-affinity-bonus" style="display:none;"></div>
         <div id="tw-instinct-grid" class="tw-instinct-grid"></div>
       </div>
@@ -4669,14 +4676,31 @@ function setTradeHeaderContext(npcId) {
 }
 
 let twSheetBaseStats = { strength: 5, dexterity: 5, constitution: 5, intelligence: 5, wisdom: 5, charisma: 5 };
-const STARTING_ITEMS_DISPLAY = {
-  ember_touched: ['charred_focus_wand', 'ash_thread_robe', 'ember_charm'],
-  hearthborn:    ['simple_mace', 'tattered_vestments', 'tarnished_holy_symbol'],
-  streetcraft:   ['rusted_dagger', 'patchwork_cloak', 'lockpick_kit'],
-  ironblood:     ['worn_longsword', 'cracked_shield', 'leather_brigandine'],
-  shadowbound:   ['serrated_dagger', 'shadow_cloak', 'smoke_vial'],
-  warden:        ['iron_spear', 'reinforced_shield', 'guards_mail'],
+// Mirror data/starter_loadouts.js. Phase 2: add keys when new instincts ship (not tied to a fixed count).
+const STARTER_LOADOUTS_DISPLAY = {
+  ember_touched: { weapon_main: 'sewer_wand', chest: 'mold_stained_vest', relic: 'ash_script_token' },
+  pale_marked: { weapon_main: 'sewer_wand', cloak: 'ash_bitten_cloak', charm: 'salt_thread_token' },
+  hearthborn: { weapon_offhand: 'bone_focus', chest: 'patchwork_jerkin', charm: 'sewer_saint_knot' },
+  lifebinder: { weapon_offhand: 'bone_focus', chest: 'mold_stained_vest', charm: 'salt_thread_token' },
+  streetcraft: { weapon_main: 'hooked_knife', chest: 'sewer_leathers', feet: 'footwraps' },
+  quickstep: { weapon_main: 'pipe_shiv', chest: 'sewer_leathers', feet: 'slickstep_boots' },
+  ironblood: { weapon_main: 'worn_mace', chest: 'riveted_coat', weapon_offhand: 'scrap_shield' },
+  war_forged: { weapon_main: 'drain_spear', chest: 'patchwork_jerkin', ring_2: 'iron_band' },
+  shadowbound: { weapon_main: 'hooked_knife', cloak: 'ash_bitten_cloak', relic: 'whisper_stone_fragment' },
+  grave_whisper: { weapon_main: 'sewer_wand', cloak: 'drip_cloak', relic: 'cracked_reliquary_shard' },
+  warden: { weapon_main: 'rusted_blade', chest: 'riveted_coat', weapon_offhand: 'cracked_buckler' },
+  sentinel: { weapon_main: 'rusted_blade', chest: 'patchwork_jerkin', charm: 'rat_bone_charm' },
 };
+
+function formatStarterLoadoutSummary(loadout) {
+  if (!loadout || typeof loadout !== 'object') return '—';
+  const keys = Object.keys(loadout);
+  if (keys.length === 0) return '—';
+  return keys.map(function (slot) {
+    var id = loadout[slot];
+    return slot.replace(/_/g, ' ') + ': ' + String(id).replace(/_/g, ' ');
+  }).join(' · ');
+}
 
 const NPC_NAMES = {
   bartender:   'Kelvaris',
@@ -5140,6 +5164,20 @@ function formatStatMods(mods) {
   }).join(' · ');
 }
 
+/**
+ * Guild-family eligibility (True Welcome): if race.guild_affinity exists, instinct.guild must be listed;
+ * otherwise legacy race.affinity (instinct ids). Missing instinct.guild under guild mode falls back to id list.
+ * Roster size is not hardcoded (Phase 1 = 12 instincts; Phase 2 TODO = 18).
+ */
+function raceAllowsInstinctClient(race, instinctId, instinctDef) {
+  if (!race || !instinctDef) return false;
+  if (Array.isArray(race.guild_affinity) && race.guild_affinity.length > 0) {
+    if (instinctDef.guild) return race.guild_affinity.indexOf(instinctDef.guild) !== -1;
+    return !!(race.affinity && race.affinity.indexOf(instinctId) !== -1);
+  }
+  return !!(race.affinity && race.affinity.indexOf(instinctId) !== -1);
+}
+
 function computedStats(raceKey, instinctKey) {
   return computedStatsFromBase(raceKey, instinctKey, { strength: 5, dexterity: 5, constitution: 5, intelligence: 5, wisdom: 5, charisma: 5 });
 }
@@ -5153,7 +5191,7 @@ function computedStatsFromBase(raceKey, instinctKey, baseStats) {
   const final = { ...baseStats };
   Object.entries(race.stat_mods || {}).forEach(([stat, mod]) => { final[stat] = (final[stat] ?? TW_SHEET_BASE) + mod; });
   Object.entries(instinct.stat_mods || {}).forEach(([stat, mod]) => { final[stat] = (final[stat] ?? TW_SHEET_BASE) + mod; });
-  if (race.affinity && race.affinity.includes(instinctKey)) {
+  if (raceAllowsInstinctClient(race, instinctKey, instinct)) {
     const primary = Object.keys(instinct.stat_mods || {})[0];
     if (primary) final[primary] += 1;
   }
@@ -5189,6 +5227,7 @@ async function showTrueWelcome() {
     btn.innerHTML = '<strong>' + escapeHtml(def.name || id) + '</strong><br><span class="tw-stat-mods">' + formatStatMods(def.stat_mods) + '</span>' + desc;
     btn.onclick = () => {
       twSelectedRace = id;
+      twSelectedInstinct = '';
       if (id !== 'ashborn') twSelectedMark = null;
       if (id !== 'dakaridari') twSelectedAdaptation = null;
       if (id !== 'panaridari') twSelectedAttunement = null;
@@ -5348,12 +5387,12 @@ function renderTwInstinctStep() {
   grid.innerHTML = '';
   const instincts = mainInstinctsData?.instincts || {};
   const race = mainRacesData?.races?.[twSelectedRace];
-  const affinityList = (race && race.affinity) ? race.affinity : [];
   for (const [id, def] of Object.entries(instincts)) {
+    if (!raceAllowsInstinctClient(race, id, def)) continue;
     const card = document.createElement('button');
     card.type = 'button';
-    card.className = 'tw-instinct-card' + (affinityList.includes(id) ? ' affinity' : '') + (twSelectedInstinct === id ? ' selected' : '');
-    card.innerHTML = (affinityList.includes(id) ? '<span class="tw-affinity-badge">Affinity ✦</span>' : '') +
+    card.className = 'tw-instinct-card affinity' + (twSelectedInstinct === id ? ' selected' : '');
+    card.innerHTML = '<span class="tw-affinity-badge">Affinity ✦</span>' +
       '<strong>' + (def.label || id) + '</strong><br>' +
       '<em class="tw-memory">' + (def.memory || '') + '</em><br>' +
       '<span class="tw-role">' + (def.role || '') + '</span><br>' +
@@ -5365,7 +5404,7 @@ function renderTwInstinctStep() {
       const inst = mainInstinctsData?.instincts?.[id];
       const primary = inst && Object.keys(inst.stat_mods || {})[0];
       const bonusEl = document.getElementById('tw-affinity-bonus');
-      if (affinityList.includes(id) && primary) {
+      if (primary) {
         bonusEl.textContent = 'Affinity bonus: +1 ' + primary.charAt(0).toUpperCase() + primary.slice(1);
         bonusEl.style.display = 'block';
       } else {
@@ -5377,9 +5416,9 @@ function renderTwInstinctStep() {
   grid.classList.add('stagger-reveal');
   grid.offsetHeight;
   const bonusEl = document.getElementById('tw-affinity-bonus');
-  if (twSelectedInstinct && affinityList.includes(twSelectedInstinct)) {
-    const inst = mainInstinctsData?.instincts?.[twSelectedInstinct];
-    const primary = inst && Object.keys(inst.stat_mods || {})[0];
+  const selInst = mainInstinctsData?.instincts?.[twSelectedInstinct];
+  if (twSelectedInstinct && race && selInst && raceAllowsInstinctClient(race, twSelectedInstinct, selInst)) {
+    const primary = Object.keys(selInst.stat_mods || {})[0];
     if (primary) { bonusEl.textContent = 'Affinity bonus: +1 ' + primary.charAt(0).toUpperCase() + primary.slice(1); bonusEl.style.display = 'block'; }
   } else { bonusEl.style.display = 'none'; }
 }
@@ -5405,16 +5444,17 @@ function updateTwSheetSummary() {
     const race = mainRacesData?.races?.[twSelectedRace];
     const instinct = mainInstinctsData?.instincts?.[twSelectedInstinct];
     const final = computedStatsFromBase(twSelectedRace, twSelectedInstinct, twSheetBaseStats);
-    const items = STARTING_ITEMS_DISPLAY[twSelectedInstinct] || [];
+    const starterLo = STARTER_LOADOUTS_DISPLAY[twSelectedInstinct];
+    const equipSummary = formatStarterLoadoutSummary(starterLo);
     const raceDef = mainRacesData?.races?.[twSelectedRace];
     const instDef = mainInstinctsData?.instincts?.[twSelectedInstinct];
-    const hasAffinity = raceDef && raceDef.affinity && raceDef.affinity.includes(twSelectedInstinct);
+    const hasAffinity = raceDef && instDef && raceAllowsInstinctClient(raceDef, twSelectedInstinct, instDef);
     const primaryStat = instDef && Object.keys(instDef.stat_mods || {})[0];
     let statsStr = final ? Object.entries(final).map(([k, v]) => k.slice(0, 3).toUpperCase() + ' ' + v).join(' · ') : '';
     contentEl.innerHTML =
       '<p><strong>' + (race ? race.name : displayPlayerRaceLabel(twSelectedRace)) + ' · ' + (instinct ? instinct.label : twSelectedInstinct) + '</strong></p>' +
       '<p class="tw-stats-preview">' + statsStr + '</p>' +
-      '<p>Starting equipment: ' + (items.length ? items.join(', ') : '—') + '</p>' +
+      '<p>Starting equipment: ' + equipSummary + '</p>' +
       (hasAffinity && primaryStat ? '<p class="tw-affinity-bonus">Affinity bonus: +1 ' + primaryStat.charAt(0).toUpperCase() + primaryStat.slice(1) + '</p>' : '');
     summaryEl.style.display = 'block';
     nextBtn.textContent = 'Confirm';

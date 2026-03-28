@@ -84,7 +84,8 @@ export const STATUS_DEFS = {
   },
 };
 
-// Instinct definitions — primary abilities and passives
+// Instinct definitions — primary abilities and passives (keys should match data/instincts.js).
+// Phase 1: 12 entries. Phase 2 (TODO): 18—add combat packages for new ids; resolvePlayerAction is key-driven.
 export const INSTINCT_DEFS = {
   ember_touched: {
     role: "burst / DoT",
@@ -94,7 +95,7 @@ export const INSTINCT_DEFS = {
       narrative: (dmg) => `**Kindle** — Arcane fire tears through them. ${dmg} damage. They are *Burning*.`,
       effect: (stats, enemy) => {
         const dmg = rollDie(8) + 2 + Math.max(0, statMod(stats.intelligence ?? stats.wisdom ?? 10));
-        return { dmg, status_on_enemy: "burning", status_duration: 3 };
+        return { dmg, status_on_enemy: "burning", status_duration_enemy: 3 };
       },
     },
     passive: { name: "Smolder", desc: "Burning enemies take +1 damage from all sources." },
@@ -119,40 +120,59 @@ export const INSTINCT_DEFS = {
     primary: {
       name: "Opportunist Strike",
       cadence: 2,
-      narrative: (dmg, wounded) =>
-        `**Opportunist Strike** — ${wounded ? "You find the gap in their weakness. " : "You slip inside their guard. "}${dmg} damage.`,
+      narrative: (dmg, wounded, tag) =>
+        `**Opportunist Strike** — ${wounded ? "You find the gap in their weakness. " : "You slip inside their guard. "}${
+          tag === "crit" ? "*The blade bites deep.* " : ""
+        }${dmg} damage.`,
       effect: (stats, enemy, state) => {
         const strMod = statMod(stats.strength);
-        const wounded = enemy && state.enemy_hp < (state.enemy_hp_max * 0.5);
+        const dex = statMod(stats.dexterity);
+        const wounded = enemy && state.enemy_hp < state.enemy_hp_max * 0.5;
         const bonus = wounded ? rollDie(4) : 0;
-        const dmg = rollDie(6) + strMod + bonus + 2;
-        return { dmg, wounded, skip_retaliation: false, status_on_player: "slip_dodge", status_duration: 1 };
+        let dmg = rollDie(6) + strMod + dex + bonus + 1;
+        const crit = Math.random() < 0.35;
+        if (crit) dmg = Math.max(1, Math.floor(dmg * 1.45));
+        return { dmg, wounded, narrative_tag: crit ? "crit" : "", skip_retaliation: false };
       },
     },
-    passive: { name: "Slip", desc: "+10% dodge on the turn after using the ability." },
+    passive: { name: "Slip", desc: "You read openings faster than most." },
   },
   ironblood: {
     role: "frontliner / control",
     primary: {
       name: "Crushing Blow",
       cadence: 3,
-      narrative: (dmg) => `**Crushing Blow** — The impact staggers them back. ${dmg} damage. They are *Staggered*.`,
+      narrative: (dmg, staggered) =>
+        staggered
+          ? `**Crushing Blow** — The impact staggers them back. ${dmg} damage. They are *Staggered*.`
+          : `**Crushing Blow** — A brutal hit for ${dmg} damage. They hold their line.`,
       effect: (stats, enemy) => {
         const strMod = statMod(stats.strength);
-        const dmg = rollDie(8) + strMod + 2;
-        return { dmg, status_on_enemy: "staggered", status_duration: 1, status_on_player: "iron_stance", status_duration_player: 1 };
+        const dmg = rollDie(8) + strMod + 3;
+        const staggered = Math.random() < 0.45;
+        const out = { dmg, wounded: staggered, status_on_player: "iron_stance", status_duration_player: 1 };
+        if (staggered) {
+          out.status_on_enemy = "staggered";
+          out.status_duration_enemy = 1;
+        }
+        return out;
       },
     },
-    passive: { name: "Iron Stance", desc: "+1 flat damage reduction for 1 turn after using the ability." },
+    passive: { name: "Veteran's Brace", desc: "After your blow, you give less away to what comes back." },
   },
   shadowbound: {
     role: "assassin / burst",
     primary: {
-      name: "Veil Step",
+      name: "Veil Cut",
       cadence: 3,
-      narrative: () => `**Veil Step** — You step into the shadow between moments. *Stealth* settles on you.`,
+      narrative: (dmg, leech) =>
+        `**Veil Cut** — Shadow carries the edge. **${dmg}** damage. You draw **${leech}** HP from the wound.`,
       effect: (stats, enemy) => {
-        return { dmg: 0, status_on_player: "stealth", status_duration: 2, skip_retaliation: true };
+        const dex = statMod(stats.dexterity);
+        const intm = Math.max(0, statMod(stats.intelligence ?? 10));
+        const dmg = rollDie(8) + dex + Math.max(0, Math.floor(intm / 2)) + 1;
+        const heal = Math.max(1, Math.floor(dmg * 0.16));
+        return { dmg, heal, wounded: heal, skip_retaliation: false };
       },
     },
     passive: { name: "Fade", desc: "First attack each combat has +10% crit chance (roll twice, take higher)." },
@@ -162,19 +182,141 @@ export const INSTINCT_DEFS = {
     primary: {
       name: "Stand Fast",
       cadence: 3,
-      narrative: () => `**Stand Fast** — You plant your feet. *Resolve* and *Taunt* — you absorb what comes.`,
-      effect: (stats, enemy) => {
+      narrative: (shieldVal) =>
+        `**Stand Fast** — You set shield and angle. A ward of **${shieldVal}** turns the next blows aside.`,
+      effect: (stats, enemy, state) => {
+        const maxHp = state.player_hp_max ?? 20;
+        const shieldVal = Math.max(3, Math.floor(maxHp * 0.1) + statMod(stats.constitution ?? 10));
         return {
           dmg: 0,
-          status_on_player: "resolve",
-          status_duration: 2,
-          status_on_enemy: "taunt",
-          status_duration_enemy: 1,
+          narrative_primary: shieldVal,
+          status_on_player: "shield",
+          status_duration_player: 2,
+          status_value: shieldVal,
           skip_retaliation: false,
         };
       },
     },
-    passive: { name: "Bulwark", desc: "+1 flat armor when below 50% HP." },
+    passive: { name: "Bulwark", desc: "Below half health, the mail remembers its duty—one less point finds you." },
+  },
+  pale_marked: {
+    role: "sustain / drain",
+    primary: {
+      name: "Siphon Burn",
+      cadence: 3,
+      narrative: (dmg, leech) =>
+        `**Siphon Burn** — Pale flame scores **${dmg}**. You pull **${leech}** HP back through the link.`,
+      effect: (stats) => {
+        const intm = Math.max(0, statMod(stats.intelligence ?? 10));
+        const dmg = rollDie(8) + intm + 1;
+        const heal = Math.max(1, Math.floor(dmg * 0.22));
+        return { dmg, heal, wounded: heal };
+      },
+    },
+    passive: { name: "Ash Wreath", desc: "What you take does not stay in the air." },
+  },
+  lifebinder: {
+    role: "support / ward",
+    primary: {
+      name: "Vital Thread",
+      cadence: 2,
+      narrative: (heal) =>
+        `**Vital Thread** — You knot life back into place. Recover **${heal}** HP. A ward steadies your skin.`,
+      effect: (stats, enemy, state) => {
+        const wis = statMod(stats.wisdom ?? 10);
+        const heal = rollDie(6) + rollDie(4) + wis + 1;
+        const maxHp = state.player_hp_max ?? 20;
+        const shieldVal = Math.max(2, Math.floor(maxHp * 0.12));
+        return {
+          heal,
+          dmg: 0,
+          status_on_player: "shield",
+          status_duration_player: 3,
+          status_value: shieldVal,
+        };
+      },
+    },
+    passive: { name: "Pulse", desc: "Life knotted tight is harder to pull loose." },
+  },
+  quickstep: {
+    role: "evasion / pressure",
+    primary: {
+      name: "Flow State",
+      cadence: 2,
+      narrative: (dmg) =>
+        `**Flow State** — A light cut for **${dmg}**; you are already elsewhere — *Untargetable* this beat.`,
+      effect: (stats) => {
+        const dex = statMod(stats.dexterity);
+        const dmg = rollDie(4) + dex + rollDie(4);
+        return {
+          dmg,
+          status_on_player: "untargetable",
+          status_duration_player: 1,
+          skip_retaliation: true,
+        };
+      },
+    },
+    passive: { name: "Rhythm", desc: "After your ability, their aim spoils for a moment." },
+  },
+  war_forged: {
+    role: "tactical / control",
+    primary: {
+      name: "Tactical Strike",
+      cadence: 3,
+      narrative: (dmg) =>
+        `**Tactical Strike** — Measured force finds the seam. **${dmg}** damage. They are *Weakened*.`,
+      effect: (stats) => {
+        const strMod = statMod(stats.strength);
+        const wis = statMod(stats.wisdom ?? 10);
+        const dmg = rollDie(8) + strMod + Math.max(0, Math.floor(wis / 2)) + 1;
+        return {
+          dmg,
+          status_on_enemy: "weakened",
+          status_duration_enemy: 2,
+        };
+      },
+    },
+    passive: { name: "Drill", desc: "They swing wide after you show them the seam." },
+  },
+  grave_whisper: {
+    role: "debuff / drain",
+    primary: {
+      name: "Death's Grasp",
+      cadence: 3,
+      narrative: (dmg, drain) =>
+        `**Death's Grasp** — The hollow takes **${dmg}**; sight frays. You pull **${drain}** HP from the slack.`,
+      effect: (stats) => {
+        const intm = Math.max(0, statMod(stats.intelligence ?? 10));
+        const dmg = rollDie(8) + intm + 1;
+        const heal = Math.max(1, Math.floor(dmg * 0.18));
+        return { dmg, heal, wounded: heal, status_on_enemy: "blind", status_duration_enemy: 1 };
+      },
+    },
+    passive: { name: "Hollow Touch", desc: "Your whispers find slack in their grip." },
+  },
+  sentinel: {
+    role: "defender / barrier",
+    primary: {
+      name: "Vigilant Guard",
+      cadence: 3,
+      narrative: (shieldVal) =>
+        `**Vigilant Guard** — You set the line. A barrier of **${shieldVal}**; they hesitate — *Weakened* for a moment.`,
+      effect: (stats, enemy, state) => {
+        const con = statMod(stats.constitution ?? 10);
+        const maxHp = state.player_hp_max ?? 20;
+        const shieldVal = Math.max(3, Math.floor(maxHp * 0.18) + con);
+        return {
+          dmg: 0,
+          narrative_primary: shieldVal,
+          status_on_player: "shield",
+          status_duration_player: 3,
+          status_value: shieldVal,
+          status_on_enemy: "weakened",
+          status_duration_enemy: 1,
+        };
+      },
+    },
+    passive: { name: "Watch", desc: "What you raise, they must reckon with first." },
   },
 };
 
@@ -213,12 +355,52 @@ export function resolvePlayerAction(stats, enemy, useAbility, instinct, state, u
     if (instinct === "ember_touched" && result.dmg != null) {
       result.dmg += eq.spell_power ?? 0;
     }
+    if (instinct === "pale_marked" && result.dmg != null) {
+      result.dmg += eq.spell_power ?? 0;
+      if (result.heal != null) {
+        result.heal = Math.max(1, Math.floor(result.dmg * 0.22));
+        result.heal += eq.healing_power ?? 0;
+        result.wounded = result.heal;
+      }
+    }
+    if (instinct === "grave_whisper" && result.dmg != null) {
+      result.dmg += eq.spell_power ?? 0;
+      if (result.heal != null) {
+        result.heal = Math.max(1, Math.floor(result.dmg * 0.18));
+        result.heal += eq.healing_power ?? 0;
+        result.wounded = result.heal;
+      }
+    }
+    if (instinct === "shadowbound" && result.dmg != null) {
+      result.dmg += (eq.melee_power ?? 0) + Math.floor((eq.spell_power ?? 0) / 2);
+      if (result.heal != null) {
+        result.heal = Math.max(1, Math.floor(result.dmg * 0.16));
+        result.heal += eq.healing_power ?? 0;
+        result.wounded = result.heal;
+      }
+    }
+    if (instinct === "streetcraft" && result.dmg != null) {
+      result.dmg += eq.melee_power ?? 0;
+    }
+    if (instinct === "ironblood" && result.dmg != null) {
+      result.dmg += eq.melee_power ?? 0;
+    }
+    if (instinct === "war_forged" && result.dmg != null) {
+      result.dmg += eq.melee_power ?? 0;
+    }
+    if (instinct === "quickstep" && result.dmg != null) {
+      result.dmg += eq.melee_power ?? 0;
+    }
     if (instinct === "hearthborn" && result.heal != null) {
       result.heal += eq.healing_power ?? 0;
     }
+    if (instinct === "lifebinder" && result.heal != null) {
+      result.heal += eq.healing_power ?? 0;
+    }
+    const narrativeArg0 = result.narrative_primary ?? result.dmg ?? result.heal;
     const narrative =
       typeof def.primary.narrative === "function"
-        ? def.primary.narrative(result.dmg ?? result.heal, result.wounded)
+        ? def.primary.narrative(narrativeArg0, result.wounded, result.narrative_tag)
         : def.primary.narrative;
     return { ...result, narrative, ability: true };
   }

@@ -64,6 +64,8 @@ export function createEmptyEquipmentLoadout() {
 }
 
 // ── Instinct gear affinities (bonuses/penalties by tag) ──────────────────────
+// Phase 1: tuned entries for six “root” instincts; same-guild alts use empty fallback until extended.
+// Phase 2 (TODO): add rows for pale_marked, lifebinder, quickstep, war_forged, grave_whisper, sentinel + new ids.
 export const INSTINCT_AFFINITIES = {
   ironblood: {
     tag_bonuses: {
