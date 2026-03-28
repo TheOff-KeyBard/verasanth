@@ -1279,7 +1279,6 @@ function computeArchetype(mercy, order, heat) {
 }
 
 // Alignment deltas [mercy, order]. Missing id → [0,0]. Not roster-length–dependent.
-// Phase 2 (TODO): add/tune rows for new instinct ids (and current gaps: pale_marked, lifebinder, quickstep, war_forged, grave_whisper, sentinel).
 const ALIGN_INSTINCT_BIAS = {
   hearthborn: [1, 0],
   ember_touched: [0, 0],
@@ -1287,6 +1286,12 @@ const ALIGN_INSTINCT_BIAS = {
   streetcraft: [0, -1],
   shadowbound: [-1, 0], // chaos-leaning
   warden: [1, 1], // moral + ordered
+  pale_marked: [0, -1], // ember family; inward/drain — order-resistant like streetcraft
+  lifebinder: [1, 0], // hearth family; mercy-leaning like hearthborn, less rigid order
+  quickstep: [0, -1], // street family; mirrors streetcraft
+  war_forged: [0, 1], // iron family; discipline / structure vs ironblood
+  grave_whisper: [-1, -1], // shadow-adjacent hollow echo; chaos- and order-resistant
+  sentinel: [1, 1], // warden family; moral + ordered like warden
 };
 
 async function updateAlignment(db, uid, mercyDelta, orderDelta, instinct = "") {

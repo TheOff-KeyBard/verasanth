@@ -700,7 +700,7 @@ function handleSerix(state, action, character, instinct) {
   const actions = ["observe", "interact", "deny", "center"];
   let s = { ...state };
   let message = "";
-  const shadowFamily = instinctGuildFamily(instinct) === "shadow";
+  const emberFamily = instinctGuildFamily(instinct) === "ember";
 
   function spawnEchoIfNeeded() {
     if (s.current_echo == null) {
@@ -710,7 +710,7 @@ function handleSerix(state, action, character, instinct) {
   }
 
   if (action === "observe") {
-    if (shadowFamily) {
+    if (emberFamily) {
       s.clarity = Math.min(100, (s.clarity ?? 50) + 10);
       message =
         "You hold still. The edges of the room refuse to agree with each other — but one line stays straight. You fix on it until the rest settles.";
@@ -723,7 +723,7 @@ function handleSerix(state, action, character, instinct) {
     spawnEchoIfNeeded();
     const echo = s.current_echo;
     const roll = rollDie(6);
-    if (shadowFamily || roll >= 4) {
+    if (emberFamily || roll >= 4) {
       s.truths_found = (s.truths_found ?? 0) + 1;
       s.current_echo = null;
       const echoNarr = {
@@ -741,7 +741,7 @@ function handleSerix(state, action, character, instinct) {
   } else if (action === "deny") {
     spawnEchoIfNeeded();
     const roll = rollDie(6);
-    if (shadowFamily || roll >= 4) {
+    if (emberFamily || roll >= 4) {
       s.current_echo = null;
       message =
         "You refuse it. Not with force — with a simple no the room cannot spend. The echo starves and lets go.";
@@ -751,7 +751,7 @@ function handleSerix(state, action, character, instinct) {
     }
   } else if (action === "center") {
     s.clarity = Math.min(100, (s.clarity ?? 50) + 15);
-    message = shadowFamily
+    message = emberFamily
       ? "You name the floor under you. Not the story of it — the weight. The hall stops borrowing your balance."
       : "You breathe until the room runs out of arguments. It does not forgive you — it waits.";
   } else {
