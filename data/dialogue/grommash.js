@@ -52,6 +52,19 @@ export const dialogue = {
       effects: null,
     },
     {
+      id: "grommash_clear_heat",
+      label: "I want to clear my record.",
+      requires_trust_min: 0,
+      requires_crime_heat_min: 2,
+      response: "You want this cleaned up.",
+      followup: {
+        label: "What will it take?",
+        response:
+          "That's going to cost you. And it doesn't erase what you did — it just means the city stops looking for you. For now.",
+      },
+      effects: null,
+    },
+    {
       id: "grommash_heat_source",
       label: "What's generating the heat in the cells? It doesn't feel like a furnace.",
       requires_trust_min: 20,

@@ -1166,7 +1166,8 @@ async function getPlayerSheet(db, uid) {
            c.intelligence, c.wisdom, c.charisma,
            c.stats_set, c.alignment_morality, c.alignment_order,
            c.ash_marks, c.ember_shards, c.soul_coins,
-           c.xp, c.class_stage, c.current_hp, c.upgrades
+           c.xp, c.class_stage, c.current_hp, c.upgrades,
+           c.last_crime_type, c.grommash_fine_last
     FROM players p
     LEFT JOIN characters c ON c.user_id=p.user_id
     WHERE p.user_id=?`, [uid]);
@@ -1329,7 +1330,8 @@ async function addCrimeHeat(db, uid, heat, crimeType, opts = {}) {
   if (!row) return;
   const newHeat = Math.min(20, (row.crime_heat || 0) + heat);
   const archetype = computeArchetype(row.alignment_morality || 0, row.alignment_order || 0, newHeat);
-  await dbRun(db, "UPDATE characters SET crime_heat=?, archetype=? WHERE user_id=?", [newHeat, archetype, uid]);
+  const typeStr = crimeType != null ? String(crimeType) : null;
+  await dbRun(db, "UPDATE characters SET crime_heat=?, archetype=?, last_crime_type=? WHERE user_id=?", [newHeat, archetype, typeStr, uid]);
   const now = Math.floor(Date.now() / 1000);
   await dbRun(db, `INSERT INTO crime_log (user_id, crime_type, heat_added, mercy_change, order_change, location, victim_id, created_at)
     VALUES (?,?,?,?,?,?,?,?)`, [uid, crimeType, heat, mercyChange, orderChange, location, victimId, now]);
@@ -1573,6 +1575,8 @@ async function initDb(db) {
     try { await dbRun(db, `ALTER TABLE characters ADD COLUMN archetype TEXT DEFAULT 'Survivor'`); } catch (_) {}
     try { await dbRun(db, `ALTER TABLE characters ADD COLUMN last_decay INTEGER`); } catch (_) {}
     try { await dbRun(db, `ALTER TABLE characters ADD COLUMN upgrades TEXT DEFAULT '{}'`); } catch (_) {}
+    try { await dbRun(db, `ALTER TABLE characters ADD COLUMN last_crime_type TEXT DEFAULT NULL`); } catch (_) {}
+    try { await dbRun(db, `ALTER TABLE characters ADD COLUMN grommash_fine_last INTEGER DEFAULT NULL`); } catch (_) {}
     await dbRun(db, `CREATE TABLE IF NOT EXISTS crime_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -1855,6 +1859,27 @@ async function getExitMapForMove(db, uid, row, fromLoc) {
   return exitMap;
 }
 
+/** Guild inner rooms: heat when entering without matching instinct family or guild standing ≥1. */
+const GUILD_TRESPASS_INNER = {
+  ashen_archive_hall: { faction: "ashen_archive", standingFlag: "guild_standing_vaelith" },
+  stone_watch_hall: { faction: "stone_watch", standingFlag: "guild_standing_rhyla" },
+  broken_banner_yard: { faction: "broken_banner", standingFlag: "guild_standing_garruk" },
+  quiet_sanctum_entrance: { faction: "quiet_sanctum", standingFlag: "guild_standing_halden" },
+  veil_market_hidden: { faction: "veil_market", standingFlag: "guild_standing_lirael" },
+  umbral_covenant_hall: { faction: "umbral_covenant", standingFlag: "guild_standing_serix" },
+};
+
+async function maybeApplyGuildTrespassHeat(db, uid, row, dest, opts = {}) {
+  if (opts.hubMove) return;
+  const cfg = GUILD_TRESPASS_INNER[dest];
+  if (!cfg) return;
+  const instinct = (row.instinct || "").toLowerCase();
+  if (instinctBelongsToFaction(instinct, cfg.faction)) return;
+  const standing = await getFlag(db, uid, cfg.standingFlag, 0);
+  if (standing >= 1) return;
+  await addCrimeHeat(db, uid, 1, "trespass", { location: dest });
+}
+
 async function processMoveTransition(db, uid, row, fromLoc, dest, directionUsed, opts = {}) {
   let encounterData = null;
   const skipNarrativeAndScene = opts.skipNarrativeAndScene ?? false;
@@ -1873,6 +1898,7 @@ async function processMoveTransition(db, uid, row, fromLoc, dest, directionUsed,
       }
 
       await dbRun(db, "UPDATE players SET location=? WHERE user_id=?", [dest, uid]);
+      await maybeApplyGuildTrespassHeat(db, uid, row, dest, opts);
       await setFlag(db, uid, "previous_location", encodePreviousLocation(fromLoc));
       let moveCount = await getFlag(db, uid, "move_count", 0);
       if (!skipMoveCount) {
@@ -2607,7 +2633,8 @@ if (path === "/api/character/reset" && method === "POST") {
   }
   await dbRun(db, "UPDATE players SET location=?, mercy_score=0, order_score=0, crime_heat=0, archetype='Survivor', last_decay=NULL WHERE user_id=?", ["tavern", targetUid]);
   await dbRun(db, `UPDATE characters SET instinct=NULL, strength=10, dexterity=10, constitution=10, intelligence=10, wisdom=10, charisma=10, stats_set=0,
-    alignment_morality=0, alignment_order=0, crime_heat=0, archetype='Survivor', last_decay=NULL, ash_marks=0, ember_shards=0, soul_coins=0, xp=0, class_stage=0, current_hp=NULL WHERE user_id=?`, [targetUid]);
+    alignment_morality=0, alignment_order=0, crime_heat=0, archetype='Survivor', last_decay=NULL, ash_marks=0, ember_shards=0, soul_coins=0, xp=0, class_stage=0, current_hp=NULL,
+    last_crime_type=NULL, grommash_fine_last=NULL WHERE user_id=?`, [targetUid]);
   await dbRun(db, "DELETE FROM crime_log WHERE user_id=?", [targetUid]);
   await dbRun(db, "UPDATE bounties SET status='expired' WHERE target_id=?", [targetUid]);
   await dbRun(db, "DELETE FROM sentences WHERE user_id=?", [targetUid]);
@@ -3667,6 +3694,7 @@ if (path === "/api/admin/command" && method === "POST") {
       if (!found) return json({ success: false, message: "You haven't found that place yet." });
 
       await dbRun(db, "UPDATE players SET location=? WHERE user_id=?", [target, uid]);
+      await maybeApplyGuildTrespassHeat(db, uid, row, target, {});
       await setFlag(db, uid, target === "market_square" ? "has_seen_market_square" : target === "crucible" ? "seen_crucible" : "visited_" + target, 1);
       if (target === "crucible") await setFlag(db, uid, "visited_crucible", 1);
 
@@ -4203,6 +4231,85 @@ The city knows.`,
         setGuildStanding,
       });
       return json(result);
+    }
+
+    // ── POST: Grommash fine (reduce heat; confirm via ?confirm=true or body.confirm) ──
+    if (path === "/api/grommash/fine" && method === "POST") {
+      const row = await getPlayerSheet(db, uid);
+      if (!row) return err("No character.", 404);
+      const atPost =
+        NPC_LOCATIONS.warden === row.location ||
+        (row.location === "cinder_cells_hall" && (row.crime_heat ?? 0) >= 4);
+      if (!atPost) return err("Grommash isn't here.", 400);
+
+      const crimeHeat = row.crime_heat ?? 0;
+      const lastFine = row.grommash_fine_last != null ? Number(row.grommash_fine_last) : null;
+      const now = Date.now();
+      const fourHoursMs = 4 * 60 * 60 * 1000;
+      if (lastFine != null && now - lastFine < fourHoursMs) {
+        return json({ message: "I already processed you once today. Come back tomorrow." });
+      }
+      if (crimeHeat >= 11) {
+        return json({ message: "I can't help you with this. You're past fines. The bounty has to resolve first." });
+      }
+      if (crimeHeat < 2) {
+        return json({ message: "You've got nothing on you worth my time." });
+      }
+
+      let cost;
+      let costLine;
+      if (crimeHeat <= 3) {
+        cost = 150;
+        costLine = "One fifty. Consider it a civic contribution.";
+      } else if (crimeHeat <= 6) {
+        cost = 400;
+        costLine = "Four hundred. You've been busy.";
+      } else {
+        cost = 900;
+        costLine = "Nine hundred. And you should think hard about whether the next one is worth it.";
+      }
+
+      const confirm =
+        url.searchParams.get("confirm") === "true" ||
+        body.confirm === true ||
+        body.confirm === "true";
+      if (!confirm) {
+        return json({ message: costLine });
+      }
+
+      const ash = Number(row.ash_marks ?? 0);
+      if (ash < cost) {
+        return json({ message: "You don't have it. Come back when you do." });
+      }
+
+      const newHeat = Math.max(0, crimeHeat - 2);
+      const archetype = computeArchetype(row.alignment_morality || 0, row.alignment_order || 0, newHeat);
+      await dbRun(
+        db,
+        "UPDATE characters SET ash_marks=ash_marks-?, crime_heat=?, archetype=?, grommash_fine_last=? WHERE user_id=?",
+        [cost, newHeat, archetype, now, uid],
+      );
+
+      const lastType = (row.last_crime_type || "").toLowerCase();
+      let doneMsg;
+      if (lastType === "murder") {
+        doneMsg = "Done. Someone's still dead, but the city's not looking for you.";
+      } else if (lastType === "theft") {
+        doneMsg = "Done. Theft. That's what started this — remember that.";
+      } else if (lastType === "fled_combat") {
+        doneMsg = "Done. Running from a fight you started. The city noticed.";
+      } else if (lastType === "trespass") {
+        doneMsg = "Done. Stay out of places you're not supposed to be.";
+      } else {
+        doneMsg = "Done. Try not to make this a habit.";
+      }
+
+      return json({
+        ok: true,
+        message: doneMsg,
+        ash_marks: ash - cost,
+        crime_heat: newHeat,
+      });
     }
 
     // ── GET/POST: Authored NPC dialogue (Phase A) ──
@@ -5645,6 +5752,7 @@ if (path === "/api/combat/state" && method === "GET") {
         weapon_die: weaponDie, armor_reduction: armorReduction, shield_bonus: shieldBonus,
         enemy_staggered: false, status_effects: [], trait_state: {},
         armor_break_effects: [], active_buffs: [],
+        player_initiated: true,
       };
       await decrementCombatBuffs(db, uid, row.location);
       await dbRun(db, "INSERT INTO combat_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json",
@@ -5674,6 +5782,9 @@ if (path === "/api/combat/state" && method === "GET") {
       if (!enemy) return err("Combat state invalid. Flee to reset.");
 
       if (action === "flee") {
+        if (state.player_initiated === true) {
+          await addCrimeHeat(db, uid, 1, "fled_combat", { location: row.location });
+        }
         try {
           await dbRun(db, "DELETE FROM combat_state WHERE user_id=?", [uid]);
         } catch {}
@@ -6478,6 +6589,26 @@ Something about the room has changed.`;
       const entry = stock.find(s => s.id === item_id);
       if (!entry) return err("Item not in stock.", 404);
 
+      if (body.steal === true) {
+        const specPropSteal = entry.stats ? JSON.stringify(entry.stats) : null;
+        const invSteal = await dbGet(db, "SELECT item,qty FROM inventory WHERE user_id=? AND item=?", [uid, item_id]);
+        if (invSteal) {
+          await dbRun(db, "UPDATE inventory SET qty=qty+1, tier=?, display_name=?, special_property=? WHERE user_id=? AND item=?",
+            [entry.tier || 1, entry.display_name, specPropSteal, uid, item_id]);
+        } else {
+          await dbRun(db, `INSERT INTO inventory (user_id, item, qty, tier, corrupted, curse, curse_identified, special_property, display_name)
+            VALUES (?, ?, 1, ?, 0, NULL, 0, ?, ?)`,
+            [uid, item_id, entry.tier || 1, specPropSteal, entry.display_name]);
+        }
+        await addCrimeHeat(db, uid, 2, "theft", { location: row.location });
+        return json({
+          ok: true,
+          stolen: true,
+          message: `*You palm ${entry.display_name} before anyone counts straight.*`,
+          ash_marks: Number(row.ash_marks ?? 0),
+        });
+      }
+
       const ash = Number(row.ash_marks ?? 0);
       if (ash < entry.price) return err(`You need ${entry.price} Ash Marks. You have ${ash}.`, 400);
 
@@ -6551,6 +6682,23 @@ Something about the room has changed.`;
       if (!items) return err("Unknown vendor.", 404);
       const entry = items.find((s) => s.id === item_id);
       if (!entry) return err("Item not in stock.", 404);
+
+      if (body.steal === true) {
+        const invSteal = await dbGet(db, "SELECT item,qty FROM inventory WHERE user_id=? AND item=?", [uid, item_id]);
+        if (invSteal) {
+          await dbRun(db, "UPDATE inventory SET qty=qty+1 WHERE user_id=? AND item=?", [uid, item_id]);
+        } else {
+          await dbRun(db, "INSERT INTO inventory (user_id, item, qty, display_name) VALUES (?, ?, 1, ?)", [uid, item_id, entry.name]);
+        }
+        await addCrimeHeat(db, uid, 2, "theft", { location: row.location });
+        return json({
+          ok: true,
+          stolen: true,
+          message: `*You palm ${entry.name} before anyone counts straight.*`,
+          new_balance: Number(row.ash_marks ?? 0),
+        });
+      }
+
       const ash = Number(row.ash_marks ?? 0);
       if (ash < entry.price) return err(`You need ${entry.price} Ash Marks. You have ${ash}.`, 400);
       await dbRun(db, "UPDATE characters SET ash_marks=ash_marks-? WHERE user_id=?", [entry.price, uid]);
