@@ -2435,7 +2435,23 @@
     font-weight: normal;
     overflow-wrap: break-word;
   }
-  .tw-race-card.selected .tw-race-desc {
+  .tw-race-card .tw-race-visual {
+    display: none;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(196, 98, 42, 0.22);
+    font-size: 0.74rem;
+    line-height: 1.5;
+    color: var(--text-dim);
+    opacity: 0.82;
+    font-weight: normal;
+    font-style: italic;
+    overflow-wrap: break-word;
+  }
+  .tw-race-card:hover .tw-race-desc,
+  .tw-race-card.selected .tw-race-desc,
+  .tw-race-card:hover .tw-race-visual,
+  .tw-race-card.selected .tw-race-visual {
     display: block;
   }
   .tw-race-card:hover, .tw-instinct-card:hover {
@@ -5290,7 +5306,8 @@ async function showTrueWelcome() {
     btn.type = 'button';
     btn.className = 'tw-race-card' + (twSelectedRace === id ? ' selected' : '');
     const desc = def.description ? '<span class="tw-race-desc">' + escapeHtml(def.description) + '</span>' : '';
-    btn.innerHTML = '<strong>' + escapeHtml(def.name || id) + '</strong><br><span class="tw-stat-mods">' + formatStatMods(def.stat_mods) + '</span>' + desc;
+    const visual = def.visual_description ? '<span class="tw-race-visual" role="note">' + escapeHtml(def.visual_description) + '</span>' : '';
+    btn.innerHTML = '<strong>' + escapeHtml(def.name || id) + '</strong><br><span class="tw-stat-mods">' + formatStatMods(def.stat_mods) + '</span>' + desc + visual;
     btn.onclick = () => {
       twSelectedRace = id;
       twSelectedInstinct = '';
