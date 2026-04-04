@@ -4,6 +4,7 @@
  */
 
 import { MAP_DATA, LOCATION_TO_MAP, RENDER_UNDISCOVERED_NODES } from "../data/maps.js";
+import { formatId } from "./format_id.js";
 
 let _lastRenderedDiscovered = new Set();
 
@@ -163,7 +164,8 @@ export function updateSidebarMap(currentRoomId, discoveredLocations, locationNam
   if (!mapDef) {
     svgEl.innerHTML = "";
     svgEl.setAttribute("viewBox", "0 0 200 200");
-    locationLabel.textContent = locationNamesMap[currentRoomId] || currentRoomId || "Unknown Location";
+    locationLabel.textContent =
+      locationNamesMap[currentRoomId] || formatId(currentRoomId) || "Unknown Location";
     mapSubtitle.textContent = "Map Unavailable";
     return;
   }
@@ -181,7 +183,28 @@ export function updateSidebarMap(currentRoomId, discoveredLocations, locationNam
   }
 
   svgEl.innerHTML = "";
-  svgEl.setAttribute("viewBox", mapDef.viewBox || "0 0 200 200");
+  const defaultVB = mapDef.viewBox || "0 0 300 280";
+  svgEl.setAttribute("viewBox", defaultVB);
+
+  if (!svgEl.dataset.zoomBound) {
+    svgEl.dataset.zoomBound = "1";
+    svgEl.addEventListener(
+      "wheel",
+      function (e) {
+        e.preventDefault();
+        const vbStr = svgEl.getAttribute("viewBox") || defaultVB;
+        const parts = vbStr.split(" ").map(Number);
+        const [x, y, w, h] = parts;
+        const factor = e.deltaY > 0 ? 1.15 : 0.87;
+        const cx = x + w / 2;
+        const cy = y + h / 2;
+        const newW = Math.max(60, Math.min(500, w * factor));
+        const newH = Math.max(60, Math.min(500, h * factor));
+        svgEl.setAttribute("viewBox", [cx - newW / 2, cy - newH / 2, newW, newH].join(" "));
+      },
+      { passive: false },
+    );
+  }
 
   const nodes = mapDef.nodes || {};
   const links = mapDef.links || [];
@@ -224,7 +247,7 @@ export function updateSidebarMap(currentRoomId, discoveredLocations, locationNam
     if (isNewlyDiscovered) newlyDiscovered.add(nodeId);
     let cls = buildNodeClass(meta, isCurrent, isDiscovered, isAdjacent);
     if (isNewlyDiscovered) cls += " node-newly-discovered";
-    const label = locationNamesMap[nodeId] || meta?.label || nodeId;
+    const label = locationNamesMap[nodeId] || meta?.label || formatId(nodeId);
     const showLabel = isCurrent || isDiscovered;
     const el = createNodeElement(meta, cls, label, nodeId, {
       isCurrent,
@@ -256,7 +279,11 @@ export function updateSidebarMap(currentRoomId, discoveredLocations, locationNam
     }, 700);
   }
 
-  locationLabel.textContent = locationNamesMap[currentRoomId] || nodes[currentRoomId]?.label || currentRoomId || "Unknown Location";
+  locationLabel.textContent =
+    locationNamesMap[currentRoomId] ||
+    nodes[currentRoomId]?.label ||
+    formatId(currentRoomId) ||
+    "Unknown Location";
   mapSubtitle.textContent = mapDef.label || "Unknown Region";
 
   if (mapDistrictLabel) {

@@ -4399,7 +4399,26 @@ const LOCATION_NAMES = {
   cinder_cells_block: "The Cell Block",
   cinder_cells_pit: "The Holding Pit",
 };
-function getLocationName(id) { return LOCATION_NAMES[id] || id || "—"; }
+
+function formatId(str) {
+  if (!str) return '';
+  return str.split('_').map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(' ');
+}
+
+function getLocationName(id) {
+  if (!id) return '—';
+  return locationNamesMap[id] || LOCATION_NAMES[id] || formatId(id) || '—';
+}
+
+function displayNpcName(npcId) {
+  if (!npcId) return '';
+  return NPC_NAMES[npcId] || formatId(npcId);
+}
+
+function displayLocationLabel(locId) {
+  if (!locId) return '—';
+  return locationNamesMap[locId] || LOCATION_NAMES[locId] || formatId(locId) || '—';
+}
 
 // Sewer floors (mirrors backend SEWER_LEVEL_* / SEWER_LOCATIONS)
 const SEWER_LEVEL_1 = ['drain_entrance', 'overflow_channel', 'broken_pipe_room', 'vermin_nest', 'workers_alcove', 'rusted_gate'];
@@ -4484,7 +4503,7 @@ function updateContextPanel(data) {
 
   if (combatState || room.in_combat) {
     const cs = combatState || room;
-    const nameRaw = cs.enemy_name || cs.enemy_id || '';
+    const nameRaw = cs.enemy_name || (cs.enemy_id ? formatId(cs.enemy_id) : '') || '';
     const eHp = cs.enemy_hp;
     const eMax = cs.enemy_hp_max;
     let body = '';
@@ -4752,7 +4771,7 @@ function npcRaceDisplayLabel(npcId) {
 function setTradeHeaderContext(npcId) {
   const sub = document.getElementById("trade-subtitle");
   if (!sub) return;
-  const name = NPC_NAMES[npcId];
+  const name = displayNpcName(npcId);
   const race = npcRaceDisplayLabel(npcId);
   const line = [name, race].filter(Boolean).join(" · ");
   sub.textContent = line;
@@ -4796,11 +4815,29 @@ const NPC_NAMES = {
   othorion:    'Othorion Naxir',
   warden:      'Grommash Nazgrel',
   vaelith:     'Vaelith Xyrelle',
+  ember_touched_adept: 'Ember-Touched Adept',
+  pale_marked_survivor: 'Pale-Marked Survivor',
+  archive_initiate: 'Archive Initiate',
   garruk:      'Garruk Stonehide',
+  ironblood_veteran: 'Ironblood Veteran',
+  war_forged_bruiser: 'War-Forged Bruiser',
+  banner_recruit: 'Banner Recruit',
   halden:      'Brother Halden Marr',
+  hearth_tender: 'Hearth Tender',
+  lifebinder_adherent: 'Lifebinder Adherent',
+  sanctum_newcomer: 'Sanctum Newcomer',
   lirael:      'Lirael Quickstep',
+  streetcraft_operative: 'Streetcraft Operative',
+  quickstep_runner: 'Quickstep Runner',
+  market_initiate: 'Market Initiate',
   serix:       'Serix Vaunt',
+  shadowbound_adept: 'Covenant Adept',
+  grave_whisper_adherent: 'Grave-Whisper Adherent',
+  covenant_initiate: 'Covenant Initiate',
   rhyla:       'Rhyla Thornshield',
+  stone_watch_defender: 'Stone Watch Defender',
+  stone_watch_sentinel: 'Stone Watch Sentinel',
+  watch_initiate: 'Watch Initiate',
 };
 
 const TOPIC_LABELS = {
@@ -6840,8 +6877,11 @@ function updateCharPanel(c) {
   }
   document.getElementById('hp-text').textContent          = `${hp} / ${maxHp}`;
   document.getElementById('hp-bar-fill').style.width      = pctStr;
-  document.getElementById('header-sub').textContent       = c.location || '';
-  document.getElementById('footer-loc').textContent        = c.location || '';
+  {
+    const locLine = displayLocationLabel(c.location);
+    document.getElementById('header-sub').textContent = locLine;
+    document.getElementById('footer-loc').textContent = locLine;
+  }
 
   const cityLine = document.getElementById('city-presence-line');
   if (cityLine) {
@@ -6939,7 +6979,7 @@ const EQUIPMENT_SLOT_LABELS = {
 const EQUIPMENT_SLOT_ORDER = ['weapon_main','weapon_offhand','head','chest','hands','legs','feet','cloak','ring_1','ring_2','charm','relic'];
 
 function formatEquipmentSlotName(slot) {
-  return EQUIPMENT_SLOT_LABELS[slot] || (slot ? slot.replace(/_/g, ' ') : '');
+  return EQUIPMENT_SLOT_LABELS[slot] || (slot ? formatId(slot) : '');
 }
 
 function htmlEquippedSlotRows(equipment, idToName, offhandLocked, dualWield) {
@@ -7010,7 +7050,7 @@ function renderSlideEquippedSection(container, equipment, idToName, offhandLocke
     row.className = 'inv-slot-row inv-slot-row--slide';
     const lab = document.createElement('span');
     lab.className = 'inv-slot-label';
-    lab.textContent = (EQUIPMENT_SLOT_LABELS[slot] || slot) + ':';
+    lab.textContent = (EQUIPMENT_SLOT_LABELS[slot] || formatId(slot)) + ':';
     const valCell = document.createElement('span');
     valCell.className = 'inv-slot-value';
     if (slot === 'weapon_offhand' && offhandLocked) {
@@ -7021,7 +7061,7 @@ function renderSlideEquippedSection(container, equipment, idToName, offhandLocke
       return;
     }
     const itemId = equipment[slot];
-    const nm = itemId ? (idToName[itemId] || itemId) : '';
+    const nm = itemId ? (idToName[itemId] || formatId(itemId)) : '';
     valCell.textContent = '';
     if (nm) valCell.appendChild(document.createTextNode(nm));
     else valCell.textContent = '—';
@@ -7080,7 +7120,7 @@ async function openItemCompare(item) {
   const overlay = document.getElementById('item-compare-overlay');
   overlay.style.display = 'flex';
 
-  document.getElementById('compare-candidate-name').textContent = item.display_name || item.id;
+  document.getElementById('compare-candidate-name').textContent = item.display_name || (item.id ? formatId(item.id) : '');
   document.getElementById('compare-title').textContent =
     'Compare — ' + formatEquipmentSlotName(item.slot);
 
@@ -7290,7 +7330,7 @@ function updateInventory(invData) {
         b.textContent = '·';
         const t = document.createElement('span');
         t.className = 'inv-inventory-text';
-        t.textContent = (it.display_name || it.id) + (it.qty > 1 ? ' ×' + it.qty : '');
+        t.textContent = (it.display_name || (it.id ? formatId(it.id) : '')) + (it.qty > 1 ? ' ×' + it.qty : '');
         d.appendChild(b);
         d.appendChild(t);
         mInvList.appendChild(d);
@@ -7301,7 +7341,7 @@ function updateInventory(invData) {
 
 // ── Node map (fog of war: only visited locations, current pulses) ──
 function shortName(locId) {
-  const name = locationNamesMap[locId] || LOCATION_NAMES[locId] || locId;
+  const name = locationNamesMap[locId] || LOCATION_NAMES[locId] || formatId(locId);
   const words = String(name).split(/\s+/);
   if (words.length >= 2) return words.slice(0, 2).join(' ');
   return name.length > 14 ? name.slice(0, 12) + '…' : name;
@@ -7481,7 +7521,7 @@ async function submitNarrativeEncounterChoice(choiceIndex) {
 }
 
 function renderRoom(data) {
-  document.getElementById('room-name').textContent = data.name || '—';
+  document.getElementById('room-name').textContent = data.name || displayLocationLabel(data.location) || '—';
   renderHazardWarning(data.hazard || null);
   renderConditionIndicator(data.active_condition || null);
   currentWardenActive = !!(data.warden_active ?? currentWardenActive);
@@ -7489,7 +7529,7 @@ function renderRoom(data) {
   renderWardenIndicator(currentWardenActive);
   document.getElementById('room-desc').innerHTML   = render(data.description || '');
   const district = data.district || '';
-  const locationText = district ? (data.name || '—') + ' — ' + district : (data.name || data.location || '—');
+  const locationText = district ? (data.name || '—') + ' — ' + district : (data.name || displayLocationLabel(data.location) || '—');
   document.getElementById('footer-loc').textContent = locationText;
   document.getElementById('header-sub').textContent = locationText;
 
@@ -7516,14 +7556,23 @@ function renderRoom(data) {
   }
 
   function buildFlatTravelExits() {
-    if (exits.length && exits.every(function(e) { return typeof e === 'string'; })) {
-      return exits.map(function(dir) {
+    let rawExits;
+    if (exits.length && exits.every(function (e) { return typeof e === 'string'; })) {
+      rawExits = exits.map(function (dir) {
         const dest = exitMap[dir];
         const label = (locationNamesMap[dest] || LOCATION_NAMES[dest] || dest || dir).trim();
         return { direction: dir, target: dest, label: label, type: 'travel' };
       });
+    } else {
+      rawExits = exits.filter(function (e) { return e && typeof e === 'object'; });
     }
-    return exits.filter(function(e) { return e && typeof e === 'object'; });
+    const seenTargets = new Set();
+    return rawExits.filter(function (ex) {
+      const key = ex.target || ex.direction || ex.label;
+      if (seenTargets.has(key)) return false;
+      seenTargets.add(key);
+      return true;
+    });
   }
 
   function makeExitButton(ex) {
@@ -7533,8 +7582,8 @@ function renderRoom(data) {
     const b = document.createElement('button');
     b.className = 'btn exit-btn travel-btn' + (dangerous ? ' exit-btn--danger' : '');
     const arrow = dir ? (DIRECTION_ARROWS[dir] || '') : '';
-    const dlab = DIRECTION_LABEL[dir] || dir;
-    const destName = ex.label || dest || dir;
+    const dlab = DIRECTION_LABEL[dir] || (dir ? formatId(String(dir)) : '');
+    const destName = ex.label || (dest ? formatId(dest) : '') || dlab;
     if (currentWardenActive) {
       b.textContent = '→ Run ' + (dir || destName);
     } else {
@@ -7611,8 +7660,9 @@ function renderRoom(data) {
     } else if (compassWrap) {
       compassWrap.style.display = 'none';
     }
-    extras.forEach(function(ex) { travelRow.appendChild(makeExitButton(ex)); });
-    if (!hasCompass) {
+    if (hasCompass) {
+      extras.forEach(function(ex) { travelRow.appendChild(makeExitButton(ex)); });
+    } else {
       travelOnly.forEach(function(ex) { travelRow.appendChild(makeExitButton(ex)); });
     }
     document.getElementById('travel-section').style.display = (hasCompass || travelOnly.length) ? '' : 'none';
@@ -7679,13 +7729,15 @@ function renderRoom(data) {
     } else if (compassWrap) {
       compassWrap.style.display = 'none';
     }
-    extras.forEach(function(ex) { travelRow.appendChild(makeExitButton(ex)); });
-    if (!hasCompass) {
+    if (hasCompass) {
+      extras.forEach(function(ex) { travelRow.appendChild(makeExitButton(ex)); });
+    } else {
       travelExits.forEach(function(ex) {
         const b = document.createElement('button');
         b.className = 'btn exit-btn travel-btn';
         const arrow = ex.direction ? (DIRECTION_ARROWS[ex.direction] || '') : '';
-        b.textContent = currentWardenActive ? ('→ Run ' + (ex.direction || ex.target)) : ((arrow ? arrow + ' ' : '') + (ex.label || ex.target));
+        const destDisp = ex.label || (ex.target ? formatId(ex.target) : '') || ex.direction || '';
+        b.textContent = currentWardenActive ? ('→ Run ' + (ex.direction || ex.target)) : ((arrow ? arrow + ' ' : '') + destDisp);
         const dest = ex.target;
         const dangerous = dest && DANGEROUS_LOCATIONS.has(dest);
         if (dangerous && !currentWardenActive) { b.className += ' exit-btn--danger'; b.textContent += ' ⚠'; }
@@ -7699,7 +7751,7 @@ function renderRoom(data) {
     enterExits.forEach(function(exit) {
       const b = document.createElement('button');
       b.className = 'btn exit-btn enter-btn';
-      b.textContent = exit.label || exit.target;
+      b.textContent = exit.label || (exit.target ? formatId(exit.target) : '') || '';
       const dest = exit.target;
       const dangerous = dest && DANGEROUS_LOCATIONS.has(dest);
       if (dangerous) { b.className += ' exit-btn--danger'; b.textContent += ' ⚠'; }
@@ -7740,7 +7792,7 @@ function renderRoom(data) {
     objects.forEach(obj => {
       const b = document.createElement('button');
       b.className = 'btn';
-      b.textContent = obj.replace(/_/g,' ');
+      b.textContent = formatId(obj);
       b.onclick = () => doInspect(obj);
       objRow.appendChild(b);
     });
@@ -7757,7 +7809,7 @@ function renderRoom(data) {
     npcs.forEach(npc => {
       const b = document.createElement('button');
       b.className = 'btn npc-btn';
-      b.textContent = NPC_NAMES[npc] || npc;
+      b.textContent = NPC_NAMES[npc] || formatId(npc);
       b.onclick = () => openDialogue(npc);
       npcRow.appendChild(b);
     });
@@ -7774,7 +7826,7 @@ function renderRoom(data) {
     items.forEach(item => {
       const b = document.createElement('button');
       b.className = 'btn';
-      b.textContent = item;
+      b.textContent = formatId(item);
       itemRow.appendChild(b);
     });
     document.getElementById('items-section').style.display = '';
@@ -8367,7 +8419,7 @@ async function openDialogue(npcId) {
   currentNPC = npcId;
   dialogueMoreTopicsOpen = false;
   dialogueSuggestedExpanded = false;
-  document.getElementById('dialogue-npc-name').textContent = NPC_NAMES[npcId] || npcId;
+  document.getElementById('dialogue-npc-name').textContent = displayNpcName(npcId);
   const npcRaceEl = document.getElementById('dialogue-npc-race');
   if (npcRaceEl) {
     const rl = npcRaceDisplayLabel(npcId);
@@ -8972,7 +9024,7 @@ function showCombat(data, isBoss) {
   overlay.classList.add('open');
   if (isBoss) overlay.classList.add('boss-encounter');
   else overlay.classList.remove('boss-encounter');
-  document.getElementById('combat-enemy-name').textContent = data.enemy_name || data.enemy_id || 'Enemy';
+  document.getElementById('combat-enemy-name').textContent = data.enemy_name || (data.enemy_id ? formatId(data.enemy_id) : '') || 'Enemy';
   updateCombatBars(data.player_hp, playerMaxHp, data.enemy_hp, data.enemy_hp);
   updateStatusDisplay(data.statuses ?? {}, data.enemy_statuses ?? {}, data.active_buffs);
   updateCombatActionButtons(data.ability_cooldown ?? 0, false, data.ability_used ?? false);
@@ -9352,7 +9404,7 @@ async function selectUpgrade(upgradeId) {
   try {
     const data = await POST('/api/character/upgrade', { slot: 'level_5', upgrade_id: upgradeId });
     document.getElementById('upgrade-overlay').style.display = 'none';
-    const name = (window.LEVEL_5_UPGRADES || {})[upgradeId]?.display_name || upgradeId;
+    const name = (window.LEVEL_5_UPGRADES || {})[upgradeId]?.display_name || formatId(upgradeId);
     log(`<strong>${escapeHtml(name)}</strong> — learned.`);
     invalidateSheetCache();
     refreshSidebar();
