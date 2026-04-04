@@ -4267,8 +4267,10 @@
 <script type="module">
   import { updateSidebarMap } from './services/map_renderer.js';
   import { LEVEL_5_UPGRADES } from './data/upgrades.js';
+  import { ITEM_DATA } from './data/items.js';
   window.updateSidebarMap = updateSidebarMap;
   window.LEVEL_5_UPGRADES = LEVEL_5_UPGRADES;
+  window.ITEM_DATA = ITEM_DATA;
 </script>
 <script>
 // ── Config ───────────────────────────────────────────────────────
@@ -4403,6 +4405,14 @@ const LOCATION_NAMES = {
 function formatId(str) {
   if (!str) return '';
   return str.split('_').map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(' ');
+}
+
+function formatItemName(str) {
+  if (!str || str === '—') return str;
+  const data = window.ITEM_DATA && window.ITEM_DATA[str];
+  const fromData = data && (data.display_name || data.name);
+  if (fromData) return fromData;
+  return formatId(str);
 }
 
 function getLocationName(id) {
@@ -6991,7 +7001,7 @@ function htmlEquippedSlotRows(equipment, idToName, offhandLocked, dualWield) {
       valueHtml = '<span class="inv-offhand-locked" title="Locked by two-handed weapon">—</span>';
     } else {
       const itemId = equipment[slot];
-      const nm = itemId ? idToName[itemId] : '';
+      const nm = itemId ? (idToName[itemId] || formatItemName(itemId)) : '';
       valueHtml = nm ? escapeHtml(nm) : '—';
       if (dualWield && slot === 'weapon_offhand' && itemId) {
         valueHtml += ' <span class="inv-dual-wield-ind">⚔ Dual Wield</span>';
@@ -7017,17 +7027,17 @@ function htmlInventoryReadOnlyLines(inv) {
   const details = inv.itemDetails || [];
   const items = inv.items || [];
   const idToName = {};
-  details.forEach(it => { idToName[it.id] = it.display_name || it.id; });
+  details.forEach(it => { idToName[it.id] = it.display_name || formatItemName(it.id); });
   const lines = [];
   if (details.length) {
     details.filter(it => !it.equipped).forEach(it => {
-      const nm = escapeHtml(it.display_name || it.id);
+      const nm = escapeHtml(it.display_name || formatItemName(it.id));
       const q = it.qty > 1 ? ' ×' + it.qty : '';
       lines.push('<div class="inv-inventory-line"><span class="inv-inventory-bullet">·</span><span class="inv-inventory-text">' + nm + q + '</span></div>');
     });
   } else if (items.length) {
     items.filter(id => !equippedIds.has(id)).forEach(id => {
-      lines.push('<div class="inv-inventory-line"><span class="inv-inventory-bullet">·</span><span class="inv-inventory-text">' + escapeHtml(idToName[id] || id) + '</span></div>');
+      lines.push('<div class="inv-inventory-line"><span class="inv-inventory-bullet">·</span><span class="inv-inventory-text">' + escapeHtml(idToName[id] || formatItemName(id)) + '</span></div>');
     });
   }
   if (!lines.length) return '<div class="inv-inventory-empty">—</div>';
@@ -7061,7 +7071,7 @@ function renderSlideEquippedSection(container, equipment, idToName, offhandLocke
       return;
     }
     const itemId = equipment[slot];
-    const nm = itemId ? (idToName[itemId] || formatId(itemId)) : '';
+    const nm = itemId ? (idToName[itemId] || formatItemName(itemId)) : '';
     valCell.textContent = '';
     if (nm) valCell.appendChild(document.createTextNode(nm));
     else valCell.textContent = '—';
@@ -7120,7 +7130,8 @@ async function openItemCompare(item) {
   const overlay = document.getElementById('item-compare-overlay');
   overlay.style.display = 'flex';
 
-  document.getElementById('compare-candidate-name').textContent = item.display_name || (item.id ? formatId(item.id) : '');
+  document.getElementById('compare-candidate-name').textContent =
+    item.display_name || (item.id ? formatItemName(item.id) : '');
   document.getElementById('compare-title').textContent =
     'Compare — ' + formatEquipmentSlotName(item.slot);
 
@@ -7131,12 +7142,12 @@ async function openItemCompare(item) {
 
   const currentItem = equipped[item.slot] || null;
   document.getElementById('compare-current-name').textContent =
-    currentItem ? currentItem.name : '— empty —';
+    currentItem ? (currentItem.name || formatItemName(currentItem.item_id)) : '— empty —';
 
   renderCompareStats('compare-current-stats', currentItem);
   renderCompareStats('compare-candidate-stats', {
     stat_modifiers: item.stat_modifiers || {},
-    name: item.display_name || item.id,
+    name: item.display_name || formatItemName(item.id),
   });
   renderCompareDeltas(currentItem, item, currentStats);
   renderCompareAffinity(item);
@@ -7245,7 +7256,7 @@ function updateInventory(invData) {
   const offhandLocked = !!invData?.offhand_locked;
   const dualWield = !!invData?.dual_wield;
   const idToName = {};
-  itemDetails.forEach(it => { idToName[it.id] = it.display_name || it.id; });
+  itemDetails.forEach(it => { idToName[it.id] = it.display_name || formatItemName(it.id); });
   renderSlideEquippedSection(loadoutEl, equipment, idToName, offhandLocked, dualWield, itemDetails);
   const packItems = itemDetails.filter(it => !it.equipped);
   el.innerHTML = '';
@@ -7263,7 +7274,7 @@ function updateInventory(invData) {
       if (it.affinity_marker === '↓') return `<span class="inv-affinity-marker inv-affinity-penalty"${t}>↓</span> `;
       return `<span class="inv-affinity-marker"${t}><span class="inv-affinity-bonus">✦</span><span class="inv-affinity-penalty">↓</span></span> `;
     })();
-    const label = affinityPrefix + escapeHtml(it.display_name || it.id) + (it.qty > 1 ? ' x' + it.qty : '');
+    const label = affinityPrefix + escapeHtml(it.display_name || formatItemName(it.id)) + (it.qty > 1 ? ' x' + it.qty : '');
     const effectLine = it.effect_summary ? `<div class="inv-effect-summary">${escapeHtml(it.effect_summary)}</div>` : '';
     const loreLine = (it.id === 'ashbound_resonance' && it.lore) ? `<div class="inv-resonance-lore">${escapeHtml(it.lore)}</div>` : '';
     const valueLine = (it.item_type === 'loot' && it.value_am > 0 && !it.unsellable) ? `<span class="inv-value">${it.value_am} AM</span>` : '';
@@ -7330,7 +7341,7 @@ function updateInventory(invData) {
         b.textContent = '·';
         const t = document.createElement('span');
         t.className = 'inv-inventory-text';
-        t.textContent = (it.display_name || (it.id ? formatId(it.id) : '')) + (it.qty > 1 ? ' ×' + it.qty : '');
+        t.textContent = (it.display_name || (it.id ? formatItemName(it.id) : '')) + (it.qty > 1 ? ' ×' + it.qty : '');
         d.appendChild(b);
         d.appendChild(t);
         mInvList.appendChild(d);
@@ -7826,7 +7837,7 @@ function renderRoom(data) {
     items.forEach(item => {
       const b = document.createElement('button');
       b.className = 'btn';
-      b.textContent = formatId(item);
+      b.textContent = formatItemName(item);
       itemRow.appendChild(b);
     });
     document.getElementById('items-section').style.display = '';
@@ -8877,7 +8888,7 @@ function openHiddenLoreModal(npcId, svc) {
     items.forEach(it => {
       const btn = document.createElement('button');
       btn.className = 'btn es-btn';
-      btn.textContent = it.name || it.id;
+      btn.textContent = it.name || formatItemName(it.id);
       btn.onclick = () => useESService('hidden_lore', npcId, { item_id: it.id });
       content.appendChild(btn);
     });
@@ -8907,7 +8918,7 @@ async function openTradeBuy(npcId) {
     items.forEach(entry => {
       const b = document.createElement('button');
       b.className = 'trade-item';
-      const name = entry.name || entry.display_name || entry.id;
+      const name = entry.name || entry.display_name || formatItemName(entry.id);
       b.innerHTML = escapeHtml(name) + ' <span class="price">' + (entry.price ?? 0) + ' AM</span>';
       b.onclick = () => confirmTradeBuy({ ...entry, id: entry.id, display_name: name, price: entry.price });
       list.appendChild(b);
@@ -8938,7 +8949,7 @@ async function openTradeSell(npcId) {
       if (price == null) return;
       const b = document.createElement('button');
       b.className = 'trade-item';
-      b.innerHTML = escapeHtml(it.display_name) + (it.qty > 1 ? ' x' + it.qty : '') + ' <span class="price">' + price + ' AM</span>';
+      b.innerHTML = escapeHtml(it.display_name || formatItemName(it.id)) + (it.qty > 1 ? ' x' + it.qty : '') + ' <span class="price">' + price + ' AM</span>';
       b.onclick = () => confirmTradeSell(it, price);
       list.appendChild(b);
     });
@@ -8950,7 +8961,7 @@ async function openTradeSell(npcId) {
 
 function confirmTradeBuy(entry) {
   tradeState.pendingItem = entry;
-  document.getElementById('trade-confirm-msg').textContent = 'Buy ' + entry.display_name + ' for ' + entry.price + ' Ash Marks?';
+  document.getElementById('trade-confirm-msg').textContent = 'Buy ' + (entry.display_name || formatItemName(entry.id)) + ' for ' + entry.price + ' Ash Marks?';
   document.getElementById('trade-confirm').style.display = 'block';
   document.getElementById('trade-confirm-btn').onclick = () => doTradeBuy();
 }
@@ -8958,7 +8969,7 @@ function confirmTradeBuy(entry) {
 function confirmTradeSell(it, price) {
   tradeState.pendingItem = it;
   tradeState.pendingPrice = price;
-  document.getElementById('trade-confirm-msg').textContent = 'Sell ' + it.display_name + ' for ' + price + ' Ash Marks?';
+  document.getElementById('trade-confirm-msg').textContent = 'Sell ' + (it.display_name || formatItemName(it.id)) + ' for ' + price + ' Ash Marks?';
   document.getElementById('trade-confirm').style.display = 'block';
   document.getElementById('trade-confirm-btn').onclick = () => doTradeSell();
 }
@@ -9212,7 +9223,7 @@ async function openCombatInventory() {
       usable.forEach(it => {
         const d = document.createElement('div');
         d.className = 'combat-item-row';
-        d.innerHTML = `<span>${escapeHtml(it.display_name || it.id)}</span><span class="combat-item-effect">${escapeHtml(it.effect_summary || '')}</span>`;
+        d.innerHTML = `<span>${escapeHtml(it.display_name || formatItemName(it.id))}</span><span class="combat-item-effect">${escapeHtml(it.effect_summary || '')}</span>`;
         const btn = document.createElement('button');
         btn.className = 'btn inv-use-btn';
         btn.textContent = 'Use';

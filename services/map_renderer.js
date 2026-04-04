@@ -188,6 +188,10 @@ export function updateSidebarMap(currentRoomId, discoveredLocations, locationNam
 
   if (!svgEl.dataset.zoomBound) {
     svgEl.dataset.zoomBound = "1";
+    let isPanning = false;
+    let panStart = { x: 0, y: 0 };
+    let panOrigin = { x: 0, y: 0, w: 0, h: 0 };
+
     svgEl.addEventListener(
       "wheel",
       function (e) {
@@ -204,6 +208,39 @@ export function updateSidebarMap(currentRoomId, discoveredLocations, locationNam
       },
       { passive: false },
     );
+
+    svgEl.addEventListener("mousedown", function (e) {
+      if (e.button !== 0) return;
+      if (typeof e.target.closest === "function" && e.target.closest("[data-node-id]")) return;
+      isPanning = true;
+      panStart = { x: e.clientX, y: e.clientY };
+      const vb = (svgEl.getAttribute("viewBox") || defaultVB).split(" ").map(Number);
+      panOrigin = { x: vb[0], y: vb[1], w: vb[2], h: vb[3] };
+      svgEl.style.cursor = "grabbing";
+      e.preventDefault();
+    });
+
+    svgEl.addEventListener("mousemove", function (e) {
+      if (!isPanning) return;
+      const svgRect = svgEl.getBoundingClientRect();
+      const scaleX = panOrigin.w / svgRect.width;
+      const scaleY = panOrigin.h / svgRect.height;
+      const dx = (e.clientX - panStart.x) * scaleX;
+      const dy = (e.clientY - panStart.y) * scaleY;
+      svgEl.setAttribute("viewBox", [panOrigin.x - dx, panOrigin.y - dy, panOrigin.w, panOrigin.h].join(" "));
+    });
+
+    svgEl.addEventListener("mouseup", function () {
+      isPanning = false;
+      svgEl.style.cursor = "grab";
+    });
+
+    svgEl.addEventListener("mouseleave", function () {
+      isPanning = false;
+      svgEl.style.cursor = "";
+    });
+
+    svgEl.style.cursor = "grab";
   }
 
   const nodes = mapDef.nodes || {};
